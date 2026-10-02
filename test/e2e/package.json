@@ -1,0 +1,7 @@
+{
+  "name": "penpot-mcp-e2e",
+  "private": true,
+  "dependencies": {
+    "playwright": "1.63.0"
+  }
+}

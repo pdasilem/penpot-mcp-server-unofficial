@@ -1,877 +1,1492 @@
-# Penpot MCP Server — Tool Reference
+# Tools
 
-Complete reference for all **68 tools** provided by the server.
+Tools of the server, grouped as in the server, plus `list_toolsets` and `set_toolset`.
 
----
+| Convention | |
+|---|---|
+| Ids | Strings in UUID format |
+| Keys in results | snake_case from API tools; Plugin API names (camelCase) from editor tools |
+| Edit results | `{id, changed}`: only the values the call changed; empty and default values are left out of every result |
+| Lists | Up to `limit` items (default 100, max 500); `next_cursor` is passed back as `cursor` |
+| Shape types | Penpot Plugin API names: `board`, `rectangle`, `ellipse`, `text`, `path`, `group`, `boolean`, `image`, `svg-raw` |
+| Colors | `#RRGGBB` |
+| Fill | `{color, opacity}` or `{gradient: {type, start_x, start_y, end_x, end_y, stops: [{color, opacity, offset}]}}` |
+| Stroke | `{color, opacity, width, style, alignment}` |
+| Errors | Tool result with `isError: true` and a message |
 
-## Table of Contents
+Tools marked `[editor]` run in the Penpot editor through the bundled MCP plugin. They need the file open in a browser tab with MCP enabled; when the shape is on another page the editor switches to it. Reads issued after editor changes return the saved state.
 
-1. [Projects & Teams](#1-projects--teams) (4 tools)
-2. [File Operations](#2-file-operations) (9 tools)
-3. [Shape Reading](#3-shape-reading) (6 tools)
-4. [Components & Design Tokens](#4-components--design-tokens) (4 tools)
-5. [Comments & Collaboration](#5-comments--collaboration) (6 tools)
-6. [Media & Fonts](#6-media--fonts) (3 tools)
-7. [Database & Advanced](#7-database--advanced) (3 tools)
-8. [Snapshots](#8-snapshots) (2 tools)
-9. [Export](#9-export) (2 tools)
-10. [Advanced Analysis](#10-advanced-analysis) (2 tools)
-11. [Shape Creation](#11-shape-creation) (8 tools)
-12. [Shape Modification](#12-shape-modification) (12 tools)
-13. [Text Operations](#13-text-operations) (5 tools)
+Groups: `read` and `edit` are enabled by default, `manage` and `export` are enabled with `set_toolset` or `PENPOT_MCP_TOOLSETS`.
 
----
+Hints are the MCP tool annotations: read-only tools do not change Penpot data; destructive tools overwrite or delete existing data; idempotent tools have no further effect when repeated with the same arguments.
 
-## 1. Projects & Teams
-
-### `list_teams`
-List all teams in the Penpot instance with member and project counts.
-
-**Parameters:** None
-
----
-
-### `list_projects`
-List projects, optionally filtered by team ID.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `team_id` | string | No | Filter by team UUID. Omit to list all projects. |
-
----
-
-### `list_files`
-List all files in a project.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `project_id` | string | Yes | The project UUID. |
-
----
-
-### `search_files`
-Search files by name across all projects.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `query` | string | Yes | Search term (case-insensitive partial match). |
-
----
-
-## 2. File Operations
-
-### `get_file_summary`
-Get detailed metadata for a file (counts, team, project, versions).
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-
----
-
-### `get_file_pages`
-Get all pages in a file with their object counts.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-
----
-
-### `get_file_history`
-Get revision history of a file.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `limit` | integer | No | Max entries to return (default 20). |
-
----
-
-### `get_file_libraries`
-List shared libraries linked to a file.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-
----
-
-### `create_project`
-Create a new project in a team.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `team_id` | string | Yes | The team UUID. |
-| `name` | string | Yes | Project name. |
-
----
-
-### `create_file`
-Create a new design file in a project.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `project_id` | string | Yes | The project UUID. |
-| `name` | string | Yes | File name. |
-
----
-
-### `rename_file`
-Rename an existing file.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `name` | string | Yes | New name. |
-
----
-
-### `duplicate_file`
-Duplicate an existing file.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `name` | string | No | Optional name for the copy. |
-
----
-
-### `delete_file`
-Delete a file (moves to trash).
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-
----
-
-## 3. Shape Reading
-
-### `get_page_objects`
-List all objects on a page, optionally filtered by type.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `shape_type` | string | No | Filter: rect, circle, frame, text, group, path, image, svg-raw, bool. |
-
----
-
-### `get_shape_tree`
-Get the hierarchical tree of shapes on a page.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `root_id` | string | No | Start from this shape ID (omit for page root). |
-| `depth` | integer | No | Max tree depth (default 3). |
-
----
-
-### `get_shape_details`
-Get full details of a specific shape (fills, strokes, layout, text content).
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `shape_id` | string | Yes | The shape UUID. |
-
----
-
-### `search_shapes`
-Search shapes by name or text content on a page.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `query` | string | Yes | Search term (case-insensitive). |
-| `search_type` | string | No | "name" or "text" (default "name"). |
-
----
-
-### `get_shape_css`
-Get CSS representation of a shape's visual properties. Converts Penpot fills, strokes, shadows, and layout to CSS.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `shape_id` | string | Yes | The shape UUID. |
-
----
-
-### `get_shape_svg`
-Get SVG representation of a shape.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `shape_id` | string | Yes | The shape UUID. |
-
----
-
-## 4. Components & Design Tokens
-
-### `get_component_instances`
-List all components defined in a file.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-
----
-
-### `get_design_tokens`
-Get consolidated design tokens (colors, typographies, component count) from a file.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-
----
-
-### `get_colors_library`
-Get all colors defined in a file's library.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-
----
-
-### `get_typography_library`
-Get all typographies defined in a file's library.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-
----
-
-## 5. Comments & Collaboration
-
-### `get_comments`
-Get all comments on a file.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `resolved` | boolean | No | Filter: true=resolved, false=unresolved, omit=all. |
-
----
-
-### `get_active_users`
-Get users currently editing a file (real-time presence).
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-
----
-
-### `get_share_links`
-List share links for a file.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-
----
-
-### `create_comment`
-Create a new comment on a page at a specific position.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `content` | string | Yes | Comment text. |
-| `x` | float | Yes | X position. |
-| `y` | float | Yes | Y position. |
-| `frame_id` | string | No | Optional frame to attach the comment to. |
-
----
-
-### `reply_to_comment`
-Reply to an existing comment thread.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `thread_id` | string | Yes | The comment thread UUID. |
-| `content` | string | Yes | Reply text. |
-
----
-
-### `resolve_comment`
-Resolve or unresolve a comment thread.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `thread_id` | string | Yes | The comment thread UUID. |
-| `resolved` | boolean | No | True to resolve, False to unresolve (default True). |
-
----
-
-## 6. Media & Fonts
-
-### `list_media_assets`
-List all media assets (images) in a file.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-
----
-
-### `list_fonts`
-List custom fonts uploaded to a team.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `team_id` | string | Yes | The team UUID. |
-
----
-
-### `upload_media`
-Upload an image to a file from a URL.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `name` | string | Yes | Name for the media asset. |
-| `url` | string | Yes | Public URL of the image. |
-
----
-
-## 7. Database & Advanced
-
-### `query_database`
-Execute a read-only SQL query against the Penpot database. Only SELECT statements allowed.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `sql` | string | Yes | SQL SELECT query. |
-
----
-
-### `get_webhooks`
-List webhooks configured for a team.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `team_id` | string | Yes | The team UUID. |
-
----
+## Account and projects
 
 ### `get_profile`
-Get the authenticated user's profile information.
 
-**Parameters:** None
+Show the Penpot account the server works as: id, email, full name, default team id and default project id. Use the team id with list_projects or search_files.
 
----
+Group: `read`. Hints: read-only, idempotent
 
-## 8. Snapshots
+### `list_teams`
+
+List the teams of the Penpot account: id, name and whether it is the default team. Team ids are needed by list_projects, create_project, search_files, list_fonts and list_webhooks.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `limit` | integer | no | Maximum number of items to return, default 100 |
+| `cursor` | string | no | next_cursor from the previous call, to get the next items |
+
+### `list_projects`
+
+List projects with id, name, team id, default flag and last modification. Without team_id the projects of all teams are returned. Project ids are needed by list_files and create_file.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `team_id` | uuid | no | Team id |
+| `limit` | integer | no | Maximum number of items to return, default 100 |
+| `cursor` | string | no | next_cursor from the previous call, to get the next items |
+
+### `create_project`
+
+Create a project in a team. Returns the new project id, name and team id.
+
+Group: `manage`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `team_id` | uuid | yes | Team id |
+| `name` | string | yes | Project name |
+
+### `rename_project`
+
+Rename a project. Returns the project id and the new name.
+
+Group: `manage`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project_id` | uuid | yes | Project id |
+| `name` | string | yes | New project name |
+
+## Files
+
+### `list_files`
+
+List the files of a project: id, name, shared-library flag, revision and last modification. File ids are needed by almost every other tool.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project_id` | uuid | yes | Project id |
+| `limit` | integer | no | Maximum number of items to return, default 100 |
+| `cursor` | string | no | next_cursor from the previous call, to get the next items |
+
+### `search_files`
+
+Find files of a team whose name contains the query. Returns id, name, project id, shared flag and last modification of each match.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `team_id` | uuid | yes | Team id |
+| `query` | string | yes | Text to search in file names |
+| `limit` | integer | no | Maximum number of items to return, default 100 |
+| `cursor` | string | no | next_cursor from the previous call, to get the next items |
+
+### `get_file`
+
+Summarize a file: name, project and team ids, revision, features, its pages in order with id, name and shape count, and the number of components, colors, typographies, token sets and media in its local library. Start here to learn page ids.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+
+### `get_file_libraries`
+
+List the shared libraries linked to a file: id, name, project id and shared flag.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+
+### `create_file`
+
+Create an empty file with one page in a project. Returns the new file id, name and project id. Open the file in the Penpot editor before using canvas tools on it.
+
+Group: `manage`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project_id` | uuid | yes | Project id |
+| `name` | string | yes | File name |
+
+### `rename_file`
+
+Rename a file. Returns the file id and the new name.
+
+Group: `manage`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `name` | string | yes | New file name |
+
+### `duplicate_file`
+
+Copy a file into the same project, with all pages, shapes and library items. Returns the copy's id, name and project id.
+
+Group: `manage`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `name` | string | no | Name of the copy |
+
+### `delete_file`
+
+Delete a file. Penpot moves it to the team trash, where it can be restored from the Penpot dashboard until the retention period ends. Returns the deleted file id.
+
+Group: `manage`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+
+## Versions
+
+### `list_snapshots`
+
+List the saved versions of a file: id, label, creation time, author and revision. Snapshot ids are used by compare_snapshots.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `limit` | integer | no | Maximum number of items to return, default 100 |
+| `cursor` | string | no | next_cursor from the previous call, to get the next items |
+
+### `compare_snapshots`
+
+Compare a saved version with another version or with the current file. Returns added and removed pages, and for each changed page the added, removed and modified shapes with the names of the changed attributes.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `from_snapshot_id` | uuid | yes | Snapshot to compare from |
+| `to_snapshot_id` | uuid | no | Snapshot to compare to; defaults to the current file |
 
 ### `create_snapshot`
-Create a named snapshot (version) of a file.
+
+Save the current state of a file as a named version that can be restored from Penpot's history panel. Changes made in the editor are saved first. Returns the snapshot id, label and creation time.
+
+Group: `manage`. Hints: changes data
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `label` | string | Yes | Label for the snapshot. |
+| `file_id` | uuid | yes | Penpot file id |
+| `label` | string | yes | Version label |
 
----
-
-### `get_snapshots`
-List all snapshots of a file.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-
----
-
-## 9. Export
-
-### `export_frame_png`
-Export a frame or shape to PNG via Penpot's exporter (headless Chromium). Returns base64-encoded PNG data.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `object_id` | string | Yes | The shape/frame UUID to export. |
-| `scale` | float | No | Scale factor: 1.0=normal, 2.0=retina (default 1.0). |
-
----
-
-### `export_frame_svg`
-Export a frame or shape to SVG. Uses Penpot's exporter for pixel-perfect output; falls back to local SVG generation if the exporter is unavailable.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `object_id` | string | Yes | The shape/frame UUID to export. |
-
----
-
-## 10. Advanced Analysis
-
-### `get_file_raw_data`
-Get the decoded internal data structure of a file. Returns the file's pages, components, colors, and typographies after full Transit decoding.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | No | Returns only that page's data if provided. |
-
----
-
-### `compare_revisions`
-Compare two revisions of a file to see what changed. Shows change operations (add-obj, mod-obj, del-obj) between revision numbers.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `revn_from` | integer | Yes | Starting revision number. |
-| `revn_to` | integer | No | Ending revision number (default: latest). |
-
----
-
-## 11. Shape Creation
-
-### `create_rectangle`
-Create a rectangle shape on a page.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `file_id` | string | Yes | — | The file UUID. |
-| `page_id` | string | Yes | — | The page UUID. |
-| `x` | float | No | 0 | X position. |
-| `y` | float | No | 0 | Y position. |
-| `width` | float | No | 100 | Width in pixels. |
-| `height` | float | No | 100 | Height in pixels. |
-| `name` | string | No | "Rectangle" | Shape name. |
-| `fill_color` | string | No | "#B1B2B5" | Fill color hex. |
-| `fill_opacity` | float | No | 1.0 | Fill opacity 0-1. |
-| `stroke_color` | string | No | — | Optional stroke color hex. |
-| `stroke_width` | float | No | 1.0 | Stroke width pixels. |
-| `opacity` | float | No | 1.0 | Overall opacity 0-1. |
-| `border_radius` | float | No | 0 | Corner radius. |
-| `parent_id` | string | No | — | Parent shape ID (root if omitted). |
-
----
-
-### `create_frame`
-Create a frame (artboard/container) that can hold child shapes.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `file_id` | string | Yes | — | The file UUID. |
-| `page_id` | string | Yes | — | The page UUID. |
-| `x` | float | No | 0 | X position. |
-| `y` | float | No | 0 | Y position. |
-| `width` | float | No | 300 | Width in pixels. |
-| `height` | float | No | 300 | Height in pixels. |
-| `name` | string | No | "Frame" | Frame name. |
-| `fill_color` | string | No | "#FFFFFF" | Background color hex. |
-| `fill_opacity` | float | No | 1.0 | Background opacity 0-1. |
-| `stroke_color` | string | No | — | Optional border color hex. |
-| `stroke_width` | float | No | 1.0 | Border width. |
-| `opacity` | float | No | 1.0 | Overall opacity 0-1. |
-| `border_radius` | float | No | 0 | Corner radius. |
-| `clip_content` | boolean | No | true | Clip children at frame bounds. |
-| `parent_id` | string | No | — | Parent frame ID (root if omitted). |
-
----
-
-### `create_ellipse`
-Create an ellipse (or circle if width == height) on a page.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `file_id` | string | Yes | — | The file UUID. |
-| `page_id` | string | Yes | — | The page UUID. |
-| `x` | float | No | 0 | X position. |
-| `y` | float | No | 0 | Y position. |
-| `width` | float | No | 100 | Width in pixels. |
-| `height` | float | No | 100 | Height in pixels. |
-| `name` | string | No | "Ellipse" | Shape name. |
-| `fill_color` | string | No | "#B1B2B5" | Fill color hex. |
-| `fill_opacity` | float | No | 1.0 | Fill opacity 0-1. |
-| `stroke_color` | string | No | — | Optional stroke color hex. |
-| `stroke_width` | float | No | 1.0 | Stroke width. |
-| `opacity` | float | No | 1.0 | Overall opacity 0-1. |
-| `parent_id` | string | No | — | Parent shape ID (root if omitted). |
-
----
-
-### `create_text`
-Create a text shape on a page.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `file_id` | string | Yes | — | The file UUID. |
-| `page_id` | string | Yes | — | The page UUID. |
-| `text` | string | No | "Text" | Text content. |
-| `x` | float | No | 0 | X position. |
-| `y` | float | No | 0 | Y position. |
-| `width` | float | No | — | Text box width (auto if omitted). |
-| `height` | float | No | — | Text box height (auto if omitted). |
-| `name` | string | No | — | Shape name (defaults to text content). |
-| `font_family` | string | No | "sourcesanspro" | Font family. |
-| `font_size` | integer | No | 16 | Font size in pixels. |
-| `font_weight` | string | No | "400" | Weight: "400"=normal, "700"=bold. |
-| `font_style` | string | No | "normal" | Style: "normal" or "italic". |
-| `fill_color` | string | No | "#000000" | Text color hex. |
-| `fill_opacity` | float | No | 1.0 | Text opacity 0-1. |
-| `text_align` | string | No | "left" | Alignment: left/center/right/justify. |
-| `line_height` | float | No | 1.2 | Line height multiplier. |
-| `letter_spacing` | float | No | 0 | Letter spacing pixels. |
-| `text_decoration` | string | No | "none" | none/underline/line-through. |
-| `opacity` | float | No | 1.0 | Overall shape opacity 0-1. |
-| `parent_id` | string | No | — | Parent shape ID (root if omitted). |
-
----
-
-### `create_path`
-Create a vector path shape.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `file_id` | string | Yes | — | The file UUID. |
-| `page_id` | string | Yes | — | The page UUID. |
-| `segments` | list | Yes | — | Path segments: list of `{command, x, y}` dicts. Commands: M=move, L=line, C=curve (with c1x,c1y,c2x,c2y), Z=close. |
-| `name` | string | No | "Path" | Shape name. |
-| `fill_color` | string | No | — | Optional fill color hex. |
-| `fill_opacity` | float | No | 1.0 | Fill opacity 0-1. |
-| `stroke_color` | string | No | "#000000" | Stroke color hex. |
-| `stroke_width` | float | No | 1.0 | Stroke width. |
-| `opacity` | float | No | 1.0 | Overall opacity 0-1. |
-| `parent_id` | string | No | — | Parent shape ID (root if omitted). |
-
----
-
-### `create_group`
-Group existing shapes together.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `file_id` | string | Yes | — | The file UUID. |
-| `page_id` | string | Yes | — | The page UUID. |
-| `shape_ids` | list | Yes | — | List of shape UUIDs to group. |
-| `name` | string | No | "Group" | Group name. |
-| `parent_id` | string | No | — | Parent shape ID (root if omitted). |
-
----
-
-### `create_component`
-Convert a shape/frame into a reusable component.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `shape_id` | string | Yes | The shape UUID to convert. |
-| `name` | string | No | Component name (keeps current name if omitted). |
-
----
+## Pages
 
 ### `create_page`
-Add a new page to a file.
 
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `file_id` | string | Yes | — | The file UUID. |
-| `name` | string | No | "New Page" | Page name. |
+Add an empty page at the end of a file. Returns the new page id and name.
 
----
-
-## 12. Shape Modification
-
-### `modify_shape`
-Modify arbitrary attributes of a shape.
+Group: `edit`. Hints: changes data
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `shape_id` | string | Yes | The shape UUID. |
-| `attrs` | dict | Yes | Kebab-case attributes to set. E.g. `{"opacity": 0.5, "name": "New Name"}`. |
-
----
-
-### `move_shape`
-Move a shape to a new position.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `shape_id` | string | Yes | The shape UUID. |
-| `x` | float | Yes | New X position. |
-| `y` | float | Yes | New Y position. |
-
----
-
-### `resize_shape`
-Resize a shape.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `shape_id` | string | Yes | The shape UUID. |
-| `width` | float | Yes | New width in pixels. |
-| `height` | float | Yes | New height in pixels. |
-
----
-
-### `delete_shape`
-Delete a shape from a page.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `shape_id` | string | Yes | The shape UUID. |
-
----
-
-### `rename_shape`
-Rename a shape.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `shape_id` | string | Yes | The shape UUID. |
-| `name` | string | Yes | New name. |
-
----
-
-### `set_fill`
-Set the fill color of a shape.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `file_id` | string | Yes | — | The file UUID. |
-| `page_id` | string | Yes | — | The page UUID. |
-| `shape_id` | string | Yes | — | The shape UUID. |
-| `color` | string | No | "#B1B2B5" | Fill color hex. |
-| `opacity` | float | No | 1.0 | Fill opacity 0-1. |
-
----
-
-### `set_stroke`
-Set the stroke (border) of a shape.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `file_id` | string | Yes | — | The file UUID. |
-| `page_id` | string | Yes | — | The page UUID. |
-| `shape_id` | string | Yes | — | The shape UUID. |
-| `color` | string | No | "#000000" | Stroke color hex. |
-| `width` | float | No | 1.0 | Stroke width pixels. |
-| `opacity` | float | No | 1.0 | Stroke opacity 0-1. |
-| `style` | string | No | "solid" | solid/dashed/dotted/mixed. |
-
----
-
-### `set_opacity`
-Set the overall opacity of a shape.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `shape_id` | string | Yes | The shape UUID. |
-| `opacity` | float | Yes | Opacity 0 (transparent) to 1 (opaque). |
-
----
-
-### `set_layout`
-Set flex/grid layout on a frame (auto-layout container).
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `file_id` | string | Yes | — | The file UUID. |
-| `page_id` | string | Yes | — | The page UUID. |
-| `frame_id` | string | Yes | — | The frame shape UUID. |
-| `layout_type` | string | No | "flex" | "flex" or "grid". |
-| `direction` | string | No | "row" | row/column/row-reverse/column-reverse. |
-| `gap` | float | No | 0 | Gap between children (pixels). |
-| `padding` | float | No | 0 | Padding on all sides (pixels). |
-| `align_items` | string | No | — | Cross-axis: start/center/end/stretch. |
-| `justify_content` | string | No | — | Main-axis: start/center/end/space-between/space-around/space-evenly. |
-| `wrap` | string | No | "nowrap" | "nowrap" or "wrap". |
-
----
-
-### `reorder_shapes`
-Reorder shapes within a parent (z-order).
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `file_id` | string | Yes | — | The file UUID. |
-| `page_id` | string | Yes | — | The page UUID. |
-| `parent_id` | string | Yes | — | Parent shape/frame UUID. |
-| `shape_ids` | list | Yes | — | Shape UUIDs to move. |
-| `index` | integer | No | 0 | Target index (0=bottom). |
-
----
-
-### `delete_page`
-Delete a page from a file.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-
----
+| `file_id` | uuid | yes | Penpot file id |
+| `name` | string | yes | Page name |
 
 ### `rename_page`
-Rename a page.
+
+Rename a page. Returns the page id and the new name.
+
+Group: `edit`. Hints: changes data, destructive, idempotent
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `name` | string | Yes | New name. |
+| `file_id` | uuid | yes | Penpot file id |
+| `page_id` | uuid | yes | Page id |
+| `name` | string | yes | New page name |
 
----
+### `delete_page`
 
-## 13. Text Operations
+Delete a page with everything on it. This cannot be undone except by restoring a snapshot, and the last page of a file cannot be deleted. Returns the deleted page id.
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `page_id` | uuid | yes | Page id |
+
+## Reading shapes and code
+
+### `list_shapes`
+
+List the shapes of a page, sorted top to bottom and left to right: id, name, type, parent id and absolute canvas position and size. The page root is omitted. Use it to find shape ids, for example boards to export.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `page_id` | uuid | no | Page id; defaults to the first page of the file |
+| `type` | `board`, `boolean`, `ellipse`, `group`, `image`, `path`, `rectangle`, `svg-raw`, `text` | no | Only shapes of this type |
+| `limit` | integer | no | Maximum number of items to return, default 100 |
+| `cursor` | string | no | next_cursor from the previous call, to get the next items |
+
+### `get_shape_tree`
+
+Return the layer tree of a page, or of one shape, with id, name, type, geometry and child count per node. Children are listed bottom to top. Use depth to limit the size of the answer.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `page_id` | uuid | no | Page id; defaults to the first page of the file |
+| `root_id` | uuid | no | Shape to start from; defaults to the root frame |
+| `depth` | integer | no | Levels of children to include (default 3) |
+
+### `get_shape`
+
+Return all Penpot attributes of one shape (fills, strokes, layout, text content, tokens and so on), its plugin type and the id of the page it is on.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+
+### `search_shapes`
+
+Find shapes whose name contains the query, ignoring case, on every page or on one page. Returns id, name, type, parent id, geometry and page id of each match.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `query` | string | yes | Text to search in shape names |
+| `page_id` | uuid | no | Restrict the search to this page |
+| `type` | `board`, `boolean`, `ellipse`, `group`, `image`, `path`, `rectangle`, `svg-raw`, `text` | no | Only shapes of this type |
+| `limit` | integer | no | Maximum number of items to return, default 100 |
+| `cursor` | string | no | next_cursor from the previous call, to get the next items |
+
+### `get_shape_css`
+
+Generate CSS for a shape, and optionally for all its visible descendants: size, position (when not inside a layout), fills and gradients, border, radius, shadows, blur, flex and grid layout, and text styles. Returns one rule per shape and the whole stylesheet as text.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `include_children` | boolean | no | Also generate rules for all descendants |
+
+### `get_shape_svg`
+
+Render a shape and its visible descendants as a standalone SVG document from the saved file data, without the editor. Text is drawn as plain SVG text and images as placeholders; use export_shape for Penpot's exact rendering.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+
+## Library
+
+### `list_components`
+
+List the components of the file's local library: id, name, path and the id and page of the main instance.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `limit` | integer | no | Maximum number of items to return, default 100 |
+| `cursor` | string | no | next_cursor from the previous call, to get the next items |
+
+### `get_component_instances`
+
+List the component instances placed in the file, optionally only those of one component: shape id, name, page id, component id, the file the component comes from and whether it is the main instance.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `component_id` | uuid | no | Only instances of this component |
+| `limit` | integer | no | Maximum number of items to return, default 100 |
+| `cursor` | string | no | next_cursor from the previous call, to get the next items |
+
+### `get_colors`
+
+List the colors of the file's local library: id, name, path, hex color, opacity and gradient or image when present.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `limit` | integer | no | Maximum number of items to return, default 100 |
+| `cursor` | string | no | next_cursor from the previous call, to get the next items |
+
+### `get_typographies`
+
+List the typographies of the file's local library with their font family, size, weight, style, line height, letter spacing and text transform.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `limit` | integer | no | Maximum number of items to return, default 100 |
+| `cursor` | string | no | next_cursor from the previous call, to get the next items |
+
+### `get_design_tokens`
+
+List the design token sets of the file and whether each is active, with every token's id, name, type, value and description, and the token themes with their id, group, name, whether each is active and the names of their sets. Token ids are used by set_token.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+
+## Comments
+
+### `list_comments`
+
+List the comment threads of a file in order, with page, board, position, resolved state and every comment with its author and time. Optionally only open or only resolved threads.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `resolved` | boolean | no | true: only resolved threads; false: only open threads |
+| `limit` | integer | no | Maximum number of items to return, default 100 |
+| `cursor` | string | no | next_cursor from the previous call, to get the next items |
+
+### `create_comment`
+
+Start a comment thread at a canvas position on a page, optionally attached to a board. Returns the thread id and its number in the file.
+
+Group: `edit`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `page_id` | uuid | no | Page id; defaults to the first page of the file |
+| `frame_id` | uuid | no | Board the comment belongs to; defaults to the page root |
+| `x` | number | yes | Canvas X position |
+| `y` | number | yes | Canvas Y position |
+| `content` | string | yes | Comment text |
+
+### `reply_comment`
+
+Add a reply to a comment thread. Returns the new comment id.
+
+Group: `edit`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `thread_id` | uuid | yes | Comment thread id |
+| `content` | string | yes | Reply text |
+
+### `resolve_comment`
+
+Mark a comment thread as resolved, or reopen it with resolved=false. Returns the thread id and its resolved state.
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `thread_id` | uuid | yes | Comment thread id |
+| `resolved` | boolean | no | Resolved state to set (default true) |
+
+### `update_comment`
+
+Replace the text of a comment. Penpot allows editing only comments written by the account the server works as. Returns the comment id and its new text.
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `comment_id` | uuid | yes | Comment id from list_comments |
+| `content` | string | yes | New comment text |
+
+### `delete_comment`
+
+Delete one comment from a thread. Penpot allows deleting only comments written by the account the server works as.
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `comment_id` | uuid | yes | Comment id from list_comments |
+
+### `delete_comment_thread`
+
+Delete a comment thread with all its replies. Penpot allows deleting only threads started by the account the server works as.
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `thread_id` | uuid | yes | Comment thread id |
+
+## Media and fonts
+
+### `list_media`
+
+List the images of the file's local library: id, name, width, height and MIME type.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `limit` | integer | no | Maximum number of items to return, default 100 |
+| `cursor` | string | no | next_cursor from the previous call, to get the next items |
+
+### `list_fonts`
+
+List the custom fonts uploaded to a team: id, font id, family, weight and style. Font families can be used by create_text and set_text_style.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `team_id` | uuid | yes | Team id |
+| `limit` | integer | no | Maximum number of items to return, default 100 |
+| `cursor` | string | no | next_cursor from the previous call, to get the next items |
+
+### `upload_media_from_url`
+
+Download an image from a public http or https URL into the file's local library. Penpot refuses internal network addresses. Returns the image id, name, size and MIME type.
+
+Group: `edit`. Hints: changes data, open world
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `url` | string | yes | http or https URL of the image |
+| `name` | string | no | Name in the library |
+
+## Integrations and presence
+
+### `list_webhooks`
+
+List the webhooks of a team: id, target URL, payload type, whether it is active and its error count.
+
+Group: `manage`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `team_id` | uuid | yes | Team id |
+| `limit` | integer | no | Maximum number of items to return, default 100 |
+| `cursor` | string | no | next_cursor from the previous call, to get the next items |
+
+### `get_active_users`
+
+List the users who have the file open in Penpot right now, with their name and number of open sessions. Presence is collected for about 1.5 seconds, so an editor that answers later can be missed.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+
+## Creating shapes (editor)
+
+### `create_board`
+
+Create a board (frame) at absolute canvas coordinates, on a page or inside another board or group. Inside a board with flex or grid layout the layout decides the position. Returns the new shape. [editor]
+
+Group: `edit`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `width` | number | yes | Width |
+| `file_id` | uuid | yes | Penpot file id |
+| `height` | number | yes | Height |
+| `x` | number | yes | Canvas X |
+| `page_id` | uuid | no | Page to create the shape on; defaults to the page open in the editor |
+| `name` | string | no | Layer name |
+| `y` | number | yes | Canvas Y |
+| `parent_id` | uuid | no | Board or group to put the shape into |
+| `clip_content` | boolean | no | Clip children to the board bounds (default true) |
+
+### `create_rect`
+
+Create a rectangle at absolute canvas coordinates, on a page or inside a board or group; color it with set_fills and set_strokes. Returns the new shape. [editor]
+
+Group: `edit`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `width` | number | yes | Width |
+| `file_id` | uuid | yes | Penpot file id |
+| `height` | number | yes | Height |
+| `border_radius` | number | no | Corner radius for all corners |
+| `x` | number | yes | Canvas X |
+| `page_id` | uuid | no | Page to create the shape on; defaults to the page open in the editor |
+| `name` | string | no | Layer name |
+| `y` | number | yes | Canvas Y |
+| `parent_id` | uuid | no | Board or group to put the shape into |
+
+### `create_ellipse`
+
+Create an ellipse that fills the given bounding box, on a page or inside a board or group. Returns the new shape. [editor]
+
+Group: `edit`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `page_id` | uuid | no | Page to create the shape on; defaults to the page open in the editor |
+| `parent_id` | uuid | no | Board or group to put the shape into |
+| `name` | string | no | Layer name |
+| `x` | number | yes | Canvas X |
+| `y` | number | yes | Canvas Y |
+| `width` | number | yes | Width |
+| `height` | number | yes | Height |
+
+### `create_text`
+
+Create a text layer. Penpot measures the text with the real font: with grow_type auto-width (the default) the box fits the text, with auto-height the width is fixed and the height grows. Returns the new shape. [editor]
+
+Group: `edit`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `font_family` | string | no | Font family, e.g. sourcesanspro or a family from list_fonts |
+| `grow_type` | `fixed`, `auto-width`, `auto-height` | no | Default auto-width |
+| `x` | number | yes | Canvas X |
+| `page_id` | uuid | no | Page to create the shape on; defaults to the page open in the editor |
+| `name` | string | no | Layer name |
+| `text` | string | yes | Text content |
+| `font_size` | number | no | Font size in pixels |
+| `font_weight` | `100`, `200`, `300`, `400`, `500`, `600`, `700`, `800`, `900` | no | Font weight |
+| `y` | number | yes | Canvas Y |
+| `parent_id` | uuid | no | Board or group to put the shape into |
+
+### `create_path`
+
+Create a path from SVG path data (the d attribute, absolute coordinates). Optional x and y move the finished path. Returns the new shape. [editor]
+
+Group: `edit`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `page_id` | uuid | no | Page to create the shape on; defaults to the page open in the editor |
+| `parent_id` | uuid | no | Board or group to put the shape into |
+| `name` | string | no | Layer name |
+| `d` | string | yes | SVG path data, e.g. M0 0 L100 0 L100 100 Z |
+| `x` | number | no | Canvas X to move the path to |
+| `y` | number | no | Canvas Y to move the path to |
+
+### `create_group`
+
+Group shapes that are on the same page; the group takes the place of the topmost shape. Returns the new group. [editor]
+
+Group: `edit`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_ids` | array of uuid | yes | Shape ids |
+| `name` | string | no | Name of the new group or component |
+
+### `create_component`
+
+Turn shapes into a component of the file's local library; the shapes become its main instance. Returns the component id, name, path and the main instance's state. [editor]
+
+Group: `edit`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_ids` | array of uuid | yes | Shape ids |
+| `name` | string | no | Name of the new group or component |
+
+## Components and variants (editor)
+
+### `create_component_instance`
+
+Place a copy (instance) of a component on a page or inside a board or group. The component comes from the file's own library or, with library_file_id, from a connected shared library. Returns the copy's state and its component id. [editor]
+
+Group: `edit`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `component_id` | uuid | yes | Component id from list_components |
+| `library_file_id` | uuid | no | Id of the connected shared library the component belongs to; omit for the file's own components |
+| `x` | number | yes | Canvas X |
+| `y` | number | yes | Canvas Y |
+| `page_id` | uuid | no | Page to create the shape on; defaults to the page open in the editor |
+| `parent_id` | uuid | no | Board or group to put the shape into |
+| `name` | string | no | Layer name |
+
+### `create_variants`
+
+Combine components of the file's own library into one variant set, as Penpot's "Combine as variants" does. Their main instances must be on the same page. Penpot derives the first properties from the component names. Returns the variant set: its id, property names and each variant component with its property values. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `component_ids` | array of uuid | yes | Ids of two or more components of this file |
+
+### `set_variant_property`
+
+Set a property value of one variant component. A property the variant set does not have yet is added to the whole set first. Returns the variant set with each variant's property values; a variant whose combination of values clashes with another one shows Penpot's error. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `component_id` | uuid | yes | Component id from list_components |
+| `property` | string | yes | Variant property name |
+| `value` | string | yes | Variant property value |
+
+### `rename_variant_property`
+
+Rename a property of the variant set a component belongs to; the values stay. Returns the variant set. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `component_id` | uuid | yes | Component id from list_components |
+| `property` | string | yes | Variant property name |
+| `new_name` | string | yes | New property name |
+
+### `remove_variant_property`
+
+Remove a property from the variant set a component belongs to, with its values in every variant. Returns the variant set. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `component_id` | uuid | yes | Component id from list_components |
+| `property` | string | yes | Variant property name |
+
+### `switch_variant`
+
+Switch a component copy to the variant of its set that has the given property value, keeping its other property values where possible, as the variant selector in Penpot's design panel does. Penpot replaces the copy with a copy of the other variant, so the returned shape id can differ from the one passed. Returns the copy's state, component id and property values. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `property` | string | yes | Variant property name |
+| `value` | string | yes | Variant property value |
+
+### `swap_component`
+
+Replace a component copy with a copy of another component, keeping overrides where possible, as Penpot's "Swap component" does. The new component comes from the file's own library or, with library_file_id, from a connected shared library. Penpot replaces the copy, so the returned shape id can differ from the one passed. Returns the new copy's state and component id. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `component_id` | uuid | yes | Component id from list_components |
+| `library_file_id` | uuid | no | Id of the connected shared library the component belongs to; omit for the file's own components |
+
+### `detach_instance`
+
+Detach a component copy from its component, turning it into ordinary shapes that no longer follow the component. Returns the shape's state. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+
+### `reset_overrides`
+
+Reset every override of a component copy and its children, restoring the values of the main component. Returns the copy's state. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+
+## Changing shapes (editor)
+
+### `set_position`
+
+Move a shape so that its top-left corner is at the given absolute canvas coordinates. A shape inside a flex or grid layout is positioned by the layout instead; use set_parent_index to reorder it. Returns the changes. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `x` | number | yes | Canvas X |
+| `y` | number | yes | Canvas Y |
+
+### `resize`
+
+Set the width and height of a shape. Penpot applies constraints to its children and reflows the parent layout. Returns the changes. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `width` | number | yes | New width in pixels |
+| `height` | number | yes | New height in pixels |
+
+### `rotate`
+
+Rotate a shape around its center by the given angle in degrees, added to its current rotation; negative values rotate counterclockwise. Returns the changes. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `angle` | number | yes | Degrees to add to the current rotation |
+
+### `rename_shape`
+
+Rename a layer. Returns the changes. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `name` | string | yes | New layer name |
+
+### `set_fills`
+
+Replace all fills of a shape. Fills are listed bottom to top; an empty list removes every fill. Penpot allows at most 8 fills. Returns the changes. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `fills` | array of objects | yes | Fills, bottom to top; an empty list removes all fills |
+
+### `set_strokes`
+
+Replace all strokes of a shape; an empty list removes every stroke. Returns the changes. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `strokes` | array of objects | yes | Strokes; an empty list removes all strokes |
+
+### `set_opacity`
+
+Set the opacity of a layer and its content, from 0 (invisible) to 1 (opaque). Returns the changes. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `opacity` | number | yes | 0 (invisible) to 1 (opaque) |
+
+### `set_radius`
+
+Round the corners of a rectangle, board or image: one radius for all corners, or individual corners. At least one value is required. Returns the changes. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `radius` | number | no | Radius in pixels for all corners |
+| `top_left` | number | no | Radius in pixels of the top-left corner |
+| `top_right` | number | no | Radius in pixels of the top-right corner |
+| `bottom_right` | number | no | Radius in pixels of the bottom-right corner |
+| `bottom_left` | number | no | Radius in pixels of the bottom-left corner |
+
+### `set_visible`
+
+Show or hide a layer. Hidden layers stay in the file but are not rendered or exported. Returns the changes. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `visible` | boolean | yes | true shows the layer, false hides it |
+
+### `set_blocked`
+
+Lock or unlock a layer. Locked layers cannot be selected or changed on the canvas by people; tools can still change them. Returns the changes. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `blocked` | boolean | yes | true locks the layer, false unlocks it |
+
+### `set_parent_index`
+
+Move a shape up or down in the stacking order of its parent; 0 is the bottom. In a flex or grid layout this also changes its place in the layout. Returns the changes. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `index` | integer | yes | New stacking index inside the parent; 0 is the bottom |
+
+### `move_to_parent`
+
+Move a shape into another board or group, on top of its children or at the given stacking index. The shape keeps its canvas position unless the new parent has a layout. Returns the changes. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `parent_id` | uuid | yes | Target board or group |
+| `index` | integer | no | Stacking index inside the parent; 0 is the bottom |
+
+### `delete_shapes`
+
+Delete shapes together with their children. Shapes already deleted, for example as children of an earlier shape in the list, are skipped. Returns the ids that were deleted. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_ids` | array of uuid | yes | Shape ids |
+
+## Appearance and arrangement (editor)
+
+### `set_layout_child`
+
+Set how a shape behaves inside its parent's flex or grid layout: sizing along each axis (fix keeps its size, fill takes the free space, auto hugs its content), its own alignment, margins, absolute positioning that takes it out of the flow, stacking order and size limits. Only the given properties change. The parent must have a layout. Returns the resulting values. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `z_index` | integer | no | Stacking order among the layout children |
+| `margin` | object | no | Margins in pixels |
+| `vertical_sizing` | `fix`, `fill`, `auto` | no | fix, fill or auto |
+| `horizontal_sizing` | `fix`, `fill`, `auto` | no | fix, fill or auto |
+| `max_width` | number | no | Maximum width in pixels |
+| `min_width` | number | no | Minimum width in pixels |
+| `align_self` | `auto`, `start`, `center`, `end`, `stretch` | no | Alignment of this child across the layout direction; auto follows the layout |
+| `min_height` | number | no | Minimum height in pixels |
+| `max_height` | number | no | Maximum height in pixels |
+| `absolute` | boolean | no | true takes the shape out of the layout flow |
+| `shape_id` | uuid | yes | Shape id |
+
+### `set_grid_cell`
+
+Place a child of a grid layout board into a cell: row and column start at 1, spans set how many tracks it covers, area_name names the cell's area. Only the given properties change. The parent must have a grid layout. Returns the resulting values. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `row` | integer | no | Row, starting at 1 |
+| `column` | integer | no | Column, starting at 1 |
+| `row_span` | integer | no | Number of rows covered |
+| `column_span` | integer | no | Number of columns covered |
+| `area_name` | string | no | Name of the cell's area |
+
+### `set_shadows`
+
+Replace all shadows of a shape, bottom to top; an empty list removes them. Returns the resulting values. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `shadows` | array of objects | yes | Shadows, bottom to top |
+
+### `set_blur`
+
+Set the layer blur (blurs the shape itself) and the background blur (blurs what is behind it) in pixels; null removes one, an omitted one stays as it is. Returns the resulting values. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `layer_blur` | value | no | Layer blur in pixels; null removes it |
+| `background_blur` | value | no | Background blur in pixels; null removes it |
+
+### `set_blend_mode`
+
+Set how a shape blends with what is below it. Returns the resulting values. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `mode` | `normal`, `darken`, `multiply`, `color-burn`, `lighten`, `screen`, `color-dodge`, `overlay`, `soft-light`, `hard-light`, `difference`, `exclusion`, `hue`, `saturation`, `color`, `luminosity` | yes | Blend mode |
+
+### `set_constraints`
+
+Set how a shape follows its parent board when the board is resized: horizontally left, right, leftright (stretch), center or scale; vertically top, bottom, topbottom (stretch), center or scale. Only the given axes change. Children of a flex or grid layout are placed by the layout instead. Returns the resulting values. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `horizontal` | `left`, `right`, `leftright`, `center`, `scale` | no | left, right, leftright, center or scale |
+| `vertical` | `top`, `bottom`, `topbottom`, `center`, `scale` | no | top, bottom, topbottom, center or scale |
+
+### `set_proportion_lock`
+
+Lock or unlock the width-to-height ratio of a shape for resizing in the editor. Returns the resulting values. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `locked` | boolean | yes | true locks the proportions |
+
+### `set_flip`
+
+Set whether a shape is mirrored horizontally and vertically. The values are the wanted state, not a toggle: a shape already in that state does not change. Only the given axes change. Returns the resulting values. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `horizontal` | boolean | no | true mirrors the shape left to right |
+| `vertical` | boolean | no | true mirrors the shape top to bottom |
+
+### `duplicate_shape`
+
+Duplicate a shape with its children, as Penpot's Duplicate does; the copy is placed by Penpot next to the original in the same parent. Returns the copy. [editor]
+
+Group: `edit`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+
+### `create_boolean`
+
+Combine shapes into one boolean shape, as Penpot's boolean operations do: union merges them, difference cuts the upper shapes out of the bottom one, intersection keeps the overlap, exclude keeps everything but the overlap. Returns the new boolean shape. [editor]
+
+Group: `edit`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_ids` | array of uuid | yes | Shape ids, all on the same page |
+| `operation` | `union`, `difference`, `intersection`, `exclude` | yes | union, difference, intersection or exclude |
+
+### `set_mask`
+
+Turn a group into a mask group, where its bottom layer clips the layers above it, or back into an ordinary group. A group already in that state does not change. Returns whether the group is a mask. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `group_id` | uuid | yes | Group id |
+| `mask` | boolean | yes | true makes the group a mask group, false an ordinary group |
+
+### `ungroup`
+
+Dissolve a group; its children take its place in the parent. Returns the ids of the former children. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `group_id` | uuid | yes | Group id |
+
+### `flatten`
+
+Convert shapes into editable paths, as Penpot's Flatten does; the shapes are replaced by paths. Returns the resulting paths. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_ids` | array of uuid | yes | Shape ids, all on the same page |
+
+### `import_svg`
+
+Import SVG markup as Penpot shapes inside a new group, for example an icon. Images referenced by the SVG are fetched and uploaded to the file. Returns the new group. [editor]
+
+Group: `edit`. Hints: changes data, open world
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `svg` | string | yes | SVG markup starting with <svg |
+| `x` | number | yes | Canvas X |
+| `y` | number | yes | Canvas Y |
+| `page_id` | uuid | no | Page to create the shape on; defaults to the page open in the editor |
+| `parent_id` | uuid | no | Board or group to put the shape into |
+| `name` | string | no | Layer name |
+
+### `align_shapes`
+
+Align shapes, as Penpot's align buttons do: several shapes are aligned to their common bounds, a single shape to its parent board. Give a horizontal and/or a vertical alignment. Returns the resulting positions. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_ids` | array of uuid | yes | Shape ids, all on the same page |
+| `horizontal` | `left`, `center`, `right` | no | left, center or right |
+| `vertical` | `top`, `center`, `bottom` | no | top, center or bottom |
+
+### `distribute_shapes`
+
+Space three or more shapes evenly along an axis between the outermost ones, as Penpot's distribute buttons do. Returns the resulting positions. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_ids` | array of uuid | yes | Shape ids, all on the same page |
+| `axis` | `horizontal`, `vertical` | yes | horizontal or vertical |
+
+## Layout (editor)
+
+### `set_flex_layout`
+
+Give a board a flex layout, replacing a grid layout if it has one, or change its flex settings; only the given settings change. Penpot reflows the children. Returns the resulting layout settings. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `board_id` | uuid | yes | Board id |
+| `file_id` | uuid | yes | Penpot file id |
+| `align_content` | `start`, `end`, `center`, `space-between`, `space-around`, `space-evenly`, `stretch` | no | Distribution of lines or tracks across the cross axis |
+| `vertical_sizing` | `fix`, `auto` | no | fix keeps the height, auto hugs the content |
+| `padding` | object | no | Inner padding in pixels; omitted sides keep their value |
+| `row_gap` | number | no | Gap between rows in pixels |
+| `wrap` | `wrap`, `nowrap` | no | Whether children wrap to new lines |
+| `horizontal_sizing` | `fix`, `auto` | no | fix keeps the width, auto hugs the content |
+| `column_gap` | number | no | Gap between columns in pixels |
+| `dir` | `row`, `row-reverse`, `column`, `column-reverse` | no | Main axis direction |
+| `align_items` | `start`, `end`, `center`, `stretch` | no | Alignment of children across the main axis |
+| `justify_items` | `start`, `end`, `center`, `stretch` | no | Alignment of children inside their grid cells |
+| `justify_content` | `start`, `center`, `end`, `space-between`, `space-around`, `space-evenly`, `stretch` | no | Distribution of children along the main axis |
+
+### `set_grid_layout`
+
+Give a board a grid layout, replacing a flex layout if it has one, or change it; only the given settings change, and given columns or rows replace the existing tracks. Penpot reflows the children. Returns the resulting layout settings. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `board_id` | uuid | yes | Board id |
+| `file_id` | uuid | yes | Penpot file id |
+| `align_content` | `start`, `end`, `center`, `space-between`, `space-around`, `space-evenly`, `stretch` | no | Distribution of lines or tracks across the cross axis |
+| `columns` | array of objects | no | Column tracks, left to right; replace the existing columns |
+| `vertical_sizing` | `fix`, `auto` | no | fix keeps the height, auto hugs the content |
+| `padding` | object | no | Inner padding in pixels; omitted sides keep their value |
+| `row_gap` | number | no | Gap between rows in pixels |
+| `horizontal_sizing` | `fix`, `auto` | no | fix keeps the width, auto hugs the content |
+| `column_gap` | number | no | Gap between columns in pixels |
+| `dir` | `row`, `column` | no | Direction in which children fill the grid |
+| `align_items` | `start`, `end`, `center`, `stretch` | no | Alignment of children across the main axis |
+| `justify_items` | `start`, `end`, `center`, `stretch` | no | Alignment of children inside their grid cells |
+| `rows` | array of objects | no | Row tracks, top to bottom; replace the existing rows |
+| `justify_content` | `start`, `center`, `end`, `space-between`, `space-around`, `space-evenly`, `stretch` | no | Distribution of children along the main axis |
+
+### `remove_layout`
+
+Remove the flex or grid layout of a board; the children keep their current positions. Returns the resulting layout settings. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `board_id` | uuid | yes | Board id |
+
+## Text (editor)
 
 ### `set_text_content`
-Replace text content of a text shape. Optionally override font properties.
+
+Replace all characters of a text layer, keeping its style. Returns the changes. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `shape_id` | string | Yes | The text shape UUID. |
-| `text` | string | Yes | New text content. |
-| `font_family` | string | No | Optional font family override. |
-| `font_size` | integer | No | Optional font size override. |
-| `font_weight` | string | No | Optional font weight override. |
-| `fill_color` | string | No | Optional text color override (hex). |
-| `text_align` | string | No | Optional alignment override. |
-
----
-
-### `set_font`
-Change the font family of a text shape.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `shape_id` | string | Yes | The text shape UUID. |
-| `font_family` | string | Yes | Font family name (e.g., "sourcesanspro", "roboto"). |
-
----
-
-### `set_font_size`
-Change the font size of a text shape.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `shape_id` | string | Yes | The text shape UUID. |
-| `font_size` | integer | Yes | Font size in pixels. |
-
----
-
-### `set_text_align`
-Set text alignment.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `shape_id` | string | Yes | The text shape UUID. |
-| `align` | string | Yes | "left", "center", "right", or "justify". |
-
----
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `text` | string | yes | New characters of the text |
 
 ### `set_text_style`
-Set text styling (bold, italic, underline).
+
+Change the style of a whole text layer; only the given properties change. Use list_fonts for custom font families. Returns the changes. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `file_id` | string | Yes | The file UUID. |
-| `page_id` | string | Yes | The page UUID. |
-| `shape_id` | string | Yes | The text shape UUID. |
-| `font_weight` | string | No | "400"=normal, "700"=bold, etc. |
-| `font_style` | string | No | "normal" or "italic". |
-| `text_decoration` | string | No | "none", "underline", or "line-through". |
+| `vertical_align` | `top`, `center`, `bottom` | no | Vertical alignment inside the text box |
+| `file_id` | uuid | yes | Penpot file id |
+| `font_family` | string | no | Font family, e.g. sourcesanspro or a family from list_fonts |
+| `align` | `left`, `center`, `right`, `justify` | no | Horizontal alignment |
+| `text_transform` | `uppercase`, `capitalize`, `lowercase`, `none` | no | Letter case transformation; none removes it |
+| `grow_type` | `fixed`, `auto-width`, `auto-height` | no | fixed box, auto-width fits the text, auto-height grows downwards |
+| `text_decoration` | `underline`, `line-through`, `none` | no | Line decoration; none removes it |
+| `font_style` | `normal`, `italic` | no | Font style |
+| `direction` | `ltr`, `rtl` | no | Writing direction |
+| `font_size` | number | no | Font size in pixels |
+| `font_weight` | `100`, `200`, `300`, `400`, `500`, `600`, `700`, `800`, `900` | no | Font weight |
+| `letter_spacing` | number | no | Pixels |
+| `line_height` | number | no | Multiplier, e.g. 1.2 |
+| `shape_id` | uuid | yes | Shape id |
 
----
+## Styles and library (editor)
 
-## 14. Interactive Mode (Browser Plugin)
+### `set_text_range_style`
 
-These tools require the **Penpot MCP Browser Plugin** to be installed and connected.
-See [Interactive Mode](README.md#interactive-mode-browser-plugin) for setup instructions.
+Style part of a text layer: the characters from start (inclusive) to end (exclusive), counted from 0. Only the given properties change; fills color the characters. Returns the resulting style of the range, where mixed means the range has several values. [editor]
 
----
+Group: `edit`. Hints: changes data, destructive, idempotent
 
-### `get_active_selection`
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `font_family` | string | no | Font family, e.g. sourcesanspro or a family from list_fonts |
+| `align` | `left`, `center`, `right`, `justify` | no | Horizontal alignment |
+| `fills` | array of objects | no | Fills of the characters |
+| `text_transform` | `uppercase`, `capitalize`, `lowercase`, `none` | no | Letter case transformation; none removes it |
+| `text_decoration` | `underline`, `line-through`, `none` | no | Line decoration; none removes it |
+| `font_style` | `normal`, `italic` | no | Font style |
+| `direction` | `ltr`, `rtl` | no | Writing direction |
+| `start` | integer | yes | First character, from 0 |
+| `font_size` | number | no | Font size in pixels |
+| `font_weight` | `100`, `200`, `300`, `400`, `500`, `600`, `700`, `800`, `900` | no | Font weight |
+| `letter_spacing` | number | no | Pixels |
+| `line_height` | number | no | Multiplier, e.g. 1.2 |
+| `end` | integer | yes | Character after the last one |
+| `shape_id` | uuid | yes | Shape id |
 
-Get the UUIDs of shapes currently selected by the user in the Penpot canvas.
+### `apply_typography`
 
-**Parameters:** None
+Apply a library typography to a whole text layer or, with start and end, to part of it; the text stays linked to the typography. The typography comes from the file's own library or, with library_file_id, from a connected shared library; take ids from get_typographies. Returns the resulting style of the styled characters. [editor]
 
-**Requires:** Penpot MCP Plugin connected in browser.
+Group: `edit`. Hints: changes data, destructive, idempotent
 
-**Returns:**
-```json
-{ "selected_shape_ids": ["uuid1", "uuid2"] }
-```
-Returns an error object if the plugin is not connected.
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `typography_id` | uuid | yes | Typography id from get_typographies |
+| `library_file_id` | uuid | no | Id of the connected shared library the style belongs to; omit for the file's own library |
+| `start` | integer | no | First character, from 0 |
+| `end` | integer | no | Character after the last one |
 
----
+### `apply_library_color`
 
-### `execute_plugin_script`
+Apply a library color to a shape, as clicking it in Penpot's color palette does: target fill replaces the first fill, target stroke recolors the first stroke and keeps its width and style; a shape without one gets one. The shape stays linked to the library color. Take ids from get_colors. Returns the changes. [editor]
 
-Execute a JavaScript snippet directly in the Penpot Plugin API context.
+Group: `edit`. Hints: changes data, destructive, idempotent
 
-The script has access to the `penpot` Plugin API object (e.g., `penpot.selection`, `penpot.currentPage`, etc.).
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `color_id` | uuid | yes | Library color id from get_colors |
+| `library_file_id` | uuid | no | Id of the connected shared library the style belongs to; omit for the file's own library |
+| `target` | `fill`, `stroke` | no | fill (default) or stroke |
 
-**Parameters:**
+### `set_image_fill`
 
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `script` | string | Yes | JavaScript code to execute. Has access to `penpot` Plugin API object. |
+Download an image from an http or https URL into the file and make it the only fill of a shape, scaled to cover it. Penpot's server fetches the URL and refuses private network addresses. Returns the changes. [editor]
 
-**Requires:** Penpot MCP Plugin connected in browser.
+Group: `edit`. Hints: changes data, destructive, open world
 
-**Returns:**
-```json
-{ "status": "Script executed (or broadcasted) successfully." }
-```
-Returns an error object if the plugin is not connected or execution fails.
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `url` | string | yes | http or https URL of the image |
+| `name` | string | no | Name of the stored image; defaults to the URL's file name |
 
-**Example scripts:**
-```javascript
-// Get all shapes on current page
-const shapes = penpot.currentPage.findAll(() => true);
-console.log(shapes.map(s => s.name));
+### `create_library_color`
 
-// Change fill color of selected shapes
-penpot.selection.forEach(shape => {
-  if (shape.fills) {
-    shape.fills = [{ fillType: 'solid', fillColor: '#FF0000', fillOpacity: 1 }];
-  }
-});
-penpot.viewport.saveChanges();
-```
+Add a solid color to the file's own library. Returns the new color with its id. [editor]
+
+Group: `edit`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `name` | string | yes | Name |
+| `path` | string | no | Group path in the library, with / between levels |
+| `color` | string | yes | Color #RRGGBB |
+| `opacity` | number | no | 0..1, default 1 |
+
+### `create_library_typography`
+
+Add a typography to the file's own library. The font family must be one Penpot knows: its bundled fonts, the team's fonts from list_fonts, or Google Fonts when the Google Fonts provider is enabled in Penpot; weight and style must be a variant of that font. Returns the new typography with its id. [editor]
+
+Group: `edit`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `font_family` | string | yes | Font family name, e.g. Work Sans |
+| `text_transform` | `uppercase`, `capitalize`, `lowercase` | no | Letter case transformation |
+| `path` | string | no | Group path in the library, with / between levels |
+| `name` | string | yes | Name |
+| `font_style` | `normal`, `italic` | no | Font style, default normal |
+| `font_size` | number | yes | Font size in pixels |
+| `font_weight` | `100`, `200`, `300`, `400`, `500`, `600`, `700`, `800`, `900` | no | Font weight, default 400 |
+| `letter_spacing` | number | no | Pixels |
+| `line_height` | number | no | Multiplier, e.g. 1.2 |
+
+## Design tokens (editor)
+
+### `set_token`
+
+Bind a design token to a shape, as Penpot's token panel does. Without attr the token binds the attributes Penpot uses for its type: color binds fill, borderRadius every corner, sizing and dimensions width and height, spacing the gaps of a layout board or the margins of a layout child, typography the text typography; other types bind their own attribute. Pass attr to bind one specific attribute, for example strokeColor for a color token. A different token bound to a target attribute is unbound first; attributes already bound to this token are left as they are, so repeating the call changes nothing. The token type and attribute are checked against the shape type before anything changes. Take token ids from get_design_tokens. Returns the changes. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `token_id` | uuid | yes | Token id from get_design_tokens |
+| `attr` | `fill`, `strokeColor`, `strokeWidth`, `shadow`, `opacity`, `rotation`, `borderRadiusTopLeft`, `borderRadiusTopRight`, `borderRadiusBottomRight`, `borderRadiusBottomLeft`, `x`, `y`, `width`, `height`, `layoutItemMinW`, `layoutItemMaxW`, `layoutItemMinH`, `layoutItemMaxH`, `rowGap`, `columnGap`, `paddingTop`, `paddingRight`, `paddingBottom`, `paddingLeft`, `marginTop`, `marginRight`, `marginBottom`, `marginLeft`, `fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`, `textCase`, `textDecoration`, `typography` | no | Shape attribute, as a Penpot Plugin API token property name |
+
+### `remove_token`
+
+Unbind design tokens from a shape; attributes keep their current values. Pass exactly one of token_id, to unbind that token from every attribute of the shape, or attr, to unbind whatever token is bound to that attribute. Nothing changes if nothing is bound. Returns the changes. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape id |
+| `token_id` | uuid | no | Token id from get_design_tokens; unbinds it from every attribute of the shape |
+| `attr` | `fill`, `strokeColor`, `strokeWidth`, `shadow`, `opacity`, `rotation`, `borderRadiusTopLeft`, `borderRadiusTopRight`, `borderRadiusBottomRight`, `borderRadiusBottomLeft`, `x`, `y`, `width`, `height`, `layoutItemMinW`, `layoutItemMaxW`, `layoutItemMinH`, `layoutItemMaxH`, `rowGap`, `columnGap`, `paddingTop`, `paddingRight`, `paddingBottom`, `paddingLeft`, `marginTop`, `marginRight`, `marginBottom`, `marginLeft`, `fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`, `textCase`, `textDecoration`, `typography` | no | Shape attribute, as a Penpot Plugin API token property name |
+
+### `create_token_set`
+
+Create a design token set in the file; use / in the name to group sets. A new set is active unless active is false. Returns the set. [editor]
+
+Group: `edit`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `name` | string | yes | Set name, e.g. brand/dark |
+| `active` | boolean | no | Whether the set is active, default true |
+
+### `delete_token_set`
+
+Delete a design token set with all its tokens. Shapes keep the values of tokens bound from it. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `set_id` | uuid | yes | Token set id from get_design_tokens |
+
+### `set_token_set_active`
+
+Activate or deactivate a design token set; active sets provide the token values Penpot resolves. Setting the state a set already has changes nothing. Returns the set. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `set_id` | uuid | yes | Token set id from get_design_tokens |
+| `active` | boolean | yes | true activates the set |
+
+### `create_token`
+
+Create a design token in a set. Penpot validates the value for the type and rejects invalid ones. Returns the token with the value Penpot resolves from the active sets. [editor]
+
+Group: `edit`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `set_id` | uuid | yes | Token set id from get_design_tokens |
+| `type` | `borderRadius`, `shadow`, `color`, `dimension`, `fontFamilies`, `fontSizes`, `fontWeights`, `letterSpacing`, `number`, `opacity`, `rotation`, `sizing`, `spacing`, `borderWidth`, `textCase`, `textDecoration`, `typography` | yes | Token type |
+| `name` | string | yes | Token name, dot separated, e.g. color.primary |
+| `value` | value | yes | Token value as Penpot's token editor takes it: a string such as #3366FF, 16, 1.5 or a reference like {spacing.base} * 2; a list of names for fontFamilies; an object with fontFamilies, fontSizes, fontWeight, lineHeight, letterSpacing, textCase and textDecoration for typography; a list of objects with color, offsetX, offsetY, blur, spread and inset for shadow |
+| `description` | string | no | Description |
+
+### `update_token`
+
+Change the name, value or description of a design token; only the given fields change. Penpot validates the value for the token's type. Returns the token. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `token_id` | uuid | yes | Token id from get_design_tokens |
+| `name` | string | no | New token name |
+| `value` | value | no | Token value as Penpot's token editor takes it: a string such as #3366FF, 16, 1.5 or a reference like {spacing.base} * 2; a list of names for fontFamilies; an object with fontFamilies, fontSizes, fontWeight, lineHeight, letterSpacing, textCase and textDecoration for typography; a list of objects with color, offsetX, offsetY, blur, spread and inset for shadow |
+| `description` | string | no | New description |
+
+### `delete_token`
+
+Delete a design token. Shapes keep the values the token gave them. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `token_id` | uuid | yes | Token id from get_design_tokens |
+
+### `create_token_theme`
+
+Create a token theme: a named preset of token sets, such as dark in group mode. Only one theme per group is active at a time; activating a theme activates its sets. Returns the theme. [editor]
+
+Group: `edit`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `group` | string | no | Theme group, e.g. mode or brand; default no group |
+| `name` | string | yes | Theme name, e.g. dark |
+| `set_ids` | array of uuid | no | Token sets the theme activates |
+
+### `delete_token_theme`
+
+Delete a token theme; its sets stay. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `theme_id` | uuid | yes | Token theme id from get_design_tokens |
+
+### `set_token_theme_active`
+
+Activate or deactivate a token theme. Activating deactivates the other theme of the same group and activates the theme's sets. Setting the state a theme already has changes nothing. Returns the theme. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `theme_id` | uuid | yes | Token theme id from get_design_tokens |
+| `active` | boolean | yes | true activates the theme |
+
+### `set_theme_sets`
+
+Set the token sets of a theme: activating the theme activates exactly these sets. The list replaces the theme's sets; sets left out stay in the file. Returns the theme. [editor]
+
+Group: `edit`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `theme_id` | uuid | yes | Token theme id from get_design_tokens |
+| `set_ids` | array of uuid | yes | All token sets of the theme; empty removes them all |
+
+## Export (editor)
+
+### `export_shape`
+
+Render a shape, for example a board, exactly as Penpot draws it and return it: png as an image the model can see, svg as markup. A png is scaled down so that its longer side fits max_size. Mode fill returns the raw image used as the shape's fill (png only, unscaled). Find board ids with list_shapes or search_shapes. [editor]
+
+Group: `export`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `shape_id` | uuid | yes | Shape to export, e.g. a board id |
+| `format` | `png`, `svg` | no | png (default) or svg |
+| `mode` | `shape`, `fill` | no | shape (default) or fill |
+| `max_size` | integer | no | Longest side of a png in pixels, default 1568; smaller shapes keep their size |
+

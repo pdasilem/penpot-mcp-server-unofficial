@@ -1,534 +1,224 @@
 # Penpot MCP Server
 
-**AI-powered design tool access for self-hosted Penpot via Model Context Protocol.**
+MCP server for self-hosted [Penpot](https://penpot.app) that gives AI agents typed tools instead of a JavaScript runner: every tool has a fixed input schema, and agents cannot execute their own code in the editor.
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Python 3.13+](https://img.shields.io/badge/Python-3.13+-yellow.svg)](https://python.org)
-[![MCP Protocol](https://img.shields.io/badge/MCP-2025--03--26-green.svg)](https://modelcontextprotocol.io)
-[![Tools: 68](https://img.shields.io/badge/Tools-68-orange.svg)](TOOLS.md)
+It runs inside the Penpot stack in place of the official `penpot-mcp` service, or as a separate container that Penpot points to. In both cases Penpot's bundled MCP plugin connects to this server instead of the official one.
 
----
+A release `X.Y.Z.N` is built for Penpot `X.Y.Z` and works only with that Penpot version: on any other version every tool returns an error asking to update the server. See [Versions](#versions).
 
-## What is this?
+## How it works
 
-An [MCP server](https://modelcontextprotocol.io) that gives AI agents (like Claude Code, Cursor, or any MCP-compatible client) **full programmatic access** to your self-hosted [Penpot](https://penpot.app) instance. AI can read, create, modify, and export design elements — from rectangles and text to full UI components — all through natural language.
-
-Think of it as the bridge between your AI assistant and your design tool.
-
-### Problems it solves
-
-| Problem | Solution |
+| Channel | Used for |
 |---|---|
-| **Manual design work** | AI creates UI components, layouts, and prototypes directly in Penpot |
-| **No programmatic API for Penpot** | 68 tools covering projects, shapes, text, exports, comments, and more |
-| **Design-to-code gap** | Generate CSS from any shape, export to SVG/PNG, extract design tokens |
-| **Repetitive tasks** | Batch operations — rename shapes, update colors, create variants |
-| **Design system maintenance** | Read/write components, colors, typographies programmatically |
+| Penpot RPC API | Reading files, shapes, libraries, design tokens, comments, versions; projects, files, pages, comments, snapshots, media |
+| Penpot notifications WebSocket | Users currently in a file |
+| Penpot's bundled MCP plugin | Every change in the editor: shapes, layout, text, styles, components and variants, library colors and typographies, design tokens, token sets and themes; image export |
 
----
+- Penpot's nginx proxies `/mcp/stream` (MCP clients) and `/mcp/ws` (the bundled plugin) to the server, so TLS and the public address come from Penpot.
+- Canvas tools run in the Penpot editor. The file must be open in a browser tab with MCP enabled; when a shape is on another page the editor switches to it.
+- A read issued after canvas changes returns the saved state: the server waits until the editor has saved the changes to Penpot.
+- Shapes are created and laid out by the editor itself, so flex and grid layouts, text measurement and token values behave exactly as in Penpot.
+- The server checks the Penpot version at start and periodically. Any other Penpot version blocks every tool with an error.
 
-## Architecture
+### Access model
 
-```mermaid
-graph TB
-    AI["AI Agent\n(Claude Code · Cursor · Gemini CLI)"]
+The server holds the access token and the password of one Penpot account. Read tools and the tools for projects, files, pages, comments, versions and media act as that account through the Penpot API and work without an open editor. Canvas tools act through the bundled plugin in the editor tab that has the file open with MCP enabled. The official Penpot MCP server holds no credentials and works only through the plugin.
 
-    subgraph SERVERS["MCP Layer"]
-        MCP["penpot-mcp — Python\n68 tools · :8787\nDB reads + API writes + Plugin"]
-        OMCP["Penpot MCP — Official\n~20 tools · penpot/penpot monorepo\nPlugin API only · TypeScript"]
-    end
+The full tool reference is in [TOOLS.md](TOOLS.md).
 
-    subgraph PENPOT["Penpot Stack (Docker)"]
-        PG["PostgreSQL\n:5432"]
-        BE["Backend\n:6060"]
-        FE["Frontend\n:9001"]
-        EX["Exporter\n:6061"]
-    end
+## Penpot preparation
 
-    subgraph BRIDGE["Browser Plugin Bridge"]
-        WS["WebSocket Server\n:4402"]
-        UI["ui.html\niframe · full browser API"]
-        PJ["plugin.js\nworker sandbox · penpot.*"]
-    end
+1. Enable the flags `enable-mcp` and `enable-access-tokens` in Penpot (`PENPOT_FLAGS` for the frontend and backend containers, or `config.flags` in the Helm chart).
+2. Sign in with the Penpot account the agent will work as and open *Settings → Integrations*:
+   - create an access token;
+   - in the *MCP Server* section create an MCP key and turn MCP on.
+3. Keep the account email and password: they are used for the presence tool, which needs a Penpot session.
 
-    AI -->|"Streamable HTTP :8787"| MCP
-    AI -->|"Streamable HTTP"| OMCP
+## Installation
 
-    MCP -->|"asyncpg · direct SQL"| PG
-    MCP -->|"httpx · RPC API"| BE
-    MCP -->|"PNG / SVG export"| EX
-    MCP <-->|"WebSocket"| WS
+The server is a single container listening on port 4401 (MCP) and 4402 (plugin). Run exactly one instance: plugin connections and pending-save tracking live in memory.
 
-    OMCP <-->|"WebSocket :4402"| WS
+### Instead of the official MCP: Docker Compose
 
-    WS <-->|"ws://localhost:4402"| UI
-    UI <-->|"postMessage"| PJ
-    PJ -->|"penpot.* API"| FE
-    FE -.->|"proxy"| BE
-    BE --> EX
+1. Clone the release for your Penpot version next to your Penpot `docker-compose.yaml`:
 
-    style AI fill:#7c3aed,color:#fff
-    style MCP fill:#2563eb,color:#fff
-    style OMCP fill:#0f766e,color:#fff
-    style PG fill:#16a34a,color:#fff
-    style BE fill:#ea580c,color:#fff
-    style FE fill:#ea580c,color:#fff
-    style EX fill:#ea580c,color:#fff
-    style WS fill:#0891b2,color:#fff
-    style UI fill:#0891b2,color:#fff
-    style PJ fill:#0891b2,color:#fff
-```
+   ```bash
+   git clone --branch v<version> https://github.com/pdasilem/penpot-mcp-server-unofficial.git
+   ```
 
-**Tri-layer access strategy:**
-- **Reads** go directly to PostgreSQL via `asyncpg` — fast and reliable, bypasses API overhead
-- **Writes** go through Penpot's RPC API via `httpx` — ensures proper change tracking and undo history
-- **Exports** use Penpot's built-in exporter (headless Chromium) for pixel-perfect SVG/PNG output
-- **Live canvas** goes through the Browser Plugin bridge (port 4402) — shared architecture with the [official Penpot MCP](https://github.com/penpot/penpot/tree/develop/mcp), enabling both servers to coexist and complement each other in the same AI workflow
+2. Run `./penpot-mcp-server-unofficial/setup.sh`. It writes `penpot-mcp-server-unofficial/.env` and pulls the image of the release. To do it by hand, copy `.env.example` to `.env`, fill it in and pull the image `ghcr.io/pdasilem/penpot-mcp-server-unofficial:<version>`.
+3. In your Penpot compose file, replace the `penpot-mcp` service with the one from [docker-compose.penpot.yml](docker-compose.penpot.yml). Keep the service name `penpot-mcp`: Penpot's nginx proxies to `http://penpot-mcp:4401` and `http://penpot-mcp:4402` by default.
+4. Make sure `PENPOT_FLAGS` contains `enable-mcp` and `enable-access-tokens`, then:
 
----
+   ```bash
+   docker compose up -d penpot-mcp penpot-frontend
+   ```
 
-## Tech Stack
+### Instead of the official MCP: Helm
 
-| Component | Technology | Purpose |
-|---|---|---|
-| Language | Python 3.13 | Runtime |
-| MCP SDK | [FastMCP](https://github.com/modelcontextprotocol/python-sdk) | Protocol handling, tool registration |
-| Database | [asyncpg](https://github.com/MagicStack/asyncpg) | Direct PostgreSQL access |
-| HTTP Client | [httpx](https://www.python-httpx.org/) | Penpot RPC API calls |
-| Validation | [Pydantic v2](https://docs.pydantic.dev/) | Automatic parameter validation |
-| Package Manager | [uv](https://github.com/astral-sh/uv) | Fast Python dependency management |
-| WebSocket | [websockets](https://websockets.readthedocs.io/) | Real-time browser plugin bridge |
-| Container | Docker | Deployment alongside Penpot |
-
----
-
-## Quick Start
-
-### Prerequisites
-
-1. **Self-hosted Penpot** running via Docker Compose ([official guide](https://help.penpot.app/technical-guide/getting-started/#install-with-docker))
-2. **Docker** and **Docker Compose** v2 installed
-3. **Access tokens enabled** in your Penpot instance (see [Enable Access Tokens](#enable-access-tokens))
-
-### Option A: Automated Setup
+Create a secret with the credentials:
 
 ```bash
-git clone https://github.com/ancrz/penpot-mcp-server.git
-cd penpot-mcp-server
-chmod +x setup.sh
-./setup.sh
+kubectl -n penpot create secret generic penpot-mcp \
+  --from-literal=access-token=<access token> \
+  --from-literal=email=<email> \
+  --from-literal=password=<password> \
+  --from-literal=mcp-key=<MCP key>
 ```
 
-The script will guide you through configuration, build the Docker image, and start the server.
+Override the MCP component of the [Penpot chart](https://github.com/penpot/penpot-helm):
 
-### Option B: Manual Setup
+```yaml
+config:
+  flags: "enable-login-with-password enable-access-tokens enable-mcp"
+mcp:
+  image:
+    repository: ghcr.io/pdasilem/penpot-mcp-server-unofficial
+    tag: "<version>"
+  replicaCount: 1
+  autoscaling:
+    hpa:
+      enabled: false
+  extraEnvs:
+    - name: PENPOT_BASE_URL
+      value: "http://<frontend service>.<namespace>.svc.cluster.local:8080"
+    - name: PENPOT_ACCESS_TOKEN
+      valueFrom: {secretKeyRef: {name: penpot-mcp, key: access-token}}
+    - name: PENPOT_EMAIL
+      valueFrom: {secretKeyRef: {name: penpot-mcp, key: email}}
+    - name: PENPOT_PASSWORD
+      valueFrom: {secretKeyRef: {name: penpot-mcp, key: password}}
+    - name: PENPOT_MCP_KEY
+      valueFrom: {secretKeyRef: {name: penpot-mcp, key: mcp-key}}
+```
 
-#### 1. Clone the repository
+`<frontend service>` is the chart's full name: the release name when it contains `penpot`, otherwise `<release>-penpot`, or `fullnameOverride` when set. Keep `mcp.service.httpPort` 4401 and `mcp.service.wsPort` 4402, or set `MCP_PORT` and `WS_PORT` in `extraEnvs` to the same values. The chart already points the frontend at the `-mcp` service.
+
+### Standalone (Docker)
+
+Run the server outside the Penpot stack, for example on another host, and point Penpot at it.
+
+1. Start the container with the variables from [Configuration](#configuration) and publish ports 4401 and 4402 only on an address the Penpot frontend reaches, never on a public interface:
+
+   ```bash
+   docker run -d --name penpot-mcp --env-file .env \
+     -p <private address>:4401:4401 -p <private address>:4402:4402 ghcr.io/pdasilem/penpot-mcp-server-unofficial:<version>
+   ```
+
+   `PENPOT_BASE_URL` must be a Penpot address reachable from this container.
+2. On the Penpot frontend container set `enable-mcp` in `PENPOT_FLAGS` and:
+
+   ```
+   PENPOT_MCP_URI=http://<mcp host>:4401
+   PENPOT_MCP_URI_WS=http://<mcp host>:4402
+   ```
+
+   Penpot's nginx resolves `<mcp host>` through its DNS resolver: use a DNS name or an IP address, not an `/etc/hosts` alias such as `host.docker.internal`.
+3. Do not run the official `penpot-mcp` service.
+
+With the Helm chart use the replacement above: with `enable-mcp` the chart deploys its own MCP service and points the frontend at it.
+
+## Connecting an agent
+
+The MCP endpoint is Penpot's public address plus `/mcp/stream`, authenticated by the MCP key:
+
+```
+https://penpot.example.com/mcp/stream?userToken=<MCP key>
+```
+
+Claude Code:
 
 ```bash
-git clone https://github.com/ancrz/penpot-mcp-server.git
-cd penpot-mcp-server
+claude mcp add --transport http penpot "https://penpot.example.com/mcp/stream?userToken=<MCP key>"
 ```
 
-#### 2. Create your configuration
+Claude Code plugin with the server connection and the `penpot` skill:
 
 ```bash
-cp .env.example .env
+export PENPOT_MCP_URL=https://penpot.example.com/mcp/stream
+export PENPOT_MCP_KEY=<MCP key>
+claude plugin marketplace add pdasilem/penpot-mcp-server-unofficial
+claude plugin install penpot@penpot-mcp
 ```
 
-Edit `.env` with your Penpot details:
+Other clients: configure a Streamable HTTP MCP server with the same URL.
 
-```env
-# Your Penpot access token (see "Enable Access Tokens" below)
-PENPOT_ACCESS_TOKEN=your-token-here
+Tools are grouped into `read`, `edit`, `manage` (projects, files, versions, webhooks) and `export`. `PENPOT_MCP_TOOLSETS` sets the groups enabled at start; agents switch groups with `list_toolsets` and `set_toolset`. A switch applies to every session of the server until it restarts.
 
-# Your Penpot database password (from your Penpot docker-compose.yml)
-PENPOT_DB_PASS=your-db-password
+## Reverse proxy in front of Penpot
 
-# Public URL where you access Penpot in the browser
-PENPOT_PUBLIC_URL=http://localhost:9001
-```
+The MCP key travels in the URL, as Penpot's own MCP integration requires. Penpot's nginx writes request URLs, including the key, to the frontend container log; restrict access to that log. In the proxy that terminates TLS in front of Penpot, log `/mcp/` requests without the query string and limit the request rate:
 
-#### 3. Add the MCP service to your Penpot Docker stack
+```nginx
+log_format penpot_mcp '$remote_addr [$time_local] "$request_method $uri $server_protocol" $status $body_bytes_sent';
+limit_req_zone $binary_remote_addr zone=penpot_mcp:10m rate=10r/s;
 
-Add the `penpot-mcp` service definition to your existing Penpot `docker-compose.yml`. See [`docker-compose.penpot.yml`](docker-compose.penpot.yml) for the complete service definition to copy.
-
-#### 4. Build and start
-
-```bash
-docker compose up -d --build penpot-mcp
-```
-
-#### 5. Verify it's running
-
-```bash
-# Quick health check
-curl -s http://localhost:8787/
-# → {"service": "Penpot MCP", "status": "ok", "version": "0.1.0"}
-```
-
-```bash
-# Full MCP protocol initialization
-curl -s http://localhost:8787/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
-```
-
-You should see a JSON response with the server capabilities.
-
----
-
-## Connect Your AI Agent
-
-Penpot MCP uses **network transport** (streamable HTTP) — the server runs as a Docker container and clients connect via HTTP. This means:
-
-- The server is **always running** independently (via Docker Compose)
-- The client only needs the URL to connect — no process spawning
-- **`env` in the client's JSON config is irrelevant** — credentials live in the server's own `.env` file (configured during [setup](#quick-start))
-- Any client on the same machine (or network) can connect to `http://localhost:8787/mcp`
-
-> **Key difference from stdio servers:** With stdio servers (like Skill Swarm), the client launches the process and injects env vars. With network servers like Penpot MCP, the server manages its own credentials. The `env` block in your client's MCP config has no effect.
-
----
-
-### Claude Code
-
-Claude Code uses `"type": "http"` for streamable HTTP connections.
-
-**Global** (`~/.claude.json`):
-
-```json
-{
-  "mcpServers": {
-    "penpot": {
-      "type": "http",
-      "url": "http://localhost:8787/mcp"
-    }
-  }
+location /mcp/ {
+    access_log /var/log/nginx/penpot-mcp.log penpot_mcp;
+    limit_req zone=penpot_mcp burst=40 nodelay;
+    proxy_pass http://<penpot frontend>;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 3600s;
 }
 ```
 
-**Project-level** (`.mcp.json` in your project root):
+## Configuration
 
-```json
-{
-  "mcpServers": {
-    "penpot": {
-      "type": "http",
-      "url": "http://localhost:8787/mcp"
-    }
-  }
-}
-```
-
-Restart Claude Code. You should see **68 tools** from the `penpot` server listed when you run `/mcp`.
-
-> **Note:** Use `"type": "http"`, not `"streamable-http"`. Claude Code maps `http` to the streamable HTTP transport internally. Using `streamable-http` will cause a schema validation error.
-
----
-
-### Gemini CLI
-
-Gemini CLI uses `httpUrl` (not `url`) for streamable HTTP connections. Transport is inferred from the field name.
-
-**Config file:** `~/.gemini/settings.json`
-
-```json
-{
-  "mcpServers": {
-    "penpot": {
-      "httpUrl": "http://localhost:8787/mcp"
-    }
-  }
-}
-```
-
-> **Note:** Gemini CLI distinguishes between `url` (SSE transport) and `httpUrl` (streamable HTTP transport). Penpot MCP uses streamable HTTP, so use `httpUrl`. No `type` field needed.
-
----
-
-### Antigravity
-
-Antigravity uses `serverUrl` for HTTP-based MCP servers.
-
-**Config file:** `~/.gemini/antigravity/mcp_config.json`
-
-```json
-{
-  "mcpServers": {
-    "penpot": {
-      "serverUrl": "http://localhost:8787/mcp"
-    }
-  }
-}
-```
-
-> **Note:** Antigravity uses `serverUrl` (not `url` or `httpUrl`). If Antigravity runs inside Docker, make sure it can reach `localhost:8787` on the host — you may need `host.docker.internal:8787` instead of `localhost:8787` depending on your Docker network setup.
-
----
-
-### Quick Comparison
-
-| | Claude Code | Gemini CLI | Antigravity |
+| Variable | Required | Default | Description |
 |---|---|---|---|
-| **Config file** | `~/.claude.json` or `.mcp.json` | `~/.gemini/settings.json` | `~/.gemini/antigravity/mcp_config.json` |
-| **URL field** | `"url"` | `"httpUrl"` | `"serverUrl"` |
-| **Type field** | `"type": "http"` (required) | Not needed (inferred) | Not needed (inferred) |
-| **`env` in JSON** | No effect (network server) | No effect (network server) | No effect (network server) |
-| **Credentials** | Server's `.env` file | Server's `.env` file | Server's `.env` file |
-| **Docker networking** | `localhost:8787` | `localhost:8787` | May need `host.docker.internal:8787` |
+| `PENPOT_BASE_URL` | yes | | Penpot frontend URL reachable from the server, e.g. `http://penpot-frontend:8080` |
+| `PENPOT_ACCESS_TOKEN` | yes | | Access token for the RPC API |
+| `PENPOT_EMAIL` | yes | | Account email, for the presence tool |
+| `PENPOT_PASSWORD` | yes | | Account password, for the presence tool |
+| `PENPOT_MCP_KEY` | yes | | MCP key; clients and the plugin must present it as `userToken` |
+| `MCP_HOST` | no | `127.0.0.1` (`0.0.0.0` in the image) | MCP listen address |
+| `MCP_PORT` | no | `4401` | MCP port, path `/mcp` |
+| `WS_HOST` | no | `127.0.0.1` (`0.0.0.0` in the image) | Plugin WebSocket listen address |
+| `WS_PORT` | no | `4402` | Plugin WebSocket port, path `/mcp/ws` |
+| `VERSION_CHECK_INTERVAL` | no | `300` | Seconds between Penpot version checks |
+| `LOG_LEVEL` | no | `info` | `trace`, `debug`, `info`, `warn`, `error` |
+| `PENPOT_MCP_TOOLSETS` | no | `read,edit` | Tool groups enabled at start: `read`, `edit`, `manage`, `export`; `read` is always enabled |
 
----
+## Versions
 
-### Example prompts
+The server version is the supported Penpot version plus a fourth number for fixes of this server: server `X.Y.Z.N` works with Penpot `X.Y.Z`. `<version>` in this document is that server version: take the latest [release](https://github.com/pdasilem/penpot-mcp-server-unofficial/releases) whose first three numbers match your Penpot version.
 
-Once connected, you can ask your AI agent things like:
+Releases are tagged `v<version>`; the image `ghcr.io/pdasilem/penpot-mcp-server-unofficial:<version>` and the Claude Code plugin carry the same version. To build the image from source instead: `docker build -t ghcr.io/pdasilem/penpot-mcp-server-unofficial:<version> .`
 
-- *"List my Penpot projects"*
-- *"Create a login form with email/password fields and a submit button"*
-- *"Export the Login Card frame as SVG"*
-- *"What colors are defined in the design system?"*
-- *"Add a comment at position (100, 200) saying 'Review this layout'"*
+## Upgrading Penpot
 
----
+The server is built against one Penpot version. After upgrading Penpot, update the server:
 
-## Interactive Mode: Browser Plugin
-
-The Penpot MCP Plugin bridges the AI agent with the **live Penpot canvas**, enabling real-time context awareness:
-
-- **Live selection**: AI can query which shapes you currently have selected
-- **Script execution**: AI can run JavaScript directly via the Penpot Plugin API
-
-> These features require the browser plugin to be connected. The 66 headless tools work without it.
-
-### Loading the Plugin
-
-1. Make sure the MCP server is running: `docker compose up -d penpot-mcp`
-2. Open Penpot in your browser
-3. Press **Ctrl+Alt+P** (or Main Menu -> Plugin Manager)
-4. Paste the URL in the input field: `http://localhost:8787/plugin/manifest.json`
-5. Click **Install** → **Allow** on the permissions dialog
-6. Click **Open** to launch the plugin panel
-
-The plugin panel appears on the right. When the status indicator turns green, the AI agent has live access to the canvas.
-
-### Penpot Flags Requirement
-
-The Penpot backend must have `enable-plugins-runtime` in `PENPOT_FLAGS`:
-
-```env
-PENPOT_FLAGS=enable-login-with-password enable-registration enable-access-tokens enable-plugins-runtime
-```
-
-> **Restart required:** After adding `enable-plugins-runtime`, restart both `penpot-backend` and `penpot-frontend`:
-> ```bash
-> docker compose restart penpot-backend penpot-frontend
-> ```
-
-### Browser Compatibility
-
-| Browser | Status | Notes |
-|---------|--------|-------|
-| **Firefox** | Works out of the box | No local network restrictions |
-| **Chrome / Chromium** | Requires one-time approval | See below |
-| **Brave** | Requires Shield disabled | See below |
-| **Vivaldi** | Requires one-time approval | Same as Chrome |
-
-#### Chrome / Vivaldi: Local Network Access
-
-Chrome may show a permission popup: **"Allow [localhost:9001] to access your local network?"**
-
-1. Click **Allow** when the popup appears
-2. The plugin will connect automatically
-
-If no popup appears and the plugin stays disconnected, check `chrome://flags/#private-network-access-respect-preflight-results` -- disable it for local development.
-
-#### Brave: Shield
-
-1. Click the **Shield icon** (lion) in the address bar
-2. Disable the Shield for `localhost:9001` (or set to "No Blocking")
-3. Reload the Penpot tab and reconnect the plugin
-
----
-
-## Tools Overview
-
-The server provides **68 tools** across 11 categories. See [**TOOLS.md**](TOOLS.md) for the complete reference with all parameters.
-
-| Category | Count | Examples |
-|---|---|---|
-| Projects & Teams | 4 | `list_projects`, `list_teams`, `list_files`, `search_files` |
-| File Operations | 9 | `create_file`, `get_file_pages`, `rename_file`, `duplicate_file` |
-| Shape Reading | 6 | `get_shape_tree`, `get_shape_details`, `get_shape_css`, `search_shapes` |
-| Components & Tokens | 4 | `get_design_tokens`, `get_colors_library`, `get_typography_library` |
-| Comments | 6 | `create_comment`, `reply_to_comment`, `resolve_comment` |
-| Media & Fonts | 3 | `upload_media`, `list_media_assets`, `list_fonts` |
-| Database & Advanced | 3 | `query_database`, `get_webhooks`, `get_profile` |
-| Snapshots | 2 | `create_snapshot`, `get_snapshots` |
-| Export | 2 | `export_frame_png`, `export_frame_svg` |
-| Shape Creation | 8 | `create_rectangle`, `create_frame`, `create_text`, `create_path` |
-| Shape Modification | 12 | `set_fill`, `set_stroke`, `set_layout`, `move_shape`, `resize_shape` |
-| Text Operations | 5 | `set_text_content`, `set_font`, `set_font_size`, `set_text_align` |
-| Advanced Analysis | 2 | `get_file_raw_data`, `compare_revisions` |
-
----
-
-## Configuration Reference
-
-All settings are via environment variables. See [`.env.example`](.env.example) for a template.
-
-| Variable | Default | Description |
-|---|---|---|
-| `PENPOT_BASE_URL` | `http://penpot-frontend:8080` | Internal Penpot URL (Docker network) |
-| `PENPOT_PUBLIC_URL` | `http://localhost:9001` | Public URL where you access Penpot in browser |
-| `PENPOT_ACCESS_TOKEN` | — | API access token (preferred auth method) |
-| `PENPOT_EMAIL` | — | Penpot login email (fallback auth) |
-| `PENPOT_PASSWORD` | — | Penpot login password (fallback auth) |
-| `PENPOT_DB_HOST` | `penpot-postgres` | PostgreSQL host |
-| `PENPOT_DB_PORT` | `5432` | PostgreSQL port |
-| `PENPOT_DB_NAME` | `penpot` | Database name |
-| `PENPOT_DB_USER` | `penpot` | Database user |
-| `PENPOT_DB_PASS` | — | Database password |
-| `MCP_HOST` | `0.0.0.0` | MCP server bind address |
-| `MCP_PORT` | `8787` | MCP server port |
-| `MCP_LOG_LEVEL` | `info` | Log level (debug/info/warning/error) |
-| `WS_HOST` | `0.0.0.0` | WebSocket server bind address |
-| `WS_PORT` | `4402` | WebSocket port for browser plugin |
-| `PLUGIN_WS_URL` | `ws://localhost:4402` | WebSocket URL the browser plugin uses to connect |
-
----
-
-## Enable Access Tokens
-
-Penpot requires a feature flag to enable API access tokens.
-
-### 1. Update your Penpot `.env` file
-
-Add `enable-access-tokens` to your `PENPOT_FLAGS`:
-
-```env
-PENPOT_FLAGS=enable-login-with-password enable-registration enable-access-tokens
-```
-
-### 2. Restart Penpot
-
-```bash
-docker compose restart penpot-backend penpot-frontend
-```
-
-### 3. Create a token
-
-1. Open Penpot in your browser
-2. Click your avatar (bottom-left) → **Access Tokens**
-3. Click **"Generate new token"**
-4. Give it a name (e.g., "MCP Server")
-5. Copy the token and paste it into your `.env` as `PENPOT_ACCESS_TOKEN`
-
----
-
-## Penpot Docker Integration
-
-The MCP server runs as a Docker container alongside your existing Penpot stack. You need to add it to your Penpot `docker-compose.yml`.
-
-See [`docker-compose.penpot.yml`](docker-compose.penpot.yml) for the exact service definition to add. The key points:
-
-- It connects to the `penpot` Docker network (same as other Penpot services)
-- It depends on `penpot-postgres` (with health check) and `penpot-backend`
-- It exposes port `8787` on localhost only (`127.0.0.1:8787:8787`)
-- Environment variables reference Docker internal hostnames
-
----
+1. Change the tag and sha of `penpot/common` in `deps.edn`, and in `src/penpot/mcp/penpot/version.clj` set `supported` to the new Penpot version and `fix-release` to 0.
+2. Set the new server version as the image tag in `docker-compose.penpot.yml` and as `version` in `claude-plugin/.claude-plugin/plugin.json`; the unit tests check both.
+3. Run the unit tests. The token table test compares `src/penpot/mcp/tools/token_rules.clj` with the token properties of the new Penpot frontend; update the table when it fails.
+4. Run the integration tests against the new Penpot version.
+5. Compare the bundled plugin protocol (`mcp/packages/common/src/types.ts` in the Penpot repository) and the Plugin API methods the tools use with the new version.
 
 ## Development
 
-### Running locally (outside Docker)
+Requirements: JDK 25, Clojure CLI, Docker; Node.js for the editor tests.
 
 ```bash
-# Install uv if needed
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install dependencies
-uv sync
-
-# Run the server (needs .env configured for local access)
-uv run penpot-mcp
+clojure -T:build compile-common
+clojure -M:test unit
+clojure -T:build uber
+docker build -t penpot-mcp:dev .
 ```
 
-For local development, point `PENPOT_DB_HOST` and `PENPOT_DB_PORT` to your host-mapped PostgreSQL port, and `PENPOT_BASE_URL` to `http://localhost:9001`.
-
-### Running tests
+Integration tests run against a Penpot instance of the supported version with this server deployed as its `penpot-mcp` service:
 
 ```bash
-uv sync --group dev
-uv run pytest tests/ -v
+(cd test/e2e && npm install)
+PENPOT_IT_ENV=/path/to/test.env clojure -M:test integration
 ```
 
-### Project structure
+`test.env` holds `PENPOT_ACCESS_TOKEN`, `PENPOT_EMAIL`, `PENPOT_PASSWORD` and `PENPOT_MCP_KEY` of a test account with MCP enabled. Optional: `PENPOT_IT_BASE_URL` (RPC, default `http://127.0.0.1:9001`), `PENPOT_IT_PUBLIC_URL` (browser, default `http://localhost:9001`), `PENPOT_IT_MCP_URL` (MCP endpoint, default `http://localhost:9001/mcp/stream`), `CHROME` (browser executable).
 
-```
-penpot-mcp-server/
-├── src/penpot_mcp/
-│   ├── server.py            # FastMCP entry point, 68 tool registrations, plugin routes
-│   ├── config.py            # Pydantic Settings configuration
-│   ├── gateway.py           # Hybrid context gateway (DB + Plugin awareness)
-│   ├── ws_controller.py     # WebSocket server for browser plugin bridge (:4402)
-│   ├── plugin/
-│   │   ├── manifest.json    # Penpot plugin manifest (served at /plugin/manifest.json)
-│   │   ├── plugin.js        # Plugin worker — penpot.* API only (no WebSocket in sandbox)
-│   │   └── ui.html          # Plugin iframe — WebSocket lives here, relays to plugin.js
-│   ├── services/
-│   │   ├── db.py            # asyncpg connection pool
-│   │   ├── api.py           # httpx RPC API client
-│   │   ├── changes.py       # Penpot change operations builder
-│   │   └── transit.py       # Transit+JSON decoder
-│   ├── tools/
-│   │   ├── projects.py      # Team & project queries
-│   │   ├── files.py         # File CRUD operations
-│   │   ├── shapes.py        # Shape reading & search
-│   │   ├── create.py        # Shape creation
-│   │   ├── modify.py        # Shape modification
-│   │   ├── text.py          # Text operations
-│   │   ├── export.py        # PNG/SVG export
-│   │   ├── components.py    # Components & design tokens
-│   │   ├── comments.py      # Comments & collaboration
-│   │   ├── media.py         # Media assets & fonts
-│   │   ├── database.py      # Raw SQL queries
-│   │   └── advanced.py      # File raw data & revision comparison
-│   └── transformers/
-│       ├── css.py           # Shape → CSS conversion
-│       ├── svg.py           # Shape → SVG conversion
-│       └── layout.py        # Layout → CSS flexbox/grid
-├── tests/
-│   ├── conftest.py
-│   ├── test_projects.py
-│   ├── test_files.py
-│   ├── test_shapes.py
-│   └── test_e2e_login_form.py
-├── pyproject.toml
-├── Dockerfile
-├── .env.example
-├── setup.sh
-├── docker-compose.penpot.yml
-├── TOOLS.md
-└── LICENSE
-```
-
----
+Lint and format: `clj-kondo --lint src test build.clj`, `clojure -M:fmt check src test build.clj`.
 
 ## License
 
-This project is licensed under the [Apache License 2.0](LICENSE).
-
----
-
-## Acknowledgments
-
-- [Penpot](https://penpot.app) — The open-source design platform
-- [Model Context Protocol](https://modelcontextprotocol.io) — The protocol standard
-- [FastMCP](https://github.com/modelcontextprotocol/python-sdk) — Python MCP SDK
-
-<div align="center">
-
-[⬆ Back to Top](#penpot-mcp-server)
-
-</div>
+[Mozilla Public License 2.0](LICENSE), the same as Penpot.

@@ -1,25 +1,36 @@
-FROM python:3.13-slim AS base
+FROM clojure:temurin-25-tools-deps-1.12.6.1673-trixie-slim@sha256:c36d56a5ae0bfda66847f3d0a0641f7b79ce2b90c9b745009a9a0bb57fafe384 AS build
 
-# Install uv for fast dependency management
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+WORKDIR /build
 
-# Copy dependency files first for Docker layer caching
-COPY pyproject.toml ./
+COPY deps.edn build.clj ./
+RUN clojure -P && clojure -T:build compile-common
 
-# Install dependencies (no dev deps in production)
-RUN uv sync --no-dev --no-install-project
+COPY src/penpot src/penpot
+RUN clojure -T:build uber
 
-# Copy source code
-COPY src/ src/
+FROM eclipse-temurin:25-jre@sha256:15090d159279e5c158473eccb48cd87f57b3e3a47511a797eb5a7a7ea6f86b0f
 
-# Install the project itself
-RUN uv sync --no-dev
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --no-create-home --shell /usr/sbin/nologin penpot-mcp
 
-# Expose MCP port
-EXPOSE 8787
-EXPOSE 4402
+COPY --from=build /build/target/penpot-mcp.jar /opt/penpot-mcp/penpot-mcp.jar
 
-# Run the MCP server
-CMD ["uv", "run", "penpot-mcp"]
+ENV MCP_HOST=0.0.0.0 \
+    MCP_PORT=4401 \
+    WS_HOST=0.0.0.0 \
+    WS_PORT=4402
+
+EXPOSE 4401 4402
+
+USER penpot-mcp
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${MCP_PORT}/mcp")" = "401" ] || exit 1
+
+CMD ["java", "-XX:MaxRAMPercentage=75", "-jar", "/opt/penpot-mcp/penpot-mcp.jar"]
