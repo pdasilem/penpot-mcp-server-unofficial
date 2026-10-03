@@ -1,0 +1,118 @@
+(ns penpot.mcp.tools.plugin-extras-test
+  (:require
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is]]
+   [penpot.mcp.fixtures :as fx]
+   [penpot.mcp.tool :as tool]
+   [penpot.mcp.tools.export :as export]
+   [penpot.mcp.tools.tokens :as tokens]))
+
+(def fid (str fx/file-id))
+(def sid (str fx/rect-id))
+
+(def tid (str fx/token-id))
+
+(defn- token-call [tool-name args]
+  (let [ctx (fx/plugin-ctx {:id sid :tokens {:fill "color.primary"}} {:get-file fx/file})]
+    {:ctx ctx :result (fx/call (fx/find-tool tokens/tools tool-name) ctx args)}))
+
+(deftest set-token-without-attribute-binds-token-type-defaults
+  (let [{:keys [ctx result]} (token-call "set_token" {"file_id" fid "shape_id" sid "token_id" tid})]
+    (is (= {"fileId" fid "shapeId" sid "tokenId" tid "attrs" [{"name" "fill" "key" "fill"}]}
+           (fx/last-script-args ctx)))
+    (is (= {"shape" {"id" sid "tokens" {"fill" "color.primary"}}} result))))
+
+(deftest set-token-with-attribute-binds-that-attribute
+  (let [{:keys [ctx]} (token-call "set_token" {"file_id" fid "shape_id" sid "token_id" tid "attr" "strokeColor"})]
+    (is (= [{"name" "stroke-color" "key" "strokeColor"}] (get (fx/last-script-args ctx) "attrs")))))
+
+(deftest set-token-script-skips-attributes-already-bound
+  (let [{:keys [ctx]} (token-call "set_token" {"file_id" fid "shape_id" sid "token_id" tid})
+        script        (last @(:scripts ctx))]
+    (is (str/includes? script "s.tokens[a.key] !== token.name"))
+    (is (str/includes? script "applyToken(token, missing.map((a) => a.name))"))))
+
+(deftest set-token-rejects-attribute-the-token-type-does-not-take
+  (let [{:keys [ctx result]} (token-call "set_token" {"file_id" fid "shape_id" sid "token_id" tid "attr" "width"})]
+    (is (= {:error "Attribute width does not take a color token; allowed: fill, strokeColor"} result))
+    (is (empty? @(:scripts ctx)))))
+
+(deftest set-token-rejects-unknown-attribute-name
+  (is (contains? (:result (token-call "set_token" {"file_id" fid "shape_id" sid "token_id" tid "attr" "background"}))
+                 :error)))
+
+(deftest set-token-rejects-unknown-token-without-plugin
+  (let [{:keys [ctx result]} (token-call "set_token" {"file_id" fid "shape_id" sid "token_id" "99999999-0000-0000-0000-0000000000cc"})]
+    (is (= {:error "Token 99999999-0000-0000-0000-0000000000cc not found in file 11111111-0000-0000-0000-000000000001"} result))
+    (is (empty? @(:scripts ctx)))))
+
+(deftest set-token-rejects-unknown-shape-without-plugin
+  (let [{:keys [ctx result]} (token-call "set_token" {"file_id" fid "shape_id" "22222222-0000-0000-0000-0000000000ff" "token_id" tid})]
+    (is (= {:error "Shape 22222222-0000-0000-0000-0000000000ff not found in file 11111111-0000-0000-0000-000000000001"} result))
+    (is (empty? @(:scripts ctx)))))
+
+(deftest set-token-rejects-lists
+  (is (contains? (:result (token-call "set_token" {"file_id" fid "shape_ids" [sid] "token_id" tid "attrs" ["fill"]}))
+                 :error)))
+
+(deftest remove-token-by-attribute
+  (let [{:keys [ctx]} (token-call "remove_token" {"file_id" fid "shape_id" sid "attr" "fill"})]
+    (is (= {"fileId" fid "shapeId" sid "attrs" [{"name" "fill" "key" "fill"}]} (fx/last-script-args ctx)))))
+
+(deftest remove-token-by-token-unbinds-it-everywhere-on-the-shape
+  (let [{:keys [ctx]} (token-call "remove_token" {"file_id" fid "shape_id" sid "token_id" tid})
+        args          (fx/last-script-args ctx)]
+    (is (= "color.primary" (get args "tokenName")))
+    (is (= 36 (count (get args "attrs"))))))
+
+(deftest remove-token-needs-exactly-one-of-token-and-attribute
+  (doseq [args [{"file_id" fid "shape_id" sid}
+                {"file_id" fid "shape_id" sid "token_id" tid "attr" "fill"}]]
+    (let [{:keys [ctx result]} (token-call "remove_token" args)]
+      (is (= {:error "Pass exactly one of token_id and attr"} result))
+      (is (empty? @(:scripts ctx))))))
+
+(deftest export-png-returns-image-content
+  (let [ctx (fx/plugin-ctx {:__type "base64" :data "iVBORw0KGgo="})
+        res (tool/invoke (fx/find-tool export/tools "export_shape") ctx {"file_id" fid "shape_id" sid})]
+    (is (= {:content [{:type :image :data "iVBORw0KGgo=" :mime-type "image/png"}] :error? false} res))
+    (is (= {"fileId" fid "shapeId" sid "format" "png" "mode" "shape" "maxSize" 1568} (fx/last-script-args ctx)))))
+
+(deftest export-limits-the-longer-side
+  (let [ctx (fx/plugin-ctx {:__type "base64" :data "AA=="})]
+    (tool/invoke (fx/find-tool export/tools "export_shape") ctx {"file_id" fid "shape_id" sid "max_size" 800})
+    (is (= 800 (get (fx/last-script-args ctx) "maxSize")))
+    (is (str/includes? (last @(:scripts ctx)) "Math.min(1, args.maxSize / Math.max(s.width, s.height))")))
+  (is (true? (:error? (tool/invoke (fx/find-tool export/tools "export_shape") (fx/plugin-ctx nil)
+                                   {"file_id" fid "shape_id" sid "max_size" 5000})))))
+
+(deftest export-svg-returns-svg-text
+  (let [svg "<svg xmlns=\"http://www.w3.org/2000/svg\"/>"
+        ctx (fx/plugin-ctx {:__type "base64" :data (.encodeToString (java.util.Base64/getEncoder) (.getBytes svg "UTF-8"))})]
+    (is (= {"svg" svg} (fx/call (fx/find-tool export/tools "export_shape") ctx {"file_id" fid "shape_id" sid "format" "svg"})))))
+
+(deftest export-requires-shape-id
+  (let [ctx (fx/plugin-ctx {:__type "base64" :data "AA=="})]
+    (is (true? (:error? (tool/invoke (fx/find-tool export/tools "export_shape") ctx {"file_id" fid}))))
+    (is (true? (:error? (tool/invoke (fx/find-tool export/tools "export_shape") ctx {"file_id" fid "page_id" (str fx/page-id) "shape_id" sid}))))
+    (is (empty? @(:scripts ctx)))))
+
+(deftest export-fill-mode-only-png
+  (is (contains? (fx/call (fx/find-tool export/tools "export_shape") (fx/plugin-ctx nil)
+                          {"file_id" fid "shape_id" sid "format" "svg" "mode" "fill"})
+                 :error)))
+
+(deftest export-without-image-data-is-an-error
+  (is (= {:content [{:type :text :text "Internal error in tool export_shape"}] :error? true}
+         (tool/invoke (fx/find-tool export/tools "export_shape") (fx/plugin-ctx {:unexpected true}) {"file_id" fid "shape_id" sid}))))
+
+(deftest token-scripts-prefer-active-sets-and-verify-removal
+  (let [ctx (fx/plugin-ctx {:id sid :tokens {}} {:get-file fx/file})]
+    (fx/call (fx/find-tool tokens/tools "remove_token") ctx {"file_id" fid "shape_id" sid "attr" "fill"})
+    (is (str/includes? (last @(:scripts ctx)) "set.active"))
+    (is (str/includes? (last @(:scripts ctx)) "fail('token-not-removed'"))))
+
+(deftest export-encodes-bytes-inside-the-script
+  (let [ctx (fx/plugin-ctx {:__type "base64" :data "AA=="})]
+    (tool/invoke (fx/find-tool export/tools "export_shape") ctx {"file_id" fid "shape_id" sid})
+    (is (str/includes? (last @(:scripts ctx)) "return { __type: 'base64', data: btoa(binary) };"))))

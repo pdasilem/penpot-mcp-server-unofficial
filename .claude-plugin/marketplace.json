@@ -1,0 +1,11 @@
+{
+  "name": "penpot-mcp",
+  "owner": { "name": "pdasilem" },
+  "plugins": [
+    {
+      "name": "penpot",
+      "source": "./claude-plugin",
+      "description": "Penpot MCP server connection and a skill for working on Penpot files"
+    }
+  ]
+}
