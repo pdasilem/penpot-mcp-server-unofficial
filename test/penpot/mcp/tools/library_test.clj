@@ -169,3 +169,7 @@
     (is (= ["MENU_FOLD"] (names "icon")))
     (is (= ["MENU_FOLD"] (names "icon / menu")))
     (is (= ["Primary"] (names "prim")))))
+
+(deftest components-with-the-same-name-are-ordered-by-id
+  (let [listed [{:id "c2" :name "Component" :path ""} {:id "c1" :name "Component" :path ""}]]
+    (is (= ["c1" "c2"] (mapv #(get % "id") (get (:result (run-in-editor "list_components" listed {"file_id" fid})) "components"))))))

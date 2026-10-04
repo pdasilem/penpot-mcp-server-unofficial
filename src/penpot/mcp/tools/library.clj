@@ -27,7 +27,7 @@
    (common/paged :components (->> (library-items ctx file_id read/components-body :components)
                                   (remove :deleted)
                                   (filter #(or (nil? query) (str/includes? (full-name %) (str/lower-case query))))
-                                  (sort-by (juxt :path :name))
+                                  (sort-by (juxt :path :name (comp str :id)))
                                   (mapv #(select-keys % [:id :name :path :main-instance-id :main-instance-page]))) args)))
 
 (defn- page-instances [component-id page]
