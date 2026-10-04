@@ -86,12 +86,13 @@
                   start  (data s "import_html" {:file_id fid :upload_id upload :frame_selector frame :section_selector section})
                   st     (wait-import s (get start "job_id"))
                   secs   (quot (- (System/nanoTime) t0) 1000000000)
-                  pages  (mapv #(get % "name") (get (data s "get_file" {:file_id fid}) "pages"))]
+                  boards (get st "boards")
+                  png    (mcp/call-tool s "export_shape" {:file_id fid :shape_id (get-in boards [0 "id"])})]
               (println "IMPORT seconds" secs "unsupported" (get st "unsupported") "fonts" (get st "substituted_fonts") "error" (get st "error"))
               (is (= "done" (get st "status")))
               (is (= (get start "frames") (get st "frames_done")))
-              (is (every? (set pages) (get start "sections")))
-              (is (= "board" (get (data s "get_shape" {:file_id fid :shape_id (get-in st ["boards" 0 "id"])}) "type")))
+              (is (= (count (get start "sections")) (count (distinct (map #(get % "page_id") boards)))))
+              (is (= "image" (get-in png [:content 0 :type])))
               (when-let [dir (get it/env "PENPOT_IT_EXPORT_DIR")]
                 (doseq [[n b] (map-indexed vector (take 3 (get st "boards")))]
                   (export-png! s fid (get b "id") dir n))))
