@@ -180,6 +180,7 @@ location /mcp/ {
 | `VERSION_CHECK_INTERVAL` | no | `300` | Seconds between Penpot version checks |
 | `LOG_LEVEL` | no | `info` | `trace`, `debug`, `info`, `warn`, `error` |
 | `PENPOT_MCP_TOOLSETS` | no | `read,edit` | Tool groups enabled at start: `read`, `edit`, `manage`, `export`; `read` is always enabled |
+| `FULL_FILE_SHAPES_MAX` | no | `5000` | Most shapes in a file that the server downloads whole; larger files are read page by page and through the open editor |
 
 ## Versions
 

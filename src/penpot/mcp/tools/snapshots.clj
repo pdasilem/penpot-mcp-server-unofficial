@@ -57,10 +57,11 @@
                  (vec))}))
 
 (defn- compare-snapshots [{:keys [rpc] :as ctx} {:keys [file_id from_snapshot_id to_snapshot_id]}]
-  (let [from (fetch-snapshot rpc file_id from_snapshot_id)
-        to   (if to_snapshot_id
-               (fetch-snapshot rpc file_id to_snapshot_id)
-               (common/fetch-file ctx file_id))]
+  (let [to   (if to_snapshot_id
+               (do (file/check-whole! ctx file_id nil)
+                   (fetch-snapshot rpc file_id to_snapshot_id))
+               (file/read-whole ctx file_id))
+        from (fetch-snapshot rpc file_id from_snapshot_id)]
     (tool/json-result (diff-files from to))))
 
 (defn- create-snapshot [{:keys [rpc] :as ctx} {:keys [file_id label]}]

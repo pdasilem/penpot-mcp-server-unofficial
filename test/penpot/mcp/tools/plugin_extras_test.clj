@@ -3,6 +3,7 @@
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]
    [penpot.mcp.fixtures :as fx]
+   [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.export :as export]
    [penpot.mcp.tools.tokens :as tokens]))
@@ -12,9 +13,28 @@
 
 (def tid (str fx/token-id))
 
+(defn- editor-answer [code]
+  (let [args (fx/script-args code)]
+    (cond
+      (str/includes? code read/token-body)
+      (when (= tid (get args "tokenId")) {:id tid :name "color.primary" :type "color"})
+
+      (str/includes? code read/shape-page-body)
+      (when (= sid (get args "shapeId")) (str fx/page-id))
+
+      :else
+      {:id sid :tokens {:fill "color.primary"}})))
+
 (defn- token-call [tool-name args]
-  (let [ctx (fx/plugin-ctx {:id sid :tokens {:fill "color.primary"}} {:get-file fx/file})]
+  (let [ctx (fx/plugin-ctx editor-answer (fx/file-responses fx/file))]
     {:ctx ctx :result (fx/call (fx/find-tool tokens/tools tool-name) ctx args)}))
+
+(defn- changes-sent? [ctx]
+  (some #(str/includes? % "applyToken") @(:scripts ctx)))
+
+(deftest token-checks-never-download-the-file
+  (let [{:keys [ctx]} (token-call "set_token" {"file_id" fid "shape_id" sid "token_id" tid})]
+    (is (= [:get-page] (fx/rpc-commands ctx)))))
 
 (deftest set-token-without-attribute-binds-token-type-defaults
   (let [{:keys [ctx result]} (token-call "set_token" {"file_id" fid "shape_id" sid "token_id" tid})]
@@ -35,21 +55,27 @@
 (deftest set-token-rejects-attribute-the-token-type-does-not-take
   (let [{:keys [ctx result]} (token-call "set_token" {"file_id" fid "shape_id" sid "token_id" tid "attr" "width"})]
     (is (= {:error "Attribute width does not take a color token; allowed: fill, strokeColor"} result))
-    (is (empty? @(:scripts ctx)))))
+    (is (not (changes-sent? ctx)))))
 
 (deftest set-token-rejects-unknown-attribute-name
   (is (contains? (:result (token-call "set_token" {"file_id" fid "shape_id" sid "token_id" tid "attr" "background"}))
                  :error)))
 
-(deftest set-token-rejects-unknown-token-without-plugin
+(deftest set-token-rejects-unknown-token-before-changing-anything
   (let [{:keys [ctx result]} (token-call "set_token" {"file_id" fid "shape_id" sid "token_id" "99999999-0000-0000-0000-0000000000cc"})]
     (is (= {:error "Token 99999999-0000-0000-0000-0000000000cc not found in file 11111111-0000-0000-0000-000000000001"} result))
-    (is (empty? @(:scripts ctx)))))
+    (is (not (changes-sent? ctx)))))
 
-(deftest set-token-rejects-unknown-shape-without-plugin
+(deftest set-token-rejects-unknown-shape-before-changing-anything
   (let [{:keys [ctx result]} (token-call "set_token" {"file_id" fid "shape_id" "22222222-0000-0000-0000-0000000000ff" "token_id" tid})]
     (is (= {:error "Shape 22222222-0000-0000-0000-0000000000ff not found in file 11111111-0000-0000-0000-000000000001"} result))
-    (is (empty? @(:scripts ctx)))))
+    (is (not (changes-sent? ctx)))))
+
+(deftest set-token-with-closed-editor-asks-to-open-the-file
+  (let [ctx    (fx/closed-editor-ctx (fx/file-responses fx/file))
+        result (fx/call (fx/find-tool tokens/tools "set_token") ctx {"file_id" fid "shape_id" sid "token_id" tid})]
+    (is (= {:error "Penpot editor is not connected; open the file in Penpot with MCP enabled"} result))
+    (is (empty? (fx/rpc-commands ctx)))))
 
 (deftest set-token-rejects-lists
   (is (contains? (:result (token-call "set_token" {"file_id" fid "shape_ids" [sid] "token_id" tid "attrs" ["fill"]}))
@@ -71,6 +97,11 @@
     (let [{:keys [ctx result]} (token-call "remove_token" args)]
       (is (= {:error "Pass exactly one of token_id and attr"} result))
       (is (empty? @(:scripts ctx))))))
+
+(deftest remove-token-of-unknown-shape-changes-nothing
+  (let [{:keys [ctx result]} (token-call "remove_token" {"file_id" fid "shape_id" "22222222-0000-0000-0000-0000000000ff" "attr" "fill"})]
+    (is (= {:error "Shape 22222222-0000-0000-0000-0000000000ff not found in file 11111111-0000-0000-0000-000000000001"} result))
+    (is (not (changes-sent? ctx)))))
 
 (deftest export-png-returns-image-content
   (let [ctx (fx/plugin-ctx {:__type "base64" :data "iVBORw0KGgo="})
@@ -107,7 +138,7 @@
          (tool/invoke (fx/find-tool export/tools "export_shape") (fx/plugin-ctx {:unexpected true}) {"file_id" fid "shape_id" sid}))))
 
 (deftest token-scripts-prefer-active-sets-and-verify-removal
-  (let [ctx (fx/plugin-ctx {:id sid :tokens {}} {:get-file fx/file})]
+  (let [ctx (fx/plugin-ctx editor-answer (fx/file-responses fx/file))]
     (fx/call (fx/find-tool tokens/tools "remove_token") ctx {"file_id" fid "shape_id" sid "attr" "fill"})
     (is (str/includes? (last @(:scripts ctx)) "set.active"))
     (is (str/includes? (last @(:scripts ctx)) "fail('token-not-removed'"))))

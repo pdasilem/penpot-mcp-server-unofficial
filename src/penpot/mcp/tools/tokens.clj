@@ -1,8 +1,11 @@
 (ns penpot.mcp.tools.tokens
   (:require
-   [app.common.types.tokens-lib :as ctob]
+   [app.common.types.token :as cto]
    [clojure.string :as str]
+   [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.revision :as revision]
+   [penpot.mcp.plugin.read :as read]
+   [penpot.mcp.plugin.scripts :as scripts]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.canvas :as canvas]
    [penpot.mcp.tools.common :as common]
@@ -56,30 +59,24 @@
     "}"
     "return changes(beforeInfo, s);"]))
 
-(defn- find-token [file-data token-id]
-  (when-let [lib (:tokens-lib file-data)]
-    (some #(get (into {} (map (juxt :id identity)) (vals (ctob/get-tokens lib (ctob/get-id %)))) token-id)
-          (ctob/get-sets lib))))
+(defn- token! [ctx file-id token-id]
+  (if-let [token (scripts/run! ctx read/token-body {:file-id file-id :token-id token-id})]
+    (update token :type cto/dtcg-token-type->token-type)
+    (throw (tool/user-error (str "Token " token-id " not found in file " file-id)))))
 
-(defn- token! [file-data file-id token-id]
-  (or (find-token file-data token-id)
-      (throw (tool/user-error (str "Token " token-id " not found in file " file-id)))))
-
-(defn- shape-with-objects! [file-data file-id shape-id]
-  (or (some (fn [page]
-              (when-let [shape (get-in page [:objects shape-id])]
-                [shape (:objects page)]))
-            (vals (:pages-index file-data)))
-      (throw (tool/user-error (str "Shape " shape-id " not found in file " file-id)))))
+(defn- shape-with-objects! [ctx file-id shape-id]
+  (let [page-id (or (some-> (scripts/run! ctx read/shape-page-body {:file-id file-id :shape-id shape-id}) parse-uuid)
+                    (throw (tool/user-error (str "Shape " shape-id " not found in file " file-id))))
+        {:keys [page shape]} (file/read-shape ctx file-id shape-id page-id)]
+    [shape (:objects page)]))
 
 (defn- attr-pairs [attrs]
   (mapv (fn [attr] {:name (rules/plugin-name attr) :key (rules/public-name attr)})
         (filter (set attrs) (map rules/parse-attr rules/public-names))))
 
 (defn- set-token [ctx {:keys [file_id shape_id token_id attr]}]
-  (let [data            (:data (common/fetch-file ctx file_id))
-        token           (token! data file_id token_id)
-        [shape objects] (shape-with-objects! data file_id shape_id)
+  (let [token           (token! ctx file_id token_id)
+        [shape objects] (shape-with-objects! ctx file_id shape_id)
         targets         (rules/target-attrs token shape objects (some-> attr rules/parse-attr))]
     (tool/json-result
      {:shape (revision/mutate! ctx file_id set-body {:shape-id shape_id :token-id token_id :attrs (attr-pairs targets)})})))
@@ -87,12 +84,12 @@
 (defn- remove-token [ctx {:keys [file_id shape_id token_id attr]}]
   (when (= (some? token_id) (some? attr))
     (throw (tool/user-error "Pass exactly one of token_id and attr")))
-  (let [data (:data (common/fetch-file ctx file_id))
-        _    (shape-with-objects! data file_id shape_id)
-        args (if attr
-               {:attrs (attr-pairs [(rules/parse-attr attr)])}
-               {:attrs (attr-pairs (map rules/parse-attr rules/public-names))
-                :token-name (:name (token! data file_id token_id))})]
+  (let [_     (shape-with-objects! ctx file_id shape_id)
+        token (when token_id (token! ctx file_id token_id))
+        args  (if attr
+                {:attrs (attr-pairs [(rules/parse-attr attr)])}
+                {:attrs (attr-pairs (map rules/parse-attr rules/public-names))
+                 :token-name (:name token)})]
     (tool/json-result
      {:shape (revision/mutate! ctx file_id remove-body (assoc args :shape-id shape_id))})))
 

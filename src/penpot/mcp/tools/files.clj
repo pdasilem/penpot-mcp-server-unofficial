@@ -3,6 +3,7 @@
    [app.common.types.tokens-lib :as ctob]
    [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.rpc :as rpc]
+   [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.common :as common]))
 
@@ -26,12 +27,39 @@
    :token_sets (if tokens-lib (ctob/set-count tokens-lib) 0)
    :media (count media)})
 
+(def ^:private file-keys
+  [:id :name :project-id :team-id :revn :vern :is-shared])
+
+(defn- whole-file-summary [f]
+  (assoc (select-keys f (conj file-keys :features))
+         :pages (mapv #(page-summary f %) (file/pages f))
+         :counts (counts (:data f))))
+
+(defn- editor-summary [{:keys [rpc] :as ctx} file-id]
+  (when-let [{pages :value} (read/in-editor ctx file-id read/page-counts-body {})]
+    (let [{lib :value} (read/in-editor ctx file-id read/library-counts-body {})]
+      (assoc (select-keys (file/revision rpc file-id) file-keys)
+             :pages (mapv (fn [{:keys [id name shapeCount]}] {:id id :name name :shape_count shapeCount}) pages)
+             :counts {:components (:components lib)
+                      :colors (:colors lib)
+                      :typographies (:typographies lib)
+                      :token_sets (:tokenSets lib)}))))
+
+(defn- stats-summary [{:keys [rpc]} file-id stats]
+  (assoc (select-keys (file/revision rpc file-id) file-keys)
+         :counts {:components (:component-count stats)
+                  :colors (:color-count stats)
+                  :typographies (:typography-count stats)}))
+
 (defn- get-file [ctx {:keys [file_id]}]
-  (let [f (common/fetch-file ctx file_id)]
-    (tool/json-result
-     (assoc (select-keys f [:id :name :project-id :team-id :revn :vern :is-shared :features])
-            :pages (mapv #(page-summary f %) (file/pages f))
-            :counts (counts (:data f))))))
+  (tool/json-result
+   (or (editor-summary ctx file_id)
+       (try
+         (whole-file-summary (file/read-whole ctx file_id))
+         (catch clojure.lang.ExceptionInfo e
+           (if (= ::file/too-large (:reason (ex-data e)))
+             (stats-summary ctx file_id (:stats (ex-data e)))
+             (throw e)))))))
 
 (defn- file-libraries [{:keys [rpc]} {:keys [file_id]}]
   (tool/json-result
@@ -70,7 +98,7 @@
                          [:query {:description "Text to search in file names"} common/short-text]] common/page-params)
     :handler search-files}
    {:name "get_file"
-    :description "Summarize a file: name, project and team ids, revision, features, its pages in order with id, name and shape count, and the number of components, colors, typographies, token sets and media in its local library. Start here to learn page ids."
+    :description "Summarize a file: name, project and team ids, revision, features, its pages in order with id, name and shape count, and the number of components, colors, typographies, token sets and media in its local library. Start here to learn page ids. When the file is open in the editor, features and the media count are left out; when it is not open and is above the server's size limit, only the ids, revision and the numbers of components, colors and typographies are returned."
     :annotations tool/read-only
     :input-schema [:map {:closed true} common/file-id-param]
     :handler get-file}

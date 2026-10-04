@@ -20,12 +20,12 @@
                     {:explain (sm/explain changes-schema redo)}))))
 
 (defn- submit! [client file-id build]
-  (let [current (file/fetch client file-id)
-        redo    (validated (:redo-changes (build current)))]
+  (let [{:keys [revn vern]} (file/revision client file-id)
+        redo                (validated (:redo-changes (build)))]
     (rpc/call client :update-file {:id file-id
                                    :session-id (:session-id client)
-                                   :revn (:revn current)
-                                   :vern (:vern current)
+                                   :revn revn
+                                   :vern vern
                                    :features cfeat/supported-features
                                    :changes redo})))
 

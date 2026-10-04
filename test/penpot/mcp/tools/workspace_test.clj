@@ -1,5 +1,6 @@
 (ns penpot.mcp.tools.workspace-test
   (:require
+   [clojure.string :as str]
    [clojure.test :refer [deftest is]]
    [penpot.mcp.fixtures :as fx]
    [penpot.mcp.tools.files :as files]
@@ -45,13 +46,42 @@
                            ["files" 0 "name"])))))
 
 (deftest get-file-summarizes-pages-and-libraries
-  (let [result (fx/call (fx/find-tool files/tools "get_file") (fx/ctx {:get-file fx/file}) {"file_id" (str fx/file-id)})]
+  (let [result (fx/call (fx/find-tool files/tools "get_file") (fx/ctx (fx/file-responses fx/file)) {"file_id" (str fx/file-id)})]
     (is (= "Login" (get result "name")))
     (is (= 12 (get result "revn")))
     (is (= [{"id" (str fx/page-id) "name" "Screens" "shape_count" 6}
             {"id" (str fx/page2-id) "name" "Archive" "shape_count" 0}]
            (get result "pages")))
     (is (= {"components" 1 "colors" 1 "typographies" 1 "token_sets" 1 "media" 1} (get result "counts")))))
+
+(deftest get-file-reads-pages-and-library-from-the-open-editor
+  (let [ctx    (fx/plugin-ctx (fn [code]
+                                (if (str/includes? code "shapeCount")
+                                  [{:id (str fx/page-id) :name "Screens" :shapeCount 6}
+                                   {:id (str fx/page2-id) :name "Archive" :shapeCount 0}]
+                                  {:components 1 :colors 1 :typographies 1 :tokenSets 1}))
+                              (fx/file-responses fx/file))
+        result (fx/call (fx/find-tool files/tools "get_file") ctx {"file_id" (str fx/file-id)})]
+    (is (= {"id" (str fx/file-id) "name" "Login" "project_id" "66666666-0000-0000-0000-000000000001"
+            "team_id" "77777777-0000-0000-0000-000000000001" "revn" 12 "vern" 0 "is_shared" false
+            "pages" [{"id" (str fx/page-id) "name" "Screens" "shape_count" 6}
+                     {"id" (str fx/page2-id) "name" "Archive" "shape_count" 0}]
+            "counts" {"components" 1 "colors" 1 "typographies" 1 "token_sets" 1}}
+           result))
+    (is (not-any? #{:get-file :get-file-stats} (fx/rpc-commands ctx)))))
+
+(deftest get-file-of-large-file-without-editor-gives-counts-only
+  (let [ctx    (assoc-in (fx/closed-editor-ctx (assoc (fx/file-responses fx/file)
+                                                      :get-file-stats {:revn 12 :shape-counts {:total 6}
+                                                                       :component-count 1 :color-count 1
+                                                                       :typography-count 1}))
+                         [:config :full-file-shapes-max] 5)
+        result (fx/call (fx/find-tool files/tools "get_file") ctx {"file_id" (str fx/file-id)})]
+    (is (= {"id" (str fx/file-id) "name" "Login" "project_id" "66666666-0000-0000-0000-000000000001"
+            "team_id" "77777777-0000-0000-0000-000000000001" "revn" 12 "vern" 0 "is_shared" false
+            "counts" {"components" 1 "colors" 1 "typographies" 1}}
+           result))
+    (is (not-any? #{:get-file} (fx/rpc-commands ctx)))))
 
 (deftest get-file-libraries-returns-linked-libraries
   (let [lib-id (parse-uuid "aaaaaaaa-0000-0000-0000-000000000001")

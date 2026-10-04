@@ -2,31 +2,65 @@
   (:require
    [app.common.files.changes-builder :as pcb]
    [app.common.uuid :as uuid]
+   [clojure.string :as str]
    [penpot.mcp.penpot.changes :as changes]
    [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.revision :as revision]
+   [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.common :as common]))
 
+(defn- in-editor [ctx file-id body args]
+  (read/attempt ctx #(revision/mutate! ctx file-id body args)))
+
+(def ^:private create-body
+  (str/join
+   "\n"
+   ["const page = penpot.createPage();"
+    "markChanged();"
+    "page.name = args.name;"
+    "return page.id;"]))
+
+(def ^:private find-page
+  "const page = penpotUtils.getPageById(args.pageId) ?? fail('page-not-found', args.pageId);\n")
+
+(def ^:private rename-body
+  (str find-page
+       (str/join
+        "\n"
+        ["page.name = args.name;"
+         "markChanged();"
+         "return page.id;"])))
+
+(def ^:private delete-body
+  (str find-page
+       (str/join
+        "\n"
+        ["if (penpot.currentFile.pages.length <= 1) fail('last-page', args.pageId);"
+         "page.remove();"
+         "markChanged();"
+         "return page.id;"])))
+
 (defn- create-page [{:keys [rpc] :as ctx} {:keys [file_id name]}]
-  (revision/await-clean! ctx file_id)
-  (let [page-id (uuid/next)]
-    (changes/commit! rpc file_id (fn [_] (pcb/add-empty-page (pcb/empty-changes) page-id name)))
-    (tool/json-result {:page_id page-id :name name})))
+  (if-let [{page-id :value} (in-editor ctx file_id create-body {:name name})]
+    (tool/json-result {:page_id page-id :name name})
+    (let [page-id (uuid/next)]
+      (revision/await-clean! ctx file_id)
+      (changes/commit! rpc file_id #(pcb/add-empty-page (pcb/empty-changes) page-id name))
+      (tool/json-result {:page_id page-id :name name}))))
 
 (defn- rename-page [{:keys [rpc] :as ctx} {:keys [file_id page_id name]}]
-  (revision/await-clean! ctx file_id)
-  (changes/commit! rpc file_id (fn [f] (pcb/mod-page (pcb/empty-changes) (file/page f page_id) {:name name})))
+  (when-not (in-editor ctx file_id rename-body {:page-id page_id :name name})
+    (let [page (file/read-page ctx file_id page_id)]
+      (changes/commit! rpc file_id #(pcb/mod-page (pcb/empty-changes) page {:name name}))))
   (tool/json-result {:page_id page_id :name name}))
 
 (defn- delete-page [{:keys [rpc] :as ctx} {:keys [file_id page_id]}]
-  (revision/await-clean! ctx file_id)
-  (changes/commit! rpc file_id
-                   (fn [f]
-                     (let [page (file/page f page_id)]
-                       (when (<= (count (get-in f [:data :pages])) 1)
-                         (throw (tool/user-error "A Penpot file must keep at least one page")))
-                       (pcb/del-page (pcb/empty-changes) page))))
+  (when-not (in-editor ctx file_id delete-body {:page-id page_id})
+    (let [page (file/read-page ctx file_id page_id)]
+      (when (<= (:page-count (file/stats rpc file_id)) 1)
+        (throw (tool/user-error "A Penpot file must keep at least one page")))
+      (changes/commit! rpc file_id #(pcb/del-page (pcb/empty-changes) page))))
   (tool/json-result {:deleted page_id}))
 
 (def ^:private page-param

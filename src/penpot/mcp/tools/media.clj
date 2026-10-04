@@ -1,12 +1,13 @@
 (ns penpot.mcp.tools.media
   (:require
+   [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.rpc :as rpc]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.common :as common]))
 
 (defn- list-media [ctx {:keys [file_id] :as args}]
   (tool/json-result
-   (common/paged :media (->> (vals (get-in (common/fetch-file ctx file_id) [:data :media]))
+   (common/paged :media (->> (vals (get-in (file/read-whole ctx file_id) [:data :media]))
                              (sort-by :name)
                              (mapv #(select-keys % [:id :name :width :height :mtype]))) args)))
 

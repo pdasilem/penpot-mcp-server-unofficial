@@ -22,9 +22,8 @@
 
 (defn- add-rect [client file-id rect-id]
   (changes/commit! client file-id
-                   (fn [f]
-                     (let [page-id (first (get-in f [:data :pages]))
-                           objects (:objects (file/page f page-id))]
+                   (fn []
+                     (let [{page-id :id objects :objects} (file/fetch-page client file-id nil)]
                        (-> (pcb/empty-changes nil page-id)
                            (pcb/with-objects objects)
                            (pcb/add-object (cts/setup-shape {:id rect-id :type :rect :name "IT Rect"
@@ -39,7 +38,9 @@
                                                       :email (get it/env "PENPOT_EMAIL")
                                                       :password (get it/env "PENPOT_PASSWORD")
                                                       :wait-ms 500})
-                :version-error (constantly nil)}]
+                :version-error (constantly nil)
+                :config {:full-file-shapes-max 5000}
+                :file-cache (atom nil)}]
     (it/with-temp-project client
       (fn [project]
         (let [created (rpc/call client :create-file {:project-id (:id project) :name "it-read"})
@@ -52,12 +53,22 @@
                                                              ["pages" 0 "added"])))))
           (is (= "it-read" (get (call ctx "get_file" {"file_id" fid}) "name")))
           (is (some #(= fid (get % "id")) (get (call ctx "list_files" {"project_id" (str (:id project))}) "files")))
-          (is (= [{"id" (str rect-id) "name" "IT Rect" "type" "rectangle" "parent_id" (str uuid/zero)
-                   "x" 10 "y" 20 "width" 30 "height" 40}]
-                 (get (call ctx "list_shapes" {"file_id" fid}) "shapes")))
-          (is (= "#FF0000" (get-in (call ctx "get_shape" {"file_id" fid "shape_id" (str rect-id)}) ["shape" "fills" 0 "fill_color"])))
-          (is (str/includes? (get (call ctx "get_shape_css" {"file_id" fid "shape_id" (str rect-id)}) "css") "background: #FF0000;"))
-          (is (str/starts-with? (get (call ctx "get_shape_svg" {"file_id" fid "shape_id" (str rect-id)}) "svg") "<svg "))
+          (let [listed (call ctx "list_shapes" {"file_id" fid})
+                pid    (get listed "page_id")
+                shape  {"file_id" fid "page_id" pid "shape_id" (str rect-id)}]
+            (is (= [{"id" (str rect-id) "name" "IT Rect" "type" "rectangle" "parent_id" (str uuid/zero)
+                     "x" 10 "y" 20 "width" 30 "height" 40}]
+                   (get listed "shapes")))
+            (is (= "#FF0000" (get-in (call ctx "get_shape" shape) ["shape" "fills" 0 "fill_color"])))
+            (is (str/includes? (get (call ctx "get_shape_css" shape) "css") "background: #FF0000;"))
+            (is (str/starts-with? (get (call ctx "get_shape_svg" shape) "svg") "<svg "))
+            (is (= ["IT Rect"] (mapv #(get % "name") (get (call ctx "search_shapes" {"file_id" fid "query" "rect"}) "shapes")))))
+          (let [limited (assoc ctx :config {:full-file-shapes-max 0})
+                t       (first (filter #(= "list_media" (:name %)) tools/all))]
+            (is (str/includes? (get-in (tool/invoke t limited {"file_id" fid}) [:content 0 :text])
+                               "more than the 0 this server reads at once"))
+            (is (= {"id" fid "name" "it-read"}
+                   (select-keys (call limited "get_file" {"file_id" fid}) ["id" "name"]))))
           (is (= {"sets" [] "themes" []} (call ctx "get_design_tokens" {"file_id" fid})))
           (is (= {"threads" []} (call ctx "list_comments" {"file_id" fid})))
           (is (= {"media" []} (call ctx "list_media" {"file_id" fid})))

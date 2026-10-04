@@ -79,6 +79,7 @@
                                                  :bridge bridge
                                                  :execute #(bridge/execute! bridge %)
                                                  :persistence {:dirty (atom #{})}
+                                                 :file-cache (atom nil)
                                                  :plugin-lock {:lock (ReentrantLock.) :wait-ms plugin-lock-wait-ms}
                                                  :version-error #(version/check-error @version-state)}}))
                          server/stop!]])]

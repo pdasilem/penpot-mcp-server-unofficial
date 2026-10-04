@@ -16,6 +16,8 @@ Tools of the server, grouped as in the server, plus `list_toolsets` and `set_too
 
 Tools marked `[editor]` run in the Penpot editor through the bundled MCP plugin. They need the file open in a browser tab with MCP enabled; when the shape is on another page the editor switches to it. Reads issued after editor changes return the saved state.
 
+Shapes are read one page at a time. When the file is open in the editor, page lists, the page of a shape, the library and design tokens come from the editor, and `create_page`, `rename_page` and `delete_page` run there. Without the editor, tools that need the whole file (`search_shapes` without `page_id`, `get_component_instances`, the library tools, `list_media`, `compare_snapshots`) refuse files with more shapes than `FULL_FILE_SHAPES_MAX`; `list_media` and `compare_snapshots` refuse them with the editor too.
+
 Groups: `read` and `edit` are enabled by default, `manage` and `export` are enabled with `set_toolset` or `PENPOT_MCP_TOOLSETS`.
 
 Hints are the MCP tool annotations: read-only tools do not change Penpot data; destructive tools overwrite or delete existing data; idempotent tools have no further effect when repeated with the same arguments.
@@ -102,7 +104,7 @@ Group: `read`. Hints: read-only, idempotent
 
 ### `get_file`
 
-Summarize a file: name, project and team ids, revision, features, its pages in order with id, name and shape count, and the number of components, colors, typographies, token sets and media in its local library. Start here to learn page ids.
+Summarize a file: name, project and team ids, revision, features, its pages in order with id, name and shape count, and the number of components, colors, typographies, token sets and media in its local library. Start here to learn page ids. When the file is open in the editor, features and the media count are left out; when it is not open and is above the server's size limit, only the ids, revision and the numbers of components, colors and typographies are returned.
 
 Group: `read`. Hints: read-only, idempotent
 
@@ -275,6 +277,7 @@ Group: `read`. Hints: read-only, idempotent
 |---|---|---|---|
 | `file_id` | uuid | yes | Penpot file id |
 | `shape_id` | uuid | yes | Shape id |
+| `page_id` | uuid | no | Page the shape is on; required when the file is not open in the Penpot editor |
 
 ### `search_shapes`
 
@@ -301,6 +304,7 @@ Group: `read`. Hints: read-only, idempotent
 |---|---|---|---|
 | `file_id` | uuid | yes | Penpot file id |
 | `shape_id` | uuid | yes | Shape id |
+| `page_id` | uuid | no | Page the shape is on; required when the file is not open in the Penpot editor |
 | `include_children` | boolean | no | Also generate rules for all descendants |
 
 ### `get_shape_svg`
@@ -313,6 +317,7 @@ Group: `read`. Hints: read-only, idempotent
 |---|---|---|---|
 | `file_id` | uuid | yes | Penpot file id |
 | `shape_id` | uuid | yes | Shape id |
+| `page_id` | uuid | no | Page the shape is on; required when the file is not open in the Penpot editor |
 
 ## Library
 
