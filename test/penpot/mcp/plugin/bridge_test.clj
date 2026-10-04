@@ -132,3 +132,21 @@
   (is (= "timeout"
          (try (bridge/execute! *bridge* "x") nil
               (catch clojure.lang.ExceptionInfo e (:plugin/code (ex-data e)))))))
+
+(defn- slow-plugin [delay-ms]
+  (fn [code] (Thread/sleep (long delay-ms)) {:success true :data {:result {:echo code} :log ""}}))
+
+(deftest idle-timeout-is-configured-on-the-connection
+  (let [quiet (bridge/start! {:host "127.0.0.1" :port 0 :mcp-key mcp-key :task-timeout-ms 3000 :idle-timeout-ms 300})]
+    (try
+      (binding [*bridge* quiet]
+        (connect-plugin mcp-key (slow-plugin 900))
+        (await-connected true)
+        (is (some? (user-error-message #(bridge/execute! *bridge* "return 1;")))
+            "a connection idle longer than the configured timeout is closed"))
+      (finally (bridge/stop! quiet)))))
+
+(deftest default-idle-timeout-outlasts-long-tasks
+  (is (<= (* 10 60 1000) (bridge/idle-timeout-ms {:task-timeout-ms 30000})))
+  (is (< 30000 (bridge/idle-timeout-ms {:task-timeout-ms 30000})))
+  (is (= 300 (bridge/idle-timeout-ms {:task-timeout-ms 30000 :idle-timeout-ms 300}))))

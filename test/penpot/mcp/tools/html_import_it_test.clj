@@ -34,7 +34,7 @@
        "<div style='background:linear-gradient(90deg,#ff7a59,#ffd166);height:40px;border-radius:6px'></div>"
        "<div style='grid-column:span 2;background:#e9ecee;padding:8px'>Wide cell</div>"
        "<div><svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><circle cx='12' cy='12' r='10' fill='#5a6167'/></svg></div>"
-       "<div><img alt='dot' width='8' height='8' src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAEklEQVR4nGNgGAWjYBSMAggAAAQQAAFVN1rQAAAAAElFTkSuQmCC'></div>"
+       "<div><img alt='red square' src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAIAAABvFaqvAAAAH0lEQVR4nGO4o2FDFcQwatCoQaMGjRo0atCoQQNvEAC/R9AfJCCrhAAAAABJRU5ErkJggg=='></div>"
        "<div class='media'>Media</div></div>"
        "<div class='btn'>Only</div></div></div>"
        "</body></html>"))
