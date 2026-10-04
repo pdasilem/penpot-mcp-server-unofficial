@@ -263,7 +263,7 @@ Group: `read`. Hints: read-only, idempotent
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `file_id` | uuid | yes | Penpot file id |
-| `page_id` | uuid | no | Page id; defaults to the first page of the file |
+| `page_id` | uuid | no | Page id; defaults to the page of root_id when the file is open in the editor, otherwise to the first page |
 | `root_id` | uuid | no | Shape to start from; defaults to the root frame |
 | `depth` | integer | no | Levels of children to include (default 3) |
 

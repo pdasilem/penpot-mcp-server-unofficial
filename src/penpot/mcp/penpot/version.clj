@@ -6,7 +6,7 @@
 
 (def supported "2.18.1")
 
-(def ^:private fix-release 3)
+(def ^:private fix-release 4)
 
 (def server-version (str supported "." fix-release))
 
