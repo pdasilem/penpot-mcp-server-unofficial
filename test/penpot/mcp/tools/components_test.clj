@@ -74,3 +74,23 @@
 (deftest instance-without-parent-is-moved-to-the-page-root
   (let [{:keys [ctx]} (run "create_component_instance" {"file_id" fid "component_id" cid "x" 10 "y" 20})]
     (is (str/includes? (last @(:scripts ctx)) "(parent ?? penpot.currentPage.root).appendChild(s);"))))
+
+(deftest instances-can-be-placed-out-of-the-layout-flow
+  (let [{:keys [ctx]} (run "create_component_instance" {"file_id" fid "component_id" cid "x" 1 "y" 2
+                                                        "parent_id" (str fx/board-id) "absolute" true})]
+    (is (str/includes? (last @(:scripts ctx)) ".absolute = true;"))))
+
+(deftest variants-get-a-named-property-and-values-in-one-call
+  (let [other "33333333-0000-0000-0000-000000000002"
+        {:keys [ctx]} (run "create_variants" {"file_id" fid "component_ids" [cid other] "property" "State" "values" ["default" "hover"]})
+        code (last @(:scripts ctx))]
+    (is (= {"fileId" fid "componentIds" [cid other] "property" "State" "values" ["default" "hover"]} (fx/last-script-args ctx)))
+    (is (str/includes? code "v.renameProperty(0, args.property);"))
+    (is (str/includes? code "c.setVariantProperty(0, args.values[i]);"))))
+
+(deftest variant-values-need-a-property-and-one-value-per-component
+  (let [other "33333333-0000-0000-0000-000000000002"]
+    (is (= {:error "values needs property"}
+           (:result (run "create_variants" {"file_id" fid "component_ids" [cid other] "values" ["a" "b"]}))))
+    (is (= {:error "Give one value per component: 2 components, 1 values"}
+           (:result (run "create_variants" {"file_id" fid "component_ids" [cid other] "property" "State" "values" ["a"]}))))))

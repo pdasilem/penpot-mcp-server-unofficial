@@ -1,6 +1,8 @@
 (ns penpot.mcp.tools.export
   (:require
    [clojure.string :as str]
+   [penpot.mcp.penpot.revision :as revision]
+   [penpot.mcp.plugin.bridge :as bridge]
    [penpot.mcp.plugin.scripts :as scripts]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.canvas :as canvas]
@@ -25,14 +27,19 @@
   (String. (.decode (Base64/getDecoder) b64) StandardCharsets/UTF_8))
 
 (def ^:private default-max-size 1568)
+(def ^:private export-timeout-ms 120000)
 
 (defn- export-shape [ctx {:keys [file_id shape_id format mode max_size]}]
   (let [format (or format "png")
         mode   (or mode "shape")]
     (when (and (= "fill" mode) (= "svg" format))
       (throw (tool/user-error "Image fills can only be exported as png")))
-    (let [result (scripts/run! ctx body (common/compact {:file-id file_id :shape-id shape_id :format format :mode mode
-                                                         :max-size (or max_size default-max-size)}))
+    (let [result (scripts/serialized
+                  ctx
+                  #(do (revision/open-target-page! ctx file_id {:shape-id shape_id})
+                       (binding [bridge/*task-timeout-ms* export-timeout-ms]
+                         (scripts/run! ctx body (common/compact {:file-id file_id :shape-id shape_id :format format :mode mode
+                                                                 :max-size (or max_size default-max-size)})))))
           {:keys [base64]} (or (scripts/bytes-envelope result)
                                (throw (ex-info "Penpot editor returned no image data" {})))]
       (if (= "svg" format)

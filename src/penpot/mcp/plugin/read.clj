@@ -23,10 +23,8 @@
 (def shape-page-body
   (str/join
    "\n"
-   ["const found = penpotUtils.findShapeById(args.shapeId);"
-    "if (!found) return null;"
-    "const page = penpotUtils.getPageForShape(found);"
-    "return page ? page.id : null;"]))
+   ["const found = locateShape(args.shapeId);"
+    "return found ? found.page.id : null;"]))
 
 (def page-counts-body
   (str/join
@@ -62,7 +60,7 @@
     all-components
     ["return allComponents().map((c) => {"
      "  const main = c.mainInstance();"
-     "  const page = main ? penpotUtils.getPageForShape(main) : null;"
+     "  const page = main ? locateShape(main.id)?.page : null;"
      "  return { id: c.id, name: c.name, path: c.path, mainInstanceId: main ? main.id : null, mainInstancePage: page ? page.id : null };"
      "});"])))
 
@@ -151,7 +149,7 @@
 (def shape-info-body
   (str/join
    "\n"
-   ["const s = penpotUtils.findShapeById(args.shapeId);"
+   ["const s = locateShape(args.shapeId)?.shape;"
     "if (!s) return null;"
     "const layoutOf = (b) => b && b.type === 'board' ? (b.grid ? 'grid' : (b.flex ? 'flex' : null)) : null;"
     "return { type: s.type, layout: layoutOf(s), parentLayout: !!layoutOf(s.parent) };"]))
@@ -166,6 +164,44 @@
 (def svg-body
   (str/join
    "\n"
-   ["const s = penpotUtils.findShapeById(args.shapeId) ?? fail('shape-not-found', args.shapeId);"
-    "if (args.pageId && penpotUtils.getPageForShape(s)?.id !== args.pageId) fail('shape-not-found', args.shapeId);"
+   ["const found = locateShape(args.shapeId) ?? fail('shape-not-found', args.shapeId);"
+    "if (args.pageId && found.page.id !== args.pageId) fail('shape-not-found', args.shapeId);"
+    "const s = found.shape;"
     "return penpot.generateMarkup([s], { type: 'svg' });"]))
+
+(def ^:private brief-js
+  (str "const brief = (s) => ({ id: s.id, name: s.name, type: s.type, parent_id: s.parent ? s.parent.id : '" root-id "',"
+       " x: s.x, y: s.y, width: s.width, height: s.height });"))
+
+(def ^:private page-or-first
+  "const page = args.pageId ? penpotUtils.getPageById(args.pageId) : penpot.currentFile.pages[0];")
+
+(def list-shapes-body
+  (str/join
+   "\n"
+   [page-or-first
+    "if (!page) return null;"
+    brief-js
+    (str "return { pageId: page.id, shapes: page.findShapes()"
+         ".filter((s) => s.id !== '" root-id "' && (!args.type || s.type === args.type)).map(brief) };")]))
+
+(def shape-tree-body
+  (str/join
+   "\n"
+   ["const page = args.pageId ? penpotUtils.getPageById(args.pageId)"
+    "  : (args.rootId ? (locateShape(args.rootId)?.page ?? penpot.currentFile.pages[0]) : penpot.currentFile.pages[0]);"
+    "if (!page) return null;"
+    brief-js
+    "const root = args.rootId ? page.getShapeById(args.rootId) : page.root;"
+    "if (!root) return { pageId: page.id, tree: null };"
+    "const kids = (s) => {"
+    "  const c = ['board', 'group', 'boolean', 'svg-raw'].includes(s.type) ? (s.children ?? []) : [];"
+    "  return s.type === 'board' && s.flex ? [...c].reverse() : [...c];"
+    "};"
+    "const node = (s, depth) => {"
+    "  const c = kids(s);"
+    "  const n = { ...brief(s), child_count: c.length };"
+    "  if (depth > 0 && c.length) n.children = c.map((k) => node(k, depth - 1));"
+    "  return n;"
+    "};"
+    "return { pageId: page.id, tree: node(root, args.depth) };"]))

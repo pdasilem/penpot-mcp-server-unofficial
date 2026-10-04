@@ -107,7 +107,7 @@
 (deftest editor-page-list-waits-for-pending-saves
   (let [ctx (assoc (fx/plugin-ctx [] (fx/file-responses fx/file)) :persistence {:dirty (atom #{fx/file-id})})]
     (file/read-pages ctx fx/file-id)
-    (is (re-find #"storage.saves" (first @(:scripts ctx))))))
+    (is (re-find #"storage.lastSaveAt" (first @(:scripts ctx))))))
 
 (deftest walks-pages-of-the-whole-file-without-editor
   (let [ctx   (fx/closed-editor-ctx (fx/file-responses fx/file))

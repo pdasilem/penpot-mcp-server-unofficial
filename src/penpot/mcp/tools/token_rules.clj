@@ -58,6 +58,18 @@
 (defn parse-attr [public]
   (get by-public-name public))
 
+(def attr-groups
+  {"padding" [:p1 :p2 :p3 :p4]
+   "margin" [:m1 :m2 :m3 :m4]
+   "borderRadius" [:r1 :r2 :r3 :r4]
+   "gap" [:row-gap :column-gap]})
+
+(def attr-names
+  (into public-names (keys attr-groups)))
+
+(defn parse-attrs [public]
+  (set (or (get attr-groups public) (some-> (parse-attr public) vector))))
+
 (defn- type-name [token-type]
   (camel (name token-type)))
 
@@ -73,7 +85,15 @@
     ctt/spacing-margin-keys
     attributes))
 
-(defn target-attrs [{:keys [type]} shape objects attr]
+(defn- check-attr! [attr token-attrs allowed type shape-type]
+  (when-not (token-attrs attr)
+    (throw (tool/user-error (str "Attribute " (public-name attr) " does not take a " (type-name type)
+                                 " token; allowed: " (listing token-attrs)))))
+  (when-not (allowed attr)
+    (throw (tool/user-error (str "Attribute " (public-name attr) " cannot be set on a " shape-type
+                                 " shape; allowed for this token: " (listing (set/intersection token-attrs allowed)))))))
+
+(defn target-attrs [{:keys [type]} shape objects attrs]
   (let [{:keys [attributes all-attributes]} (get token-properties type)
         token-attrs   (or all-attributes attributes)
         _             (when-not token-attrs
@@ -81,15 +101,10 @@
         layout-child? (ctsl/any-layout-immediate-child? objects shape)
         allowed       (shape-attrs shape layout-child?)
         shape-type    (name (:type shape))]
-    (if attr
-      (do
-        (when-not (token-attrs attr)
-          (throw (tool/user-error (str "Attribute " (public-name attr) " does not take a " (type-name type)
-                                       " token; allowed: " (listing token-attrs)))))
-        (when-not (allowed attr)
-          (throw (tool/user-error (str "Attribute " (public-name attr) " cannot be set on a " shape-type
-                                       " shape; allowed for this token: " (listing (set/intersection token-attrs allowed))))))
-        #{attr})
+    (if (seq attrs)
+      (do (doseq [attr (filter (set attrs) attr-order)]
+            (check-attr! attr token-attrs allowed type shape-type))
+          (set attrs))
       (let [targets (set/intersection (default-attrs type attributes layout-child?) allowed)]
         (when (empty? targets)
           (throw (tool/user-error (str "A " (type-name type) " token cannot be applied to a " shape-type " shape"))))

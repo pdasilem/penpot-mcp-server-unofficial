@@ -73,6 +73,7 @@
                 "  (parent ?? penpot.currentPage.root).appendChild(s);"
                 "  s.x = args.x;"
                 "  s.y = args.y;"
+                create/out-of-flow
                 "} catch (e) { s.remove(); throw e; }"
                 "await settle();"
                 "markChanged();"
@@ -84,10 +85,13 @@
 (def ^:private create-variants
   (canvas/plugin-tool
    {:name "create_variants"
-    :description "Combine components of the file's own library into one variant set, as Penpot's \"Combine as variants\" does. Their main instances must be on the same page. Penpot derives the first properties from the component names. Returns the variant set: its id, property names and each variant component with its property values."
+    :description "Combine components of the file's own library into one variant set, as Penpot's \"Combine as variants\" does. Their main instances must be on the same page. Penpot derives the first properties from the component names; property and values name the first property and set each variant's value in the same call. Returns the variant set: its id, property names and each variant component with its property values."
     :annotations tool/overwrite
     :input-schema (schema [:component_ids {:description "Ids of two or more components of this file"}
-                           [:vector {:min 2} :uuid]])
+                           [:vector {:min 2} :uuid]]
+                          [:property {:optional true :description "Name for the first property instead of Penpot's Property 1"} common/short-text]
+                          [:values {:optional true :description "Value of that property for each component, in the order of component_ids"}
+                           [:vector [:string {:min 1 :max 250}]]])
     :body (body "const mains = [];"
                 "for (const id of args.componentIds) {"
                 "  const c = findComponent(id);"
@@ -98,9 +102,24 @@
                 "for (const m of mains) if (!penpot.currentPage.getShapeById(m.id)) fail('mixed-pages', m.id);"
                 "const container = penpot.createVariantFromComponents(mains) ?? fail('create-failed', 'variant set');"
                 "markChanged();"
-                "const v = await waitFor(() => container.variants);"
-                "return v ? variantState(v) : fail('create-failed', 'variant set');")
-    :args #(hash-map :component-ids (:component_ids %))
+                "const v = await waitFor(() => container.variants) ?? fail('create-failed', 'variant set');"
+                "if (args.property !== undefined && v.properties[0] !== args.property) {"
+                "  v.renameProperty(0, args.property);"
+                "  if (!(await waitFor(() => v.properties[0] === args.property))) fail('variant-not-updated', args.property);"
+                "}"
+                "for (let i = 0; i < (args.values ?? []).length; i++) {"
+                "  const c = findComponent(args.componentIds[i]);"
+                "  c.setVariantProperty(0, args.values[i]);"
+                "  if (!(await waitFor(() => c.variantProps[v.properties[0]] === args.values[i]))) fail('variant-not-updated', args.values[i]);"
+                "}"
+                "return variantState(v);")
+    :args (fn [{:keys [component_ids property values]}]
+            (when (and values (not property))
+              (throw (tool/user-error "values needs property")))
+            (when (and values (not= (count values) (count component_ids)))
+              (throw (tool/user-error (str "Give one value per component: " (count component_ids) " components, "
+                                           (count values) " values"))))
+            (common/compact {:component-ids component_ids :property property :values values}))
     :result-key :variants}))
 
 (def ^:private set-variant-property

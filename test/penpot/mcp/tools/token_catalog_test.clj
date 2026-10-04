@@ -53,3 +53,17 @@
                      "if (theme.active !== args.active) { theme.toggleActive(); markChanged(); }"))
   (is (= {"fileId" fid "themeId" theme-id "setIds" [set-id]} (:args (run "set_theme_sets" {"theme_id" theme-id "set_ids" [set-id]}))))
   (is (= {"fileId" fid "themeId" theme-id "setIds" []} (:args (run "set_theme_sets" {"theme_id" theme-id "set_ids" []})))))
+
+(deftest repeating-a-token-creation-returns-the-existing-token
+  (let [{:keys [script]} (run "create_token" {"set_id" set-id "type" "color" "name" "color.primary" "value" "#3366FF"})]
+    (is (str/includes? script "if (same) return tokenState(same);"))
+    (is (str/includes? script "fail('token-exists', args.name);"))))
+
+(deftest repeating-a-set-creation-returns-the-existing-set
+  (let [{:keys [script]} (run "create_token_set" {"name" "brand/dark"})]
+    (is (str/includes? script "if (existing) return { set: setState(existing), deactivatedThemes: [] };"))))
+
+(deftest a-new-active-set-reports-the-themes-it-switched-off
+  (let [{:keys [script]} (run "create_token_set" {"name" "brand/dark"})]
+    (is (str/includes? script "const activeBefore = tokens.themes.filter((th) => th.active).map((th) => th.id);"))
+    (is (str/includes? script "deactivatedThemes"))))

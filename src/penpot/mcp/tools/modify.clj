@@ -154,7 +154,7 @@
     :body (str/join "\n"
                     ["const deleted = [];"
                      "for (const id of args.shapeIds) {"
-                     "  if (!penpotUtils.findShapeById(id)) continue;"
+                     "  if (!locateShape(id)) continue;"
                      "  (await focusShape(id)).remove();"
                      "  markChanged();"
                      "  deleted.push(id);"

@@ -1,5 +1,6 @@
 (ns penpot.mcp.tools.library
   (:require
+   [clojure.string :as str]
    [app.common.types.token :as cto]
    [app.common.types.tokens-lib :as ctob]
    [penpot.mcp.penpot.file :as file]
@@ -18,11 +19,15 @@
     (read/file-keys items)
     (vals (get (whole-data ctx file-id) k))))
 
-(defn- list-components [ctx {:keys [file_id] :as args}]
+(defn- full-name [{:keys [path name]}]
+  (str/lower-case (if (str/blank? path) (str name) (str path " / " name))))
+
+(defn- list-components [ctx {:keys [file_id query] :as args}]
   (tool/json-result
    (common/paged :components (->> (library-items ctx file_id read/components-body :components)
                                   (remove :deleted)
-                                  (sort-by (juxt :path :name))
+                                  (filter #(or (nil? query) (str/includes? (full-name %) (str/lower-case query))))
+                                  (sort-by (juxt :path :name (comp str :id)))
                                   (mapv #(select-keys % [:id :name :path :main-instance-id :main-instance-page]))) args)))
 
 (defn- page-instances [component-id page]
@@ -113,9 +118,12 @@
 
 (def tools
   [{:name "list_components"
-    :description "List the components of the file's local library: id, name, path and the id and page of the main instance."
+    :description "List the components of the file's local library: id, name, path and the id and page of the main instance. query keeps the components whose path and name, written as path / name, contain it, ignoring case."
     :annotations tool/read-only
-    :input-schema (into file-only common/page-params)
+    :input-schema (into [:map {:closed true}
+                         common/file-id-param
+                         [:query {:optional true :description "Text to find in the component path and name"} [:string {:min 1 :max 250}]]]
+                        common/page-params)
     :handler list-components}
    {:name "get_component_instances"
     :description "List the component instances placed in the file, optionally only those of one component: shape id, name, page id, component id, the file the component comes from and whether it is the main instance."

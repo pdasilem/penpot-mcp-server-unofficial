@@ -102,13 +102,43 @@
 (defn connected? [{:keys [state]}]
   (some? (:session @state)))
 
+(def ^:dynamic *task-timeout-ms* nil)
+
+(defn- seconds [ms]
+  (let [secs (/ ms 1000.0)]
+    (if (== secs (Math/floor secs)) (str (long secs)) (str secs))))
+
+(defn- timeout-error [timeout-ms]
+  (ex-info (str "Penpot editor did not answer within " (seconds timeout-ms) " seconds; the change may still have been applied."
+                " Check the result, for example with get_shape or search_shapes, before repeating the call")
+           {:type :tool/user-error :plugin/code "timeout"}))
+
 (defn- await-reply [^CompletableFuture fut timeout-ms]
   (try
     (.get fut timeout-ms TimeUnit/MILLISECONDS)
     (catch TimeoutException _
-      (throw (ex-info "Penpot editor did not answer in time" {:type :tool/user-error :plugin/code "timeout"})))
+      (throw (timeout-error timeout-ms)))
     (catch ExecutionException e
       (throw (.getCause e)))))
+
+(defn- await-inflight! [state]
+  (when-let [{:keys [^CompletableFuture future expires-at]} (:inflight @state)]
+    (let [left (- expires-at (System/currentTimeMillis))]
+      (when-not (.isDone future)
+        (try
+          (when (pos? left) (.get future left TimeUnit/MILLISECONDS))
+          (catch Exception _ nil)))
+      (swap! state dissoc :inflight)
+      (when-not (.isDone future)
+        (throw (ex-info "Penpot editor is still busy with a previous request that did not answer in time; check its result and try again"
+                        {:type :tool/user-error :plugin/code "busy"}))))))
+
+(defn- keep-inflight! [state id ^CompletableFuture fut grace-ms]
+  (swap! state assoc :inflight {:future fut :expires-at (+ (System/currentTimeMillis) grace-ms)})
+  (.whenComplete fut (reify java.util.function.BiConsumer
+                       (accept [_ _ _]
+                         (swap! state update :pending dissoc id)
+                         (log/info "Penpot editor answered a request after its timeout")))))
 
 (defn- send-callback [^CompletableFuture fut]
   (reify Callback
@@ -117,6 +147,7 @@
       (.completeExceptionally fut (tool/user-error disconnected-message)))))
 
 (defn execute! [{:keys [state task-timeout-ms]} code]
+  (await-inflight! state)
   (let [^Session session (:session @state)]
     (when-not session
       (throw (ex-info "Penpot editor is not connected; open the file in Penpot with MCP enabled"
@@ -126,12 +157,17 @@
       (swap! state assoc-in [:pending id] {:future fut :session session})
       (try
         (.sendText session (json/write-str {:id id :task "executeCode" :params {:code code}}) (send-callback fut))
-        (let [{:keys [success error data]} (await-reply fut task-timeout-ms)]
+        (let [{:keys [success error data]} (await-reply fut (or *task-timeout-ms* task-timeout-ms))]
           (if success
             (:result data)
             (throw (tool/user-error (str "Penpot editor reported an error: " error)))))
+        (catch clojure.lang.ExceptionInfo e
+          (when (= "timeout" (:plugin/code (ex-data e)))
+            (keep-inflight! state id fut task-timeout-ms))
+          (throw e))
         (finally
-          (swap! state update :pending dissoc id))))))
+          (when (.isDone fut)
+            (swap! state update :pending dissoc id)))))))
 
 (defn stop! [{:keys [^Server jetty state]}]
   (when-let [session (:session @state)]

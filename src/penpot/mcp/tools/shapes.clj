@@ -3,6 +3,7 @@
    [app.common.uuid :as uuid]
    [clojure.string :as str]
    [penpot.mcp.penpot.file :as file]
+   [penpot.mcp.penpot.revision :as revision]
    [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.common :as common]
@@ -11,13 +12,29 @@
 
 (def ^:private default-depth 3)
 
-(defn- list-shapes [ctx {:keys [file_id page_id type] :as args}]
-  (let [page (file/read-page ctx file_id page_id)]
+(defn- missing-page [file-id page-id]
+  (tool/user-error (str "Page " page-id " not found in file " file-id)))
+
+(defn- editor-listing [ctx {:keys [file_id page_id type]}]
+  (when (revision/unsaved? ctx file_id)
+    (read/in-editor ctx file_id read/list-shapes-body
+                    (cond-> {} page_id (assoc :page-id page_id) type (assoc :type type)))))
+
+(defn- shapes-listing [ctx {:keys [file_id page_id type] :as args}]
+  (if-let [{found :value} (editor-listing ctx args)]
+    (if found
+      {:page-id (parse-uuid (:pageId found)) :shapes (:shapes found)}
+      (throw (missing-page file_id page_id)))
+    (let [page (file/read-page ctx file_id page_id)]
+      {:page-id (:id page)
+       :shapes  (->> (common/page-shapes page)
+                     (filter #(or (nil? type) (= type (common/shape-type %))))
+                     (mapv common/brief))})))
+
+(defn- list-shapes [ctx args]
+  (let [{:keys [page-id shapes]} (shapes-listing ctx args)]
     (tool/json-result
-     (merge {:page_id (:id page)} (common/paged :shapes (->> (common/page-shapes page)
-                                                             (filter #(or (nil? type) (= type (common/shape-type %))))
-                                                             (sort-by (juxt :y :x :name))
-                                                             (mapv common/brief)) args)))))
+     (merge {:page_id page-id} (common/paged :shapes (vec (sort-by (juxt :y :x :name) shapes)) args)))))
 
 (defn- tree-node [objects shape depth]
   (let [children (keep #(get objects %) (:shapes shape))
@@ -26,12 +43,26 @@
       (assoc node :children (mapv #(tree-node objects % (dec depth)) children))
       node)))
 
-(defn- shape-tree [ctx {:keys [file_id page_id root_id depth]}]
+(defn- missing-root [root-id page-id]
+  (tool/user-error (str "Shape " root-id " not found on page " page-id)))
+
+(defn- saved-tree [ctx {:keys [file_id page_id root_id depth]}]
   (let [page    (file/read-page ctx file_id page_id)
         objects (:objects page)
-        root    (or (get objects (or root_id uuid/zero))
-                    (throw (tool/user-error (str "Shape " root_id " not found on page " (:id page)))))]
-    (tool/json-result (tree-node objects root (or depth default-depth)))))
+        root    (or (get objects (or root_id uuid/zero)) (throw (missing-root root_id (:id page))))]
+    (tree-node objects root (or depth default-depth))))
+
+(defn- shape-tree [ctx {:keys [file_id page_id root_id depth] :as args}]
+  (tool/json-result
+   (if-let [{found :value} (read/in-editor ctx file_id read/shape-tree-body
+                                           (cond-> {:depth (or depth default-depth)}
+                                             page_id (assoc :page-id page_id)
+                                             root_id (assoc :root-id root_id)))]
+     (cond
+       (nil? found) (throw (missing-page file_id page_id))
+       (nil? (:tree found)) (throw (missing-root root_id (:pageId found)))
+       :else (:tree found))
+     (saved-tree ctx args))))
 
 (defn- get-shape [ctx {:keys [file_id page_id shape_id]}]
   (let [{:keys [page shape]} (file/read-shape ctx file_id shape_id page_id)]
@@ -102,7 +133,7 @@
     :annotations tool/read-only
     :input-schema [:map {:closed true}
                    common/file-id-param
-                   common/page-id-param
+                   [:page_id {:optional true :description "Page id; defaults to the page of root_id when the file is open in the editor, otherwise to the first page"} :uuid]
                    [:root_id {:optional true :description "Shape to start from; defaults to the root frame"} :uuid]
                    [:depth {:optional true :description "Levels of children to include (default 3)"} [:int {:min 0 :max 50}]]]
     :handler shape-tree}

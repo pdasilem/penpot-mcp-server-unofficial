@@ -23,7 +23,7 @@
     (revision/mark-dirty! c file-id)
     (revision/await-clean! c file-id)
     (is (= 1 (count @(:scripts c))))
-    (is (str/includes? (first @(:scripts c)) "storage.saves > storage.dirtySave"))
+    (is (str/includes? (first @(:scripts c)) "storage.lastSaveAt > storage.dirtySince + 3000"))
     (is (empty? @(get-in c [:persistence :dirty])))))
 
 (deftest unsaved-changes-are-an-error
@@ -55,7 +55,7 @@
         c     {:plugin-lock {:lock lock :wait-ms 5000}
                :persistence {:dirty dirty}
                :execute (fn [code]
-                          (if (str/includes? code "storage.dirtySave === undefined")
+                          (if (str/includes? code "storage.dirtySince === undefined")
                             (do (Thread/sleep 200) {:result true :changed false})
                             {:result :ok :changed true}))}
         reader (future (revision/await-clean! c file-id))]
@@ -79,4 +79,24 @@
 (deftest failure-before-any-change-keeps-the-file-clean
   (let [c (ctx (fn [_] (throw (ex-info "Penpot editor reported an error: MCP_ERR:shape-not-found:x" {}))))]
     (is (thrown? clojure.lang.ExceptionInfo (revision/mutate! c file-id "x" {})))
+    (is (empty? @(get-in c [:persistence :dirty])))))
+
+(deftest an-edit-first-opens-the-page-of-its-target-in-a-separate-call
+  (let [c (ctx (fn [code] (if (str/includes? code "return { switched") {:result {:switched true} :changed false} {:result 1 :changed true})))]
+    (revision/mutate! c file-id "return 1;" {:shape-id "s1"})
+    (is (= 2 (count @(:scripts c))))
+    (is (str/includes? (first @(:scripts c)) "await openPage(page);"))
+    (is (str/includes? (second @(:scripts c)) "return 1;"))))
+
+(deftest an-edit-without-a-canvas-target-runs-alone
+  (let [c (ctx (constantly {:result 1 :changed false}))]
+    (revision/mutate! c file-id "return 1;" {:token-id "t1"})
+    (is (= 1 (count @(:scripts c))))))
+
+(deftest a-failing-page-switch-changes-nothing
+  (let [c (ctx (fn [code] (if (str/includes? code "return { switched")
+                            (throw (tool/user-error "Penpot editor reported an error: MCP_ERR:page-not-opened:p"))
+                            {:result 1 :changed true})))]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"did not open page p" (revision/mutate! c file-id "return 1;" {:page-id "p"})))
+    (is (= 1 (count @(:scripts c))))
     (is (empty? @(get-in c [:persistence :dirty])))))

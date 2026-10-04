@@ -60,7 +60,7 @@
 (def remove-body
   (str/join
    "\n"
-   ["const s = penpotUtils.findShapeById(args.shapeId);"
+   ["const s = locateShape(args.shapeId);"
     "if (s) { await focusShape(args.shapeId); penpot.currentPage.getShapeById(args.shapeId)?.remove(); markChanged(); }"
     "return { removed: !!s };"]))
 

@@ -8,7 +8,7 @@
 (def objects (get-in fx/page [:objects]))
 
 (defn- targets [token-type shape-id attr]
-  (rules/target-attrs {:type token-type :name "t"} (get objects shape-id) objects attr))
+  (rules/target-attrs {:type token-type :name "t"} (get objects shape-id) objects (some-> attr vector)))
 
 (defn- error [f]
   (try (f) nil (catch clojure.lang.ExceptionInfo e (ex-message e))))

@@ -15,7 +15,7 @@
 (defn- call [tools tool-name args]
   (let [ctx (fx/plugin-ctx shape-result)
         res (fx/call (fx/find-tool tools tool-name) ctx args)]
-    {:result res :args (some-> (first @(:scripts ctx)) fx/script-args) :code (first @(:scripts ctx)) :ctx ctx}))
+    {:result res :args (some-> (last @(:scripts ctx)) fx/script-args) :code (last @(:scripts ctx)) :ctx ctx}))
 
 (deftest create-rect-passes-geometry-and-parent
   (let [{:keys [result args code]} (call create/tools "create_rect"
@@ -137,7 +137,7 @@
   (is (str/includes? (:code (call create/tools "create_group" {"file_id" fid "shape_ids" [sid]})) "fail('mixed-pages'")))
 
 (deftest delete-skips-already-removed-shapes
-  (is (str/includes? (:code (call modify/tools "delete_shapes" {"file_id" fid "shape_ids" [sid]})) "if (!penpotUtils.findShapeById(id)) continue;")))
+  (is (str/includes? (:code (call modify/tools "delete_shapes" {"file_id" fid "shape_ids" [sid]})) "if (!locateShape(id)) continue;")))
 
 (deftest radius-requires-a-value
   (is (= {:error "Give radius or at least one corner"}
@@ -190,3 +190,25 @@
   (let [code (:code (call modify/tools "set_opacity" {"file_id" fid "shape_id" sid "opacity" 0.5}))]
     (is (str/includes? code "const defaults = { rotation: 0, opacity: 1, visible: true, blocked: false };"))
     (is (str/includes? code "return { id, changed };"))))
+
+(deftest text-is-created-with-typography-and-color-tokens-in-one-call
+  (let [typo "88888888-0000-0000-0000-0000000000a1"
+        color "88888888-0000-0000-0000-0000000000a2"
+        {:keys [code args]} (call create/tools "create_text" {"file_id" fid "x" 0 "y" 0 "text" "Hi"
+                                                              "typography_token_id" typo "color_token_id" color})]
+    (is (= [typo color] [(get args "typographyTokenId") (get args "colorTokenId")]))
+    (is (str/includes? code "bindToken(args.typographyTokenId, 'typography', 'typography');"))
+    (is (str/includes? code "bindToken(args.colorTokenId, 'color', 'fill');"))))
+
+(deftest shapes-can-be-created-out-of-the-layout-flow-in-one-call
+  (let [{:keys [code args]} (call create/tools "create_rect" {"file_id" fid "x" 5 "y" 6 "width" 10 "height" 10
+                                                              "parent_id" (str fx/board-id) "absolute" true
+                                                              "constraint_horizontal" "right" "constraint_vertical" "top"})]
+    (is (= [true "right" "top"] [(get args "absolute") (get args "constraintHorizontal") (get args "constraintVertical")]))
+    (is (str/includes? code "(s.layoutChild ?? fail('not-in-layout', s.id)).absolute = true;"))
+    (is (< (str/index-of code "parent.appendChild(s);") (str/index-of code ".absolute = true;")))))
+
+(deftest component-name-is-the-full-name-with-its-path
+  (let [{:keys [code]} (call create/tools "create_component" {"file_id" fid "shape_ids" [sid] "name" "ICON / MENU_FOLD"})]
+    (is (str/includes? code "const parts = args.name.split('/').map((p) => p.trim()).filter(Boolean);"))
+    (is (< (str/index-of code "c.path = path;") (str/index-of code "c.name = leaf;")))))

@@ -21,6 +21,7 @@
 (def mcp-url (get it/env "PENPOT_IT_MCP_URL" "http://localhost:9001/mcp/stream"))
 (def public-url (get it/env "PENPOT_IT_PUBLIC_URL" "http://localhost:9001"))
 (def token-id (uuid/next))
+(def spacing-id (uuid/next))
 (def set-name "it-brand")
 
 (defn- add-tokens [client file-id]
@@ -31,6 +32,7 @@
                            lib    (-> (or (get-in f [:data :tokens-lib]) (ctob/make-tokens-lib))
                                       (ctob/add-set (ctob/make-token-set :id set-id :name set-name))
                                       (ctob/add-token set-id (ctob/make-token :id token-id :name "it.primary" :type :color :value "#3366FF"))
+                                      (ctob/add-token set-id (ctob/make-token :id spacing-id :name "it.space" :type :spacing :value "8"))
                                       (ctob/toggle-set-in-theme ctob/hidden-theme-id set-name))]
                        (-> (pcb/empty-changes)
                            (pcb/with-library-data (:data f))
@@ -110,7 +112,11 @@
                              (get (changed "set_token" {:token_id (str token-id) :attr "strokeColor"}) "tokens")))
                       (is (= {"strokeColor" "it.primary"} (get (changed "remove_token" {:attr "fill"}) "tokens")))
                       (is (not (contains? (changed "remove_token" {:attr "fill"}) "tokens")))
-                      (is (= {} (get (changed "remove_token" {:token_id (str token-id)}) "tokens")))))))
+                      (is (= {} (get (changed "remove_token" {:token_id (str token-id)}) "tokens")))
+                      (is (= {"paddingTop" "it.space" "paddingRight" "it.space" "paddingBottom" "it.space" "paddingLeft" "it.space"}
+                             (get-in (data s "set_token" {:file_id fid :shape_id board :token_id (str spacing-id) :attr "padding"})
+                                     ["shape" "changed" "tokens"])))
+                      (is (= {} (get-in (data s "remove_token" {:file_id fid :shape_id board :attr "padding"}) ["shape" "changed" "tokens"])))))))
               (testing "text"
                 (let [t (get-in (data s "create_text" {:file_id fid :x 0 :y 400 :text "Hello MCP"}) ["shape" "id"])]
                   (is (= "32" (get-in (data s "set_text_style" {:file_id fid :shape_id t :font_size 32}) ["shape" "changed" "fontSize"])))
@@ -272,6 +278,12 @@
                   (is (= ["{space.1} * 2" "8"] [(get-in space ["token" "value"]) (get-in space ["token" "resolvedValue"])]))
                   (is (= ["mode" "dark" ["mode/dark"]] [(get theme "group") (get theme "name") (mapv #(get % "name") (get theme "sets"))]))
                   (is (true? (get-in (data s "set_token_theme_active" {:file_id fid :theme_id (get theme "id") :active true}) ["theme" "active"])))
+                  (let [extra (data s "create_token_set" {:file_id fid :name "mode/extra"})]
+                    (is (= [(get theme "id")] (mapv #(get % "id") (get extra "deactivatedThemes"))))
+                    (is (= (get-in extra ["set" "id"]) (get-in (data s "create_token_set" {:file_id fid :name "mode/extra"}) ["set" "id"])))
+                    (data s "set_token_theme_active" {:file_id fid :theme_id (get theme "id") :active true}))
+                  (is (= (get-in token ["token" "id"])
+                         (get-in (data s "create_token" {:file_id fid :set_id light :type "color" :name "bg" :value "#FFFFFF"}) ["token" "id"])))
                   (let [[_ ms] (timed #(data s "set_token_theme_active" {:file_id fid :theme_id (get theme "id") :active true}))
                         [t read-ms] (timed tokens)]
                     (is (< (+ ms read-ms) 10000) "repeating an unchanged state does not block reads")
@@ -313,6 +325,29 @@
                     (data s "distribute_shapes" {:file_id fid :shape_ids row :axis "horizontal"})
                     (shape-of s fid (first row))
                     (is (< (quot (- (System/nanoTime) t0) 1000000) 10000) "an unchanged distribution does not block reads"))))
+              (testing "fewer calls and exact results"
+                (let [flexb (get-in (data s "create_board" {:file_id fid :x 0 :y 6000 :width 300 :height 100 :name "FlexAbs"}) ["shape" "id"])
+                      _     (data s "set_flex_layout" {:file_id fid :board_id flexb :dir "row"})
+                      abs   (get (data s "create_rect" {:file_id fid :parent_id flexb :x 250 :y 6050 :width 20 :height 20
+                                                        :absolute true :constraint_horizontal "right"}) "shape")
+                      icon  (get (data s "import_svg" {:file_id fid :x 400 :y 6000
+                                                       :svg "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1344 1344\" width=\"24\" height=\"24\"><rect width=\"1344\" height=\"1344\"/></svg>"})
+                                 "shape")
+                      comp  (data s "create_component" {:file_id fid :shape_ids [(get icon "id")] :name "IT / Icon"})
+                      part  (fn [x nm] (let [b (get-in (data s "create_board" {:file_id fid :x x :y 6200 :width 40 :height 40 :name nm}) ["shape" "id"])]
+                                         (get (data s "create_component" {:file_id fid :shape_ids [b] :name nm}) "componentId")))
+                      small (part 0 "Small")
+                      large (part 100 "Large")
+                      v     (get (data s "create_variants" {:file_id fid :component_ids [small large] :property "Size" :values ["S" "L"]}) "variants")
+                      round #(Math/round (double %))]
+                  (is (= [250 6050] (mapv round [(get abs "x") (get abs "y")])))
+                  (is (= [24 24] (mapv round [(get icon "width") (get icon "height")])))
+                  (is (= ["IT" "Icon"] [(get comp "path") (get comp "name")]))
+                  (is (= ["Size"] (get v "properties")))
+                  (is (= #{{"Size" "S"} {"Size" "L"}} (set (map #(get % "properties") (get v "components")))))
+                  (data s "resize" {:file_id fid :shape_id flexb :width 320 :height 100})
+                  (is (= 320 (round (get (data s "get_shape_tree" {:file_id fid :root_id flexb :depth 0}) "width"))))
+                  (is (= ["Icon"] (mapv #(get % "name") (get (data s "list_components" {:file_id fid :query "it / ic"}) "components"))))))
               (testing "export"
                 (let [png (tool s "export_shape" {:file_id fid :shape_id board})
                       bytes (.decode (Base64/getDecoder) ^String (get-in png [:content 0 :data]))]

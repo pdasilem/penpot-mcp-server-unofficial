@@ -3,6 +3,7 @@
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]
    [penpot.mcp.fixtures :as fx]
+   [penpot.mcp.plugin.bridge :as bridge]
    [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.export :as export]
@@ -160,3 +161,40 @@
   (let [ctx (fx/plugin-ctx {:__type "base64" :data "AA=="})]
     (tool/invoke (fx/find-tool export/tools "export_shape") ctx {"file_id" fid "shape_id" sid})
     (is (str/includes? (last @(:scripts ctx)) "return { __type: 'base64', data: btoa(binary) };"))))
+
+(defn- spacing-call [tool-name args]
+  (let [ctx (fx/plugin-ctx (fn [code]
+                             (cond
+                               (str/includes? code read/token-body) {:id tid :name "space.m" :type "spacing"}
+                               (str/includes? code read/shape-info-body) {:type "board" :layout "flex" :parentLayout false}
+                               :else {:id sid}))
+                           {})]
+    {:ctx ctx :result (fx/call (fx/find-tool tokens/tools tool-name) ctx args)}))
+
+(deftest a-group-attribute-binds-all-its-sides-in-one-call
+  (let [{:keys [ctx]} (spacing-call "set_token" {"file_id" fid "shape_id" sid "token_id" tid "attr" "padding"})]
+    (is (= #{"paddingTop" "paddingRight" "paddingBottom" "paddingLeft"}
+           (set (map #(get % "key") (get (fx/last-script-args ctx) "attrs")))))))
+
+(deftest a-group-attribute-unbinds-all-its-sides
+  (let [{:keys [ctx]} (spacing-call "remove_token" {"file_id" fid "shape_id" sid "attr" "gap"})]
+    (is (= #{"rowGap" "columnGap"} (set (map #(get % "key") (get (fx/last-script-args ctx) "attrs")))))))
+
+(deftest a-group-attribute-is-checked-against-the-token-type
+  (let [{:keys [ctx result]} (token-call "set_token" {"file_id" fid "shape_id" sid "token_id" tid "attr" "padding"})]
+    (is (re-find #"does not take a color token" (:error result)))
+    (is (not (changes-sent? ctx)))))
+
+(deftest export-opens-the-page-of-the-shape-first
+  (let [ctx (fx/plugin-ctx (fn [code] (if (str/includes? code "return { switched") {:switched true} {:__type "base64" :data "AA=="})))]
+    (tool/invoke (fx/find-tool export/tools "export_shape") ctx {"file_id" fid "shape_id" sid})
+    (is (= 2 (count @(:scripts ctx))))
+    (is (str/includes? (first @(:scripts ctx)) "await openPage(page);"))))
+
+(deftest export-waits-longer-than-an-edit
+  (let [seen (atom [])
+        ctx  (assoc (fx/plugin-ctx {:__type "base64" :data "AA=="})
+                    :execute (fn [code] (swap! seen conj bridge/*task-timeout-ms*)
+                               {:result (if (str/includes? code "return { switched") {:switched false} {:__type "base64" :data "AA=="}) :changed false}))]
+    (tool/invoke (fx/find-tool export/tools "export_shape") ctx {"file_id" fid "shape_id" sid})
+    (is (= [120000] (distinct (rest @seen))))))

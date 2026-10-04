@@ -73,8 +73,8 @@
 (deftest times-out-when-plugin-does-not-answer
   (connect-plugin mcp-key (constantly nil))
   (await-connected true)
-  (is (= "Penpot editor did not answer in time"
-         (user-error-message #(bridge/execute! *bridge* "return 1;")))))
+  (is (re-find #"did not answer within 0\.5 seconds; the change may still have been applied"
+               (user-error-message #(bridge/execute! *bridge* "return 1;")))))
 
 (deftest fails-when-no-plugin-connected
   (is (= "Penpot editor is not connected; open the file in Penpot with MCP enabled"
@@ -150,3 +150,31 @@
   (is (<= (* 10 60 1000) (bridge/idle-timeout-ms {:task-timeout-ms 30000})))
   (is (< 30000 (bridge/idle-timeout-ms {:task-timeout-ms 30000})))
   (is (= 300 (bridge/idle-timeout-ms {:task-timeout-ms 30000 :idle-timeout-ms 300}))))
+
+(deftest a-request-after-a-timeout-waits-for-the-late-answer
+  (let [sent  (atom [])
+        reply (fn [^WebSocket ws text]
+                (let [{:keys [id params]} (json/read-str (str text) :key-fn keyword)
+                      n (count (swap! sent conj [(:code params) (System/currentTimeMillis)]))
+                      answer #(.sendText ws (json/write-str {:id id :success true :data {:result (:code params) :log ""}}) true)]
+                  (if (= 1 n) (future (Thread/sleep 800) (answer)) (answer))))
+        listener (reify WebSocket$Listener
+                   (onText [_ ws text _] (reply ws text) (.request ws 1) nil))
+        uri (URI/create (str "ws://127.0.0.1:" (bridge/port *bridge*) "/mcp/ws?userToken=" mcp-key))
+        _   (.join (.buildAsync (.newWebSocketBuilder (HttpClient/newHttpClient)) uri listener))]
+    (await-connected true)
+    (let [t0 (System/currentTimeMillis)]
+      (is (some? (user-error-message #(bridge/execute! *bridge* "first"))))
+      (is (= "second" (bridge/execute! *bridge* "second")))
+      (is (<= 750 (- (second (second @sent)) t0)) "the second script is sent only after the first answered"))))
+
+(deftest a-request-after-a-timeout-gives-up-waiting-after-the-grace-period
+  (connect-plugin mcp-key (constantly nil))
+  (await-connected true)
+  (user-error-message #(bridge/execute! *bridge* "first"))
+  (is (re-find #"still busy with a previous request" (str (user-error-message #(bridge/execute! *bridge* "second"))))))
+
+(deftest a-longer-timeout-can-be-given-for-one-call
+  (connect-plugin mcp-key (slow-plugin 800))
+  (await-connected true)
+  (is (= {:echo "slow"} (binding [bridge/*task-timeout-ms* 3000] (bridge/execute! *bridge* "slow")))))

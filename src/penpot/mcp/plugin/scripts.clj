@@ -11,16 +11,18 @@
   (str/join
    "\n"
    ["const fail = (code, detail) => { throw new Error('MCP_ERR:' + code + ':' + (detail ?? '')); };"
-    "if (!storage.saveTracking) { storage.saves = 0; storage.saveTracking = penpot.on('contentsave', () => { storage.saves += 1; }); }"
+    "if (!storage.saveTracking) { storage.lastSaveAt = 0; storage.saveTracking = penpot.on('contentsave', () => { storage.lastSaveAt = Date.now(); }); }"
+    "const startedAt = Date.now();"
     "let changed = false;"
-    "const markChanged = () => { changed = true; storage.dirtySave = storage.saves; };"
+    "const markChanged = () => { changed = true; storage.dirtySince = Math.max(storage.dirtySince ?? 0, startedAt); };"
     "const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms ?? 150));"
     "const ensureFile = () => { const f = penpot.currentFile; if (!f || f.id !== args.fileId) fail('not-open', f ? f.id : ''); };"
-    "const waitFor = async (check) => { for (let i = 0; i < 60; i++) { const v = check(); if (v) return v; await settle(50); } return null; };"
+    "const waitFor = async (check, ms) => { const until = Date.now() + (ms ?? 3000); for (;;) { const v = check(); if (v) return v; if (Date.now() > until) return null; await settle(20); } };"
     "const openPage = async (page) => {"
     "  if (penpot.currentPage.id === page.id) return;"
-    "  await penpot.openPage(page);"
-    "  await waitFor(() => penpot.currentPage.id === page.id);"
+    "  const opening = penpot.openPage(page);"
+    "  if (opening && opening.catch) opening.catch(() => {});"
+    "  if (!(await waitFor(() => penpot.currentPage.id === page.id, 25000))) fail('page-not-opened', page.id);"
     "};"
     "const focusPage = async (pageId) => {"
     "  if (!pageId) return penpot.currentPage;"
@@ -29,11 +31,19 @@
     "  await openPage(page);"
     "  return penpot.currentPage;"
     "};"
+    "const locateShape = (id) => {"
+    "  const here = penpot.currentPage.getShapeById(id);"
+    "  if (here) return { page: penpot.currentPage, shape: here };"
+    "  for (const page of penpot.currentFile.pages) {"
+    "    if (page.id === penpot.currentPage.id) continue;"
+    "    const s = page.getShapeById(id);"
+    "    if (s) return { page, shape: s };"
+    "  }"
+    "  return null;"
+    "};"
     "const focusShape = async (id) => {"
-    "  const found = penpotUtils.findShapeById(id);"
-    "  if (!found) fail('shape-not-found', id);"
-    "  const page = penpotUtils.getPageForShape(found);"
-    "  if (page) await openPage(page);"
+    "  const found = locateShape(id) ?? fail('shape-not-found', id);"
+    "  await openPage(found.page);"
     "  return (await waitFor(() => penpot.currentPage.getShapeById(id))) ?? fail('shape-not-found', id);"
     "};"
     "const defaults = { rotation: 0, opacity: 1, visible: true, blocked: false };"
@@ -100,6 +110,8 @@
                     (if (str/blank? detail) "no file is open" (str "the editor has file " detail " open")))
     "shape-not-found" (str "Shape " detail " not found in the open file")
     "page-not-found" (str "Page " detail " not found in the open file")
+    "page-not-opened" (str "Penpot did not open page " detail " within 25 seconds; try again")
+    "wrong-token-type" (str "Token " detail)
     "last-page" "A Penpot file must keep at least one page"
     "not-a-board" (str "Shape " detail " is not a board")
     "not-a-container" (str "Shape " detail " cannot contain other shapes")
