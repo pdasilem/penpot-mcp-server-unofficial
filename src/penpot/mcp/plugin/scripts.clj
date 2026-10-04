@@ -112,6 +112,7 @@
     "page-not-found" (str "Page " detail " not found in the open file")
     "page-not-opened" (str "Penpot did not open page " detail " within 25 seconds; try again")
     "wrong-token-type" (str "Token " detail)
+    "track-occupied" (str "The grid " detail " still holds shapes; move or delete them first, or pass as many tracks as are used")
     "last-page" "A Penpot file must keep at least one page"
     "not-a-board" (str "Shape " detail " is not a board")
     "not-a-container" (str "Shape " detail " cannot contain other shapes")

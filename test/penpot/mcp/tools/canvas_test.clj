@@ -212,3 +212,15 @@
   (let [{:keys [code]} (call create/tools "create_component" {"file_id" fid "shape_ids" [sid] "name" "ICON / MENU_FOLD"})]
     (is (str/includes? code "const parts = args.name.split('/').map((p) => p.trim()).filter(Boolean);"))
     (is (< (str/index-of code "c.path = path;") (str/index-of code "c.name = leaf;")))))
+
+(deftest grid-tracks-are-changed-in-place-and-only-free-extras-are-removed
+  (let [{:keys [code]} (call layout/tools "set_grid_layout"
+                             {"file_id" fid "board_id" (str fx/board-id)
+                              "columns" [{"type" "flex" "value" 1}] "rows" [{"type" "auto"}]})]
+    (is (str/includes? code "l.setColumn(i, t.type, t.value);"))
+    (is (str/includes? code "l.setRow(i, t.type, t.value);"))
+    (is (str/includes? code "fail('track-occupied',"))
+    (is (< (str/index-of code "const columnsPlan = plan('column', args.columns);")
+           (str/index-of code "const rowsPlan = plan('row', args.rows);")
+           (str/index-of code "columnsPlan();")))
+    (is (not (str/includes? code "for (let i = l.columns.length - 1; i >= 0; i--) l.removeColumn(i);")))))

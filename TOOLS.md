@@ -1186,7 +1186,7 @@ Group: `edit`. Hints: changes data, destructive, idempotent
 
 ### `set_grid_layout`
 
-Give a board a grid layout, replacing a flex layout if it has one, or change it; only the given settings change, and given columns or rows replace the existing tracks. Penpot reflows the children. Returns the resulting layout settings. [editor]
+Give a board a grid layout, replacing a flex layout if it has one, or change it; only the given settings change. Given columns or rows change the existing tracks in order, keeping the shapes in their cells; missing tracks are added, and extra tracks are removed only when they hold no shapes, otherwise nothing changes and the error names them. Penpot reflows the children. Returns the resulting layout settings. [editor]
 
 Group: `edit`. Hints: changes data, destructive, idempotent
 
@@ -1195,7 +1195,7 @@ Group: `edit`. Hints: changes data, destructive, idempotent
 | `board_id` | uuid | yes | Board id |
 | `file_id` | uuid | yes | Penpot file id |
 | `align_content` | `start`, `end`, `center`, `space-between`, `space-around`, `space-evenly`, `stretch` | no | Distribution of lines or tracks across the cross axis |
-| `columns` | array of objects | no | Column tracks, left to right; replace the existing columns |
+| `columns` | array of objects | no | Column tracks, left to right; existing columns change in order, missing ones are added, extra empty ones are removed |
 | `vertical_sizing` | `fix`, `auto` | no | fix keeps the height, auto hugs the content |
 | `padding` | object | no | Inner padding in pixels; omitted sides keep their value |
 | `row_gap` | number | no | Gap between rows in pixels |
@@ -1204,7 +1204,7 @@ Group: `edit`. Hints: changes data, destructive, idempotent
 | `dir` | `row`, `column` | no | Direction in which children fill the grid |
 | `align_items` | `start`, `end`, `center`, `stretch` | no | Alignment of children across the main axis |
 | `justify_items` | `start`, `end`, `center`, `stretch` | no | Alignment of children inside their grid cells |
-| `rows` | array of objects | no | Row tracks, top to bottom; replace the existing rows |
+| `rows` | array of objects | no | Row tracks, top to bottom; existing rows change in order, missing ones are added, extra empty ones are removed |
 | `justify_content` | `start`, `center`, `end`, `space-between`, `space-around`, `space-evenly`, `stretch` | no | Distribution of children along the main axis |
 
 ### `remove_layout`

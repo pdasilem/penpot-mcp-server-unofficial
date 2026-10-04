@@ -94,25 +94,49 @@
 (def ^:private set-grid-layout
   (canvas/plugin-tool
    {:name "set_grid_layout"
-    :description "Give a board a grid layout, replacing a flex layout if it has one, or change it; only the given settings change, and given columns or rows replace the existing tracks. Penpot reflows the children. Returns the resulting layout settings."
+    :description "Give a board a grid layout, replacing a flex layout if it has one, or change it; only the given settings change. Given columns or rows change the existing tracks in order, keeping the shapes in their cells; missing tracks are added, and extra tracks are removed only when they hold no shapes, otherwise nothing changes and the error names them. Penpot reflows the children. Returns the resulting layout settings."
     :annotations tool/overwrite
     :input-schema (into [:map {:closed true} common/file-id-param board-param
                          [:dir {:optional true :description "Direction in which children fill the grid"} [:enum "row" "column"]]
-                         [:columns {:optional true :description "Column tracks, left to right; replace the existing columns"} [:vector {:min 1} track]]
-                         [:rows {:optional true :description "Row tracks, top to bottom; replace the existing rows"} [:vector {:min 1} track]]]
+                         [:columns {:optional true :description "Column tracks, left to right; existing columns change in order, missing ones are added, extra empty ones are removed"} [:vector {:min 1} track]]
+                         [:rows {:optional true :description "Row tracks, top to bottom; existing rows change in order, missing ones are added, extra empty ones are removed"} [:vector {:min 1} track]]]
                         common-params)
     :body (str/join "\n" [load-board
                           "if (s.flex) s.flex.remove();"
                           "const l = s.grid ?? s.addGridLayout();"
                           "if (args.dir !== undefined) l.dir = args.dir;"
-                          "if (args.columns) {"
-                          "  for (let i = l.columns.length - 1; i >= 0; i--) l.removeColumn(i);"
-                          "  for (const t of args.columns) l.addColumn(t.type, t.value);"
-                          "}"
-                          "if (args.rows) {"
-                          "  for (let i = l.rows.length - 1; i >= 0; i--) l.removeRow(i);"
-                          "  for (const t of args.rows) l.addRow(t.type, t.value);"
-                          "}"
+                          "const plan = (kind, given) => {"
+                          "  if (!given) return () => {};"
+                          "  const column = kind === 'column';"
+                          "  const count = () => (column ? l.columns : l.rows).length;"
+                          "  const covers = (cell, n) => {"
+                          "    const start = column ? cell.column : cell.row;"
+                          "    const span = (column ? cell.columnSpan : cell.rowSpan) ?? 1;"
+                          "    return start !== undefined && n >= start && n < start + span;"
+                          "  };"
+                          "  const extra = [];"
+                          "  const owners = new Set();"
+                          "  for (let i = given.length; i < count(); i++) {"
+                          "    const inside = (s.children ?? []).filter((c) => c.layoutCell && covers(c.layoutCell, i + 1));"
+                          "    if (inside.length) { extra.push(i + 1); for (const c of inside) owners.add(c.name); }"
+                          "  }"
+                          "  if (extra.length) fail('track-occupied', kind + ' ' + extra.join(', ') + ' (' + [...owners].join(', ') + ')');"
+                          "  return () => {"
+                          "    for (let i = 0; i < Math.min(given.length, count()); i++) {"
+                          "      const t = given[i];"
+                          "      if (column) l.setColumn(i, t.type, t.value); else l.setRow(i, t.type, t.value);"
+                          "    }"
+                          "    for (let i = count() - 1; i >= given.length; i--) { if (column) l.removeColumn(i); else l.removeRow(i); }"
+                          "    for (let i = count(); i < given.length; i++) {"
+                          "      const t = given[i];"
+                          "      if (column) l.addColumn(t.type, t.value); else l.addRow(t.type, t.value);"
+                          "    }"
+                          "  };"
+                          "};"
+                          "const columnsPlan = plan('column', args.columns);"
+                          "const rowsPlan = plan('row', args.rows);"
+                          "columnsPlan();"
+                          "rowsPlan();"
                           apply-common
                           layout-info])
     :args #(common/compact (assoc (common-args %) :dir (:dir %) :columns (:columns %) :rows (:rows %)))
