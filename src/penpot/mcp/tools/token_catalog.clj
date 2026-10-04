@@ -53,17 +53,22 @@
 (def ^:private create-token-set
   (tool
    {:name "create_token_set"
-    :description "Create a design token set in the file; use / in the name to group sets. A new set is active unless active is false. Returns the set."
+    :description "Create a design token set in the file; use / in the name to group sets. A new set is active unless active is false. As in Penpot's token panel, activating a set switches off the active themes, since their sets no longer match; deactivatedThemes lists them, and set_theme_sets adds the new set to a theme so that it can be switched on again with the set. If a set with this name exists it is returned unchanged. Returns the set."
     :annotations tool/additive
     :params [[:name {:description "Set name, e.g. brand/dark"} token-name]
              [:active {:optional true :description "Whether the set is active, default true"} :boolean]]
-    :body (body "if (tokens.sets.some((set) => set.name === args.name)) fail('set-exists', args.name);"
+    :body (body "const existing = tokens.sets.find((set) => set.name === args.name);"
+                "if (existing) return { set: setState(existing), deactivatedThemes: [] };"
+                "const activeBefore = tokens.themes.filter((th) => th.active).map((th) => th.id);"
                 "const set = tokens.addSet({ name: args.name, active: args.active });"
                 "markChanged();"
                 "await waitFor(() => tokens.getSetById(set.id));"
-                "return setState(findSet(set.id));")
+                "if (args.active) await waitFor(() => findSet(set.id).active);"
+                "const deactivatedThemes = activeBefore.map((id) => tokens.getThemeById(id)).filter((th) => th && !th.active)"
+                "  .map((th) => ({ id: th.id, group: th.group, name: th.name }));"
+                "return { set: setState(findSet(set.id)), deactivatedThemes };")
     :args #(hash-map :name (:name %) :active (if (contains? % :active) (:active %) true))
-    :result-key :set}))
+    :result-key nil}))
 
 (def ^:private delete-token-set
   (tool
@@ -94,7 +99,7 @@
 (def ^:private create-token
   (tool
    {:name "create_token"
-    :description "Create a design token in a set. Penpot validates the value for the type and rejects invalid ones. Returns the token with the value Penpot resolves from the active sets."
+    :description "Create a design token in a set. Penpot validates the value for the type and rejects invalid ones. Repeating the call with the same name, type and value returns the existing token; a different token with the same name is an error. Returns the token with the value Penpot resolves from the active sets."
     :annotations tool/additive
     :params [set-param
              [:type {:description "Token type"} token-types]
@@ -102,6 +107,8 @@
              [:value {:description value-description} token-value]
              [:description {:optional true :description "Description"} [:string {:max 1000}]]]
     :body (body "const set = findSet(args.setId);"
+                "const same = set.tokens.find((t) => t.name === args.name && t.type === args.type && JSON.stringify(t.value) === JSON.stringify(args.value));"
+                "if (same) return tokenState(same);"
                 "if (set.tokens.some((t) => t.name === args.name)) fail('token-exists', args.name);"
                 "const t = set.addToken({ type: args.type, name: args.name, value: args.value });"
                 "if (args.description !== undefined) t.description = args.description;"
