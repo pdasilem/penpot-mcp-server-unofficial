@@ -6,6 +6,7 @@
    [penpot.mcp.tools.components :as components]
    [penpot.mcp.tools.create :as create]
    [penpot.mcp.tools.export :as export]
+   [penpot.mcp.tools.html-import :as html-import]
    [penpot.mcp.tools.files :as files]
    [penpot.mcp.tools.integrations :as integrations]
    [penpot.mcp.tools.layout :as layout]
@@ -35,10 +36,14 @@
 (def ^:private export-tools
   #{"export_shape"})
 
+(def ^:private import-tools
+  (set (map :name html-import/tools)))
+
 (defn- toolset-of [t]
   (cond
     (manage-tools (:name t)) "manage"
     (export-tools (:name t)) "export"
+    (import-tools (:name t)) "import"
     (read-tools (:name t)) "read"
     :else "edit"))
 
@@ -46,7 +51,8 @@
   {"read" "read files, pages, shapes, CSS and SVG, library, design tokens, comments, media and who is online"
    "edit" "create and change shapes, layout, text, styles, components, variants, design tokens, pages, comments and media"
    "manage" "projects, files, versions and webhooks"
-   "export" "render shapes as images or SVG"})
+   "export" "render shapes as images or SVG"
+   "import" "import static HTML designs as native Penpot boards"})
 
 (def all
   (let [tools (vec (concat profile/tools
@@ -70,7 +76,8 @@
                            styles/tools
                            tokens/tools
                            token-catalog/tools
-                           export/tools))
+                           export/tools
+                           html-import/tools))
         reads (set (map :name (concat shapes/tools library/tools)))]
     (mapv #(assoc % :toolset (if (reads (:name %)) "read" (toolset-of %))) tools)))
 
@@ -84,5 +91,5 @@
     "An [editor] edit returns the shape id and changed: only the values the call changed, empty when nothing changed;"
     "use get_shape for the full state. Create tools return the new shape. Results leave out empty and default values."
     "Ids of files, pages, shapes, components, colors, typographies and tokens come from the read tools."
-    "Tools come in groups: read, edit, manage (projects, files, versions) and export; list_toolsets shows which are enabled"
+    "Tools come in groups: read, edit, manage (projects, files, versions), export and import (HTML designs); list_toolsets shows which are enabled"
     "and set_toolset enables another group when a task needs it."]))

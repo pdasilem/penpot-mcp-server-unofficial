@@ -26,6 +26,7 @@
     "create_token_set" "delete_token_set" "set_token_set_active" "create_token" "update_token" "delete_token"
     "create_token_theme" "delete_token_theme" "set_token_theme_active" "set_theme_sets"
     "create_boolean" "set_mask" "ungroup" "flatten" "import_svg" "align_shapes" "distribute_shapes"
+    "import_html" "get_import_status" "cancel_import" "resume_import"
     "set_position" "resize" "rotate" "rename_shape" "set_fills" "set_strokes" "set_opacity" "set_radius"
     "set_visible" "set_blocked" "set_parent_index" "move_to_parent" "delete_shapes"
     "set_flex_layout" "set_grid_layout" "remove_layout" "set_text_content" "set_text_style"
@@ -57,7 +58,7 @@
     "list_snapshots" "compare_snapshots" "list_shapes" "get_shape_tree" "get_shape" "search_shapes"
     "get_shape_css" "get_shape_svg" "list_components" "get_component_instances"
     "get_colors" "get_typographies" "get_design_tokens" "list_comments" "list_media" "list_fonts"
-    "list_webhooks" "get_active_users" "export_shape"})
+    "list_webhooks" "get_active_users" "export_shape" "get_import_status"})
 
 (def destructive-tools
   #{"rename_project" "rename_file" "delete_file" "rename_page" "delete_page" "resolve_comment"
@@ -73,7 +74,7 @@
     "set_text_range_style" "apply_typography" "apply_library_color" "set_image_fill"
     "delete_token_set" "set_token_set_active" "update_token" "delete_token" "delete_token_theme"
     "set_token_theme_active" "set_theme_sets"
-    "set_mask" "ungroup" "flatten" "align_shapes" "distribute_shapes"})
+    "set_mask" "ungroup" "flatten" "align_shapes" "distribute_shapes" "cancel_import"})
 
 (deftest every-tool-has-annotations
   (doseq [t tools/all]
@@ -82,7 +83,7 @@
 (deftest annotations-match-tool-behaviour
   (is (= read-only-tools (set (map :name (filter (comp :read-only :annotations) tools/all)))))
   (is (= destructive-tools (set (map :name (filter (comp :destructive :annotations) tools/all)))))
-  (is (= #{"upload_media_from_url" "set_image_fill" "import_svg"} (set (map :name (filter (comp :open-world :annotations) tools/all))))))
+  (is (= #{"upload_media_from_url" "set_image_fill" "import_svg" "import_html"} (set (map :name (filter (comp :open-world :annotations) tools/all))))))
 
 (deftest instructions-carry-the-shared-rules-once
   (is (str/includes? tools/instructions "open in a browser tab"))
@@ -121,7 +122,7 @@
   (is (not-any? #(= "get_page_data" (:name %)) tools/all)))
 
 (deftest every-tool-belongs-to-a-toolset
-  (is (every? #(contains? #{"read" "edit" "manage" "export"} (:toolset %)) tools/all))
+  (is (every? #(contains? #{"read" "edit" "manage" "export" "import"} (:toolset %)) tools/all))
   (is (= {"get_shape" "read" "list_comments" "read" "get_active_users" "read"
           "create_rect" "edit" "create_comment" "edit" "update_comment" "edit" "create_page" "edit"
           "upload_media_from_url" "edit" "set_token" "edit" "create_token" "edit"
@@ -133,4 +134,4 @@
                                        (:name t))
                                   [(:name t) (:toolset t)])))
                tools/all)))
-  (is (every? (comp seq tools/toolset-summaries) ["read" "edit" "manage" "export"])))
+  (is (every? (comp seq tools/toolset-summaries) ["read" "edit" "manage" "export" "import"])))

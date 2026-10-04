@@ -82,6 +82,7 @@
                                                  :persistence {:dirty (atom #{})}
                                                  :plugin-lock {:lock (ReentrantLock.) :wait-ms plugin-lock-wait-ms}
                                                  :uploads (uploads/store {:now #(System/currentTimeMillis)})
+                                                 :import-jobs (atom {})
                                                  :version-error #(version/check-error @version-state)}}))
                          server/stop!]])]
     (assoc (into {} (map (juxt first second)) started)

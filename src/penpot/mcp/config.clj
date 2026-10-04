@@ -39,8 +39,8 @@
    [:version-check-interval {:default 300} [:int {:min 1}]]
    [:log-level {:default "info"} [:enum "trace" "debug" "info" "warn" "error"]]
    [:toolsets {:default "read,edit"}
-    [:re {:error/message "should be a comma separated list of read, edit, manage and export"}
-     #"^\s*(read|edit|manage|export)\s*(,\s*(read|edit|manage|export)\s*)*$"]]])
+    [:re {:error/message "should be a comma separated list of read, edit, manage, export and import"}
+     #"^\s*(read|edit|manage|export|import)\s*(,\s*(read|edit|manage|export|import)\s*)*$"]]])
 
 (defn- parse-toolsets [s]
   (conj (set (map str/trim (str/split s #","))) "read"))
