@@ -18,12 +18,26 @@
      :import-jobs (atom {})
      :persistence {:dirty (atom #{})}
      :version-error (constantly nil)
+     :rpc {:session-id (random-uuid) :send (fn [_ params] {:revn (:revn params) :lagged []})}
      :execute (fn [code]
-                (if (str/includes? code "penpot.createPage()")
-                  {:result {:pageId "page-1" :name "One"} :changed true}
-                  {:result {:boardId (str "board-" (swap! n inc)) :name "x" :pageId "page-1" :x 0 :y 0 :width 300 :height 200
-                            :shapes 2 :substitutedFonts []}
-                   :changed true}))}))
+                (let [args (fx/script-args code)]
+                  (cond
+                    (str/includes? code "penpot.createPage()")
+                    {:result {:pageId "aaaaaaaa-0000-0000-0000-000000000001" :name "One"} :changed true}
+
+                    (str/includes? code "penpot.currentFile.revn")
+                    {:result {:pageId (or (get args "pageId") "aaaaaaaa-0000-0000-0000-000000000001") :revn 1 :bottom nil :fonts {}
+                              :fallback {:fontId "sourcesanspro" :fontFamily "sourcesanspro"
+                                         :variants [{:id "regular" :weight "400" :style "normal"}]}}
+                     :changed false}
+
+                    (str/includes? code "layout.rowGap = layout.rowGap")
+                    {:result {:boardId (str "board-" (swap! n inc)) :name "x" :pageId (get args "pageId")
+                              :x 0 :y 0 :width 300 :height 200}
+                     :changed true}
+
+                    :else
+                    {:result true :changed false})))}))
 
 (defn- call [ctx tool-name args]
   (fx/call (fx/find-tool html-import/tools tool-name) ctx args))

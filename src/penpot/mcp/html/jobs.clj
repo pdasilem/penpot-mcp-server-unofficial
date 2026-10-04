@@ -1,20 +1,26 @@
 (ns penpot.mcp.html.jobs
   (:refer-clojure :exclude [run!])
   (:require
+   [app.common.features :as cfeat]
+   [app.common.files.changes-builder :as pcb]
+   [app.common.types.shape :as cts]
+   [app.common.uuid :as uuid]
    [clojure.string :as str]
    [clojure.tools.logging :as log]
-   [penpot.mcp.html.chunks :as chunks]
    [penpot.mcp.html.script :as script]
+   [penpot.mcp.html.shapes :as shapes]
    [penpot.mcp.html.tree :as tree]
+   [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.revision :as revision]
+   [penpot.mcp.penpot.rpc :as rpc]
    [penpot.mcp.tool :as tool])
   (:import
    (java.util UUID)))
 
 (def ^:private gap 120)
+(def ^:private below-gap 200)
 (def ^:private max-row-width 6000)
 (def ^:private finished-ttl-ms (* 60 60 1000))
-(def ^:private default-chunk-size 150)
 
 (defn- registry [ctx] (:import-jobs ctx))
 
@@ -31,7 +37,8 @@
 (defn create! [ctx {:keys [file-id plan computed opts on-done]}]
   (let [id  (str (UUID/randomUUID))
         job {:id id :file-id file-id :plan plan :computed computed :opts opts :on-done on-done
-             :status "pending" :next 0 :boards [] :pages {} :cursors {} :unsupported {} :fonts #{}}]
+             :status "pending" :next 0 :boards [] :pages {} :cursors {} :unsupported {} :fonts #{}
+             :font-map {} :fallback nil :vern 0}]
     (swap! (registry ctx) #(assoc (prune % (System/currentTimeMillis)) id job))
     job))
 
@@ -46,49 +53,86 @@
             (update-job! ctx id assoc-in [:pages section] pageId)
             pageId)))
 
-(defn- placement [cursor width]
-  (let [{:keys [x y row-h] :or {x 0 row-h 0}} cursor]
-    (if (and (pos? x) (> (+ x width) max-row-width))
-      {:x 0 :y (+ y row-h gap)}
-      {:x x :y y})))
+(defn- placement [cursor bottom width]
+  (let [{:keys [x y row-h]} cursor]
+    (cond
+      (nil? cursor) {:x 0.0 :y (if bottom (+ bottom below-gap) 0.0)}
+      (and (pos? x) (> (+ x width) max-row-width)) {:x 0.0 :y (+ y row-h gap)}
+      :else {:x x :y y})))
 
 (defn- advance [cursor {:keys [x y width height]}]
   (let [same-row (= y (:y cursor))]
     {:x (+ x width gap) :y y :row-h (if same-row (max (or (:row-h cursor) 0) height) height)}))
 
-(defn- build-calls! [ctx {:keys [id file-id opts]} index page-id calls {:keys [x y]}]
-  (reduce (fn [acc [i units]]
-            (let [res (revision/mutate! ctx file-id script/frame-body
-                                        {:units units :ids (:ids acc) :root-id (:root-id acc) :page-id page-id
-                                         :x x :y y :font-family (:font-family opts)})]
-              (when (zero? i)
-                (update-job! ctx id assoc :partial {:index index :root-id (:boardId res)}))
-              {:ids (:ids res)
-               :root-id (:boardId res)
-               :fonts (into (:fonts acc) (:substitutedFonts res))
-               :last res}))
-          {:ids {} :root-id nil :fonts #{}}
-          (map-indexed vector calls)))
+(defn- node-families [node]
+  (->> (tree-seq :children :children node)
+       (mapcat :runs)
+       (mapcat #(shapes/families (get-in % [:style :fontFamily])))
+       set))
 
-(defn- import-frame! [ctx {:keys [id computed opts cursors] :as job} index]
+(defn- font-entry [{:keys [fontId fontFamily variants]}]
+  {:font-id fontId :font-family fontFamily :variants (mapv #(select-keys % [:id :weight :style]) variants)})
+
+(defn- prepare! [ctx {:keys [id file-id font-map fallback opts]} page-id node]
+  (let [missing (vec (remove #(contains? font-map %) (node-families node)))
+        res     (revision/mutate! ctx file-id script/prepare-body
+                                  {:page-id page-id :families missing :fallback (nil? fallback)
+                                   :font-family (:font-family opts)})
+        fonts   (into {} (map (fn [f] [f (some-> (get-in res [:fonts (keyword f)]) font-entry)])) missing)]
+    (update-job! ctx id (fn [j] (cond-> (update j :font-map merge fonts)
+                                  (:fallback res) (assoc :fallback (font-entry (:fallback res))))))
+    (assoc res :pageId (uuid/uuid (str (:pageId res))))))
+
+(def ^:private page-root
+  (cts/setup-shape {:id uuid/zero :type :frame :name "Root Frame" :x 0 :y 0 :width 0.01 :height 0.01
+                    :frame-id uuid/zero :parent-id uuid/zero}))
+
+(defn- frame-changes [page-id objects]
+  (:redo-changes (-> (pcb/empty-changes)
+                     (pcb/with-page {:id page-id :objects {uuid/zero page-root}})
+                     (pcb/with-objects {uuid/zero page-root})
+                     (pcb/add-objects objects))))
+
+(defn- submit! [{:keys [rpc]} file-id revn vern changes]
+  (rpc/call rpc :update-file {:id file-id :session-id (:session-id rpc) :revn revn :vern vern
+                              :features cfeat/supported-features :changes changes}))
+
+(defn- commit! [ctx {:keys [id file-id vern]} revn changes]
+  (try
+    (submit! ctx file-id revn vern changes)
+    (catch clojure.lang.ExceptionInfo e
+      (if (= :vern-conflict (:penpot/code (ex-data e)))
+        (let [current (:vern (file/fetch (:rpc ctx) file-id))]
+          (update-job! ctx id assoc :vern current)
+          (submit! ctx file-id revn current changes))
+        (throw e)))))
+
+(defn- frame-name [name]
+  (or (not-empty (str/trim (str/replace (str name) #"[\s ]+" " "))) "frame"))
+
+(defn- import-frame! [ctx {:keys [id file-id computed opts] :as job} index]
   (let [{:keys [element section name]} (nth (:plan job) index)
-        page-id (section-page! ctx job section)
-        key     (or page-id :target)
+        page-hint (section-page! ctx job section)
+        _         (revision/await-clean! ctx file-id)
         {:keys [node unsupported]} (tree/frame element computed {:viewport (:viewport opts)})
-        {:keys [node lines]} (chunks/extract-lines (assoc node :name (or (not-empty (str/trim (str/replace (str name) #"[\s\u00a0]+" " "))) "frame")))
-        calls   (chunks/split node (or (:chunk-size opts) default-chunk-size))
-        built   (build-calls! ctx job index page-id calls (placement (get cursors key) (:width node)))
-        _       (when (seq lines)
-                  (revision/mutate! ctx (:file-id job) script/lines-body {:lines lines :ids (:ids built) :page-id page-id}))
-        result  (:last built)]
-    (update-job! ctx id
-                 (fn [j]
-                   (-> j
-                       (update :boards conj {:id (:boardId result) :name (:name result) :page_id (:pageId result) :section section})
-                       (assoc-in [:cursors key] (advance (get-in j [:cursors key]) result))
-                       (update :unsupported #(merge-with + % unsupported))
-                       (update :fonts into (:fonts built))
-                       (assoc :next (inc index) :partial nil))))))
+        node      (assoc node :name (frame-name name))
+        prep      (prepare! ctx job page-hint node)
+        page-id   (:pageId prep)
+        job       (job! ctx id)
+        at        (placement (get-in job [:cursors page-id]) (:bottom prep) (:width node))
+        built     (shapes/frame-objects node (merge at {:fonts (:font-map job) :fallback (:fallback job)}))]
+    (commit! ctx job (:revn prep) (frame-changes page-id (:objects built)))
+    (update-job! ctx id assoc :partial {:index index :root-id (:root-id built)})
+    (let [result (revision/mutate! ctx file-id script/finish-body
+                                   {:page-id page-id :root-id (:root-id built) :media (:media built)})]
+      (update-job! ctx id
+                   (fn [j]
+                     (-> j
+                         (update :boards conj {:id (:boardId result) :name (:name result) :page_id (:pageId result) :section section})
+                         (assoc-in [:cursors page-id] (advance (get-in j [:cursors page-id]) result))
+                         (update :unsupported #(merge-with + % unsupported))
+                         (update :fonts into (:substituted built))
+                         (assoc :next (inc index) :partial nil)))))))
 
 (defn- drop-partial! [ctx {:keys [id file-id partial next]}]
   (when (and partial (= next (:index partial)) (:root-id partial))
@@ -145,9 +189,9 @@
   (run! ctx id))
 
 (defn status [ctx id]
-  (let [job    (job! ctx id)
-        state  (if (and (:cancel-requested job) (= "running" (:status job))) "cancelling" (:status job))
-        base   {:job_id id :status state :frames_total (count (:plan job)) :frames_done (count (:boards job))}]
+  (let [job   (job! ctx id)
+        state (if (and (:cancel-requested job) (= "running" (:status job))) "cancelling" (:status job))
+        base  {:job_id id :status state :frames_total (count (:plan job)) :frames_done (count (:boards job))}]
     (if (#{"done" "failed" "cancelled"} state)
       (assoc base
              :file_id (:file-id job)

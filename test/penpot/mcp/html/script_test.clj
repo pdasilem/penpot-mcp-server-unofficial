@@ -4,11 +4,12 @@
    [clojure.test :refer [deftest is]]
    [penpot.mcp.html.script :as script]))
 
-(deftest properties-are-written-only-when-they-differ
-  (is (str/includes? script/frame-body "const put = (o, k, v) => { if (v !== undefined && v !== null && o[k] !== v) o[k] = v; };"))
-  (is (str/includes? script/frame-body "const putList = (o, k, v) => { if (v && JSON.stringify(o[k] ?? []) !== JSON.stringify(v)) o[k] = v; };"))
-  (is (str/includes? script/frame-body "put(f, 'dir', layout.dir);"))
-  (is (str/includes? script/frame-body "put(lc, 'horizontalSizing', self.horizontalSizing);"))
-  (is (str/includes? script/frame-body "put(range, 'fontSize', st.fontSize);"))
-  (is (str/includes? script/frame-body "if (range.fontId !== font.fontId || range.fontVariantId !== variant.fontVariantId) font.applyToRange(range, variant);"))
-  (is (not (re-find #"\bf\.dir = |\blc\.horizontalSizing = |\brange\.fontSize = " script/frame-body))))
+(deftest prepare-reports-revision-bottom-and-fonts
+  (is (str/includes? script/prepare-body "revn: penpot.currentFile.revn"))
+  (is (str/includes? script/prepare-body "penpot.fonts.findByName(name)"))
+  (is (not (str/includes? script/prepare-body "markChanged()"))))
+
+(deftest finish-fills-placeholders-and-settles-the-layout
+  (is (str/includes? script/finish-body "holder.appendChild(shape);"))
+  (is (str/includes? script/finish-body "penpot.createShapeFromSvg(m.node.markup)"))
+  (is (str/includes? script/finish-body "if (layout) layout.rowGap = layout.rowGap;")))
