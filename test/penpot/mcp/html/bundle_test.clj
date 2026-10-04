@@ -53,14 +53,15 @@
     (is (= 1 (:pages result)))
     (is (str/includes? (:html result) (str "about:blank#" page-id)))))
 
-(deftest unpacked-assets-beyond-the-budget-are-refused
+(deftest unpacked-assets-beyond-the-budget-are-refused-with-the-setting-to-raise
   (let [manifest {asset-id {"mime" "text/plain" "compressed" true "data" (gzip-b64 (apply str (repeat 5000 "a")))}}
         html     (bundle-html (str "<p>" asset-id "</p>") manifest [])]
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unpack to more than"
-                          (bundle/unpack html {:max-bytes 4000 :max-assets 10})))
-    (is (string? (:html (bundle/unpack html {:max-bytes 10000 :max-assets 10}))))))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"more than 4000 bytes.*PENPOT_MCP_IMPORT_MAX_ASSET_MB"
+                          (bundle/unpack html {:max-bytes 4000})))
+    (is (string? (:html (bundle/unpack html {:max-bytes 10000}))))))
 
-(deftest too-many-bundle-assets-are-refused
-  (let [manifest (into {} (for [i (range 3)] [(str "id-" i) {"mime" "text/plain" "data" "YQ=="}]))]
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"more than 2 assets"
-                          (bundle/unpack (bundle-html "<p></p>" manifest []) {:max-bytes 1000 :max-assets 2})))))
+(deftest many-small-assets-are-fine
+  (let [ids      (for [i (range 600)] (str "00000000-0000-4000-8000-" (format "%012d" i)))
+        manifest (into {} (for [id ids] [id {"mime" "text/plain" "data" "YQ=="}]))
+        html     (bundle/unpack (bundle-html (apply str ids) manifest []) {:max-bytes 1000})]
+    (is (= 600 (count (re-seq #"data:text/plain;base64,YQ==" (:html html)))))))

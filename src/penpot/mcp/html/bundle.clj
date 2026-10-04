@@ -14,10 +14,11 @@
   (when-let [^Element el (.selectFirst doc (str "script[type=__bundler/" kind "]"))]
     (json/read-str (.data el))))
 
-(def ^:private default-limits {:max-bytes (* 64 1024 1024) :max-assets 500})
+(def default-max-bytes (* 64 1024 1024))
 
 (defn- over-budget [max-bytes]
-  (tool/user-error (str "The design bundle's assets unpack to more than " max-bytes " bytes")))
+  (tool/user-error (str "The design bundle's assets unpack to more than " max-bytes " bytes; "
+                        "raise PENPOT_MCP_IMPORT_MAX_ASSET_MB together with the server memory to import it")))
 
 (defn- asset-bytes [{:strs [data compressed]} remaining max-bytes]
   (let [raw   (.decode (Base64/getDecoder) ^String data)
@@ -52,14 +53,12 @@
       (str/replace #"(?i)\s+crossorigin=\"[^\"]*\"" "")))
 
 (defn unpack
-  ([html] (unpack html default-limits))
-  ([html {:keys [max-assets] :as limits}]
+  ([html] (unpack html {:max-bytes default-max-bytes}))
+  ([html limits]
    (let [doc (Jsoup/parse ^String html)]
      (if-let [template (script-json doc "template")]
        (let [manifest (or (script-json doc "manifest") {})
              pages    (set (or (script-json doc "page_order") []))]
-         (when (> (count manifest) max-assets)
-           (throw (tool/user-error (str "The design bundle has more than " max-assets " assets"))))
          {:html (strip-integrity (inline-assets template manifest pages limits))
           :pages (count pages)})
        {:html html :pages 0}))))

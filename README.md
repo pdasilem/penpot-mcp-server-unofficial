@@ -159,7 +159,7 @@ The `import` group turns a static HTML design, such as a Claude Design export, i
 2. `import_html` with the file id, `upload_id`, `frame_selector` (each match becomes a board) and optionally `section_selector` (each section heading starts a new page) starts a background job.
 3. `get_import_status` reports progress; `cancel_import` stops after the current frame; `resume_import` continues a failed or cancelled job.
 
-Scripts are ignored. The file must be open in the editor during the import. At most two imports run at once. The assets of a Claude Design bundle may unpack to at most 64 MB. Images on loopback, private, link-local or single-label hosts are skipped and reported as unsupported.
+Scripts are ignored. The file must be open in the editor during the import. At most two imports run at once. The assets packed into a Claude Design bundle may unpack to at most `PENPOT_MCP_IMPORT_MAX_ASSET_MB`; raise it together with the server memory for designs with large images. Images on loopback, private, link-local or single-label hosts are skipped and reported as unsupported.
 
 ## Reverse proxy in front of Penpot
 
@@ -196,6 +196,7 @@ location /mcp/ {
 | `VERSION_CHECK_INTERVAL` | no | `300` | Seconds between Penpot version checks |
 | `LOG_LEVEL` | no | `info` | `trace`, `debug`, `info`, `warn`, `error` |
 | `PENPOT_MCP_TOOLSETS` | no | `read,edit` | Tool groups enabled at start: `read`, `edit`, `manage`, `export`, `import`; `read` is always enabled |
+| `PENPOT_MCP_IMPORT_MAX_ASSET_MB` | no | `64` | Megabytes the assets packed into an imported HTML bundle may unpack to |
 
 ## Versions
 
