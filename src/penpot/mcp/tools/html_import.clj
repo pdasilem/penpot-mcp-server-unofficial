@@ -54,7 +54,7 @@
                    [:font_family {:optional true :description "Font for families Penpot does not have, default sourcesanspro"} common/short-text]]
     :handler start-import}
    {:name "get_import_status"
-    :description "Show the progress of an HTML import: status (pending, running, cancelling, done, failed, cancelled), frames done of total, created boards with their pages, the error and failed frame, unsupported CSS with counts and fonts replaced by the fallback."
+    :description "Show the progress of an HTML import. While it runs: status (pending, running, cancelling), frames done of total and the frame in progress. Once finished (done, failed, cancelled): also the created boards with their pages, the error and failed frame, unsupported CSS with counts and fonts replaced by the fallback. Poll at most once a minute."
     :annotations tool/read-only
     :input-schema [:map {:closed true} job-param]
     :handler (fn [ctx {:keys [job_id]}] (tool/json-result (jobs/status ctx (str job_id))))}

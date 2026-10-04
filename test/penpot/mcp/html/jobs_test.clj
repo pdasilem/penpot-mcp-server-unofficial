@@ -148,3 +148,9 @@
     (jobs/run! ctx job-id)
     (is (str/includes? (last @(:scripts editor)) "penpot.history.undoBlockBegin()"))
     (is (some? scripts/execute!))))
+
+(deftest unfinished-status-is-compact
+  (let [{:keys [ctx job-id]} (setup {})
+        st (jobs/status ctx job-id)]
+    (is (= #{:job_id :status :frames_total :frames_done :current_frame} (set (keys st))))
+    (is (= {:index 1 :name "One" :section "One"} (:current_frame st)))))

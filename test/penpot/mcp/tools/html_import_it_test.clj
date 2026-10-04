@@ -62,11 +62,12 @@
 
 (defn- wait-import [s job-id]
   (loop [i 0 last-done -1]
-    (let [st (data s "get_import_status" {:job_id job-id})]
+    (let [raw (get-in (mcp/call-tool s "get_import_status" {:job_id job-id}) [:content 0 :text])
+          st  (json/read-str raw)]
       (when (not= last-done (get st "frames_done"))
-        (println "IMPORT" (get st "status") (get st "frames_done") "/" (get st "frames_total")))
-      (if (or (#{"done" "failed" "cancelled"} (get st "status")) (> i 1800))
-        st
+        (println "IMPORT" (get st "status") (get st "frames_done") "/" (get st "frames_total") "status-chars" (count raw)))
+      (if (or (#{"done" "failed" "cancelled"} (get st "status")) (> i 3600))
+        (do (println "IMPORT final status-chars" (count raw)) st)
         (do (Thread/sleep 1000) (recur (inc i) (get st "frames_done")))))))
 
 (defn- export-png! [s fid board dir n]

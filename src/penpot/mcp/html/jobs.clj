@@ -145,15 +145,18 @@
   (run! ctx id))
 
 (defn status [ctx id]
-  (let [job (job! ctx id)]
-    {:job_id id
-     :file_id (:file-id job)
-     :status (if (and (:cancel-requested job) (= "running" (:status job))) "cancelling" (:status job))
-     :frames_total (count (:plan job))
-     :frames_done (count (:boards job))
-     :sections (vec (distinct (keep :section (:plan job))))
-     :boards (:boards job)
-     :error (:error job)
-     :failed_frame (:failed-frame job)
-     :unsupported (:unsupported job)
-     :substituted_fonts (vec (sort (:fonts job)))}))
+  (let [job    (job! ctx id)
+        state  (if (and (:cancel-requested job) (= "running" (:status job))) "cancelling" (:status job))
+        base   {:job_id id :status state :frames_total (count (:plan job)) :frames_done (count (:boards job))}]
+    (if (#{"done" "failed" "cancelled"} state)
+      (assoc base
+             :file_id (:file-id job)
+             :sections (vec (distinct (keep :section (:plan job))))
+             :boards (:boards job)
+             :error (:error job)
+             :failed_frame (:failed-frame job)
+             :unsupported (:unsupported job)
+             :substituted_fonts (vec (sort (:fonts job))))
+      (let [idx (:next job)
+            {:keys [name section]} (get (:plan job) idx)]
+        (assoc base :current_frame (when (< idx (count (:plan job))) {:index (inc idx) :name name :section section}))))))

@@ -1510,7 +1510,7 @@ Group: `import`. Hints: changes data, open world
 
 ### `get_import_status`
 
-Show the progress of an HTML import: status (pending, running, cancelling, done, failed, cancelled), frames done of total, created boards with their pages, the error and failed frame, unsupported CSS with counts and fonts replaced by the fallback.
+Show the progress of an HTML import. While it runs: status (pending, running, cancelling), frames done of total and the frame in progress. Once finished (done, failed, cancelled): also the created boards with their pages, the error and failed frame, unsupported CSS with counts and fonts replaced by the fallback. Poll at most once a minute.
 
 Group: `import`. Hints: read-only, idempotent
 
