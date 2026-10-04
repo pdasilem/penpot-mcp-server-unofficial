@@ -35,6 +35,9 @@
 (defn- grow? [style]
   (some-> (get style "flex-grow") str/trim parse-double pos?))
 
+(defn- no-shrink? [style]
+  (some-> (get style "flex-shrink") str/trim parse-double zero?))
+
 (defn- inline-level? [style]
   (#{"inline" "inline-block" "inline-flex" "inline-grid"} (get style "display")))
 
@@ -81,7 +84,8 @@
       (limit style "max-width" ctx) (assoc :maxWidth (limit style "max-width" ctx))
       (limit style "min-height" ctx) (assoc :minHeight (limit style "min-height" ctx))
       (limit style "max-height" ctx) (assoc :maxHeight (limit style "max-height" ctx))
-      (and (row? (:dir parent)) (:left auto-margins)) (assoc :push-right true))))
+      (and (row? (:dir parent)) (:left auto-margins)) (assoc :push-right true)
+      (no-shrink? style) (assoc :noShrink true))))
 
 (defn- style-ctx [style viewport]
   {:font-size (or (v/px (get style "font-size" "16px") {}) 16.0) :root-font-size 16.0 :viewport viewport})

@@ -189,6 +189,19 @@
 (defn- decorated [style ctx]
   (dissoc (box/decoration style (px-ctx style ctx)) :padding))
 
+(defn- wraps? [node]
+  (and (= "fill" (get-in node [:self :horizontalSizing]))
+       (or (and (= "text" (:kind node)) (= "auto-height" (:grow node)))
+           (and (= "board" (:kind node)) (some wraps? (:children node))))))
+
+(defn- fill-shrinking [nodes]
+  (mapv (fn [n]
+          (if (and (= "board" (:kind n)) (= "auto" (get-in n [:self :horizontalSizing]))
+                   (not (get-in n [:self :noShrink])) (some wraps? (:children n)))
+            (assoc-in n [:self :horizontalSizing] "fill")
+            n))
+        nodes))
+
 (defn- board-node [^Element el style ctx parent self]
   (let [layout (layout-for el style ctx)
         fixed  (or (#{"fix" "fill"} (:verticalSizing self)) (:fixed-height parent))
@@ -205,7 +218,8 @@
                        (assoc :rows (vec (take rows (concat (:rows layout) (repeat {:type "auto"}))))))]
         (merge {:kind "board" :name (node-name el) :layout layout :self self :children placed}
                (decorated style ctx)))
-      (merge {:kind "board" :name (node-name el) :layout layout :self self :children kids}
+      (merge {:kind "board" :name (node-name el) :layout layout :self self
+              :children (if (row? (:dir layout)) (fill-shrinking kids) kids)}
              (decorated style ctx)))))
 
 (defn- table-rows [^Element table]

@@ -135,3 +135,17 @@
 (deftest grid-template-areas-are-reported
   (is (= {"grid-template-areas" 1}
          (:unsupported (frame "<div id='f' style='width:400px'><div style='display:grid;grid-template-areas:\"a b\"'><div>a</div></div></div>" "#f")))))
+
+(deftest row-items-holding-wrapping-text-fill-the-row-instead-of-collapsing
+  (let [{:keys [node]} (frame (str "<div id='f' style='width:300px'>"
+                                   "<div id='r' style='display:flex;justify-content:space-between'>"
+                                   "<div><p>Title</p><p>A long description that wraps</p></div><span>401</span>"
+                                   "<button style='display:inline-flex'>Tab</button>"
+                                   "<div style='flex-shrink:0'><p>Fixed width text that does not shrink</p></div></div></div>")
+                              "#f")
+        row            (first (:children node))
+        [text-box code tab rigid] (:children row)]
+    (is (= "fill" (get-in text-box [:self :horizontalSizing])))
+    (is (= "auto" (get-in code [:self :horizontalSizing])))
+    (is (= "auto" (get-in tab [:self :horizontalSizing])))
+    (is (= "auto" (get-in rigid [:self :horizontalSizing])) "flex-shrink 0 keeps the content width")))
