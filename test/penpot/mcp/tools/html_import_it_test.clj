@@ -2,7 +2,6 @@
   (:require
    [clojure.data.json :as json]
    [clojure.java.io :as io]
-   [clojure.string :as str]
    [clojure.test :refer [deftest is]]
    [penpot.mcp.it :as it]
    [penpot.mcp.penpot.rpc :as rpc]
