@@ -28,7 +28,9 @@
   io.modelcontextprotocol.sdk/mcp-json-jackson2 {:mvn/version "2.0.1"}
   org.eclipse.jetty.ee11/jetty-ee11-servlet {:mvn/version "12.1.13"}
   org.eclipse.jetty.websocket/jetty-websocket-jetty-server {:mvn/version "12.1.13"}
-  jakarta.servlet/jakarta.servlet-api {:mvn/version "6.1.0"}}
+  jakarta.servlet/jakarta.servlet-api {:mvn/version "6.1.0"}
+  org.jsoup/jsoup {:mvn/version "1.23.2"}
+  com.helger/ph-css {:mvn/version "8.2.2"}}
  :aliases
  {:test {:extra-paths ["test"]
          :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}}

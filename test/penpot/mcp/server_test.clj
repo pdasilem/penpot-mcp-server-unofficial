@@ -1,6 +1,8 @@
 (ns penpot.mcp.server-test
   (:require
+   [clojure.data.json]
    [clojure.test :refer [deftest is use-fixtures]]
+   [penpot.mcp.html.uploads]
    [penpot.mcp.penpot.version :as version]
    [penpot.mcp.server :as server]
    [penpot.mcp.test-client :as client]
@@ -30,6 +32,8 @@
 
 (def ^:dynamic *server* nil)
 
+(def uploads (penpot.mcp.html.uploads/store {:now #(System/currentTimeMillis)}))
+
 (use-fixtures :once
   (fn [run]
     (let [s (server/start! {:host "127.0.0.1"
@@ -37,7 +41,8 @@
                             :mcp-key mcp-key
                             :tools [echo-tool image-tool nested-tool]
                             :instructions "Shared rules"
-                            :ctx {:version-error (fn [] @version-error)}})]
+                            :upload-limit 2048
+                            :ctx {:version-error (fn [] @version-error) :uploads uploads}})]
       (try
         (binding [*server* s] (run))
         (finally (server/stop! s))))))
@@ -118,3 +123,25 @@
         (is (true? (:isError (client/call-tool c "set_toolset" {:name "read" :enabled false}))))
         (is (true? (:isError (client/call-tool c "set_toolset" {:name "admin" :enabled true})))))
       (finally (server/stop! s)))))
+
+(defn- raw-post [query ^String body]
+  (let [client (java.net.http.HttpClient/newHttpClient)
+        req    (-> (java.net.http.HttpRequest/newBuilder (java.net.URI/create (str "http://127.0.0.1:" (:port *server*) "/mcp?" query)))
+                   (.header "Content-Type" "text/html")
+                   (.POST (java.net.http.HttpRequest$BodyPublishers/ofString body))
+                   (.build))
+        resp   (.send client req (java.net.http.HttpResponse$BodyHandlers/ofString))]
+    {:status (.statusCode resp) :body (.body resp)}))
+
+(deftest html-upload-is-stored-and-returns-an-id
+  (let [{:keys [status body]} (raw-post (str "userToken=" mcp-key "&upload=html") "<html><body>Hi</body></html>")
+        id                    (get (clojure.data.json/read-str body) "upload_id")]
+    (is (= 201 status))
+    (is (= "<html><body>Hi</body></html>" (penpot.mcp.html.uploads/text uploads id)))))
+
+(deftest html-upload-needs-the-mcp-key
+  (is (= 401 (:status (raw-post "userToken=wrong&upload=html" "<html></html>")))))
+
+(deftest html-upload-rejects-empty-and-oversized-bodies
+  (is (= 400 (:status (raw-post (str "userToken=" mcp-key "&upload=html") ""))))
+  (is (= 413 (:status (raw-post (str "userToken=" mcp-key "&upload=html") (apply str (repeat 2049 "a")))))))

@@ -1,6 +1,7 @@
 (ns penpot.mcp.system
   (:require
    [clojure.tools.logging :as log]
+   [penpot.mcp.html.uploads :as uploads]
    [penpot.mcp.penpot.notifications :as notifications]
    [penpot.mcp.penpot.rpc :as rpc]
    [penpot.mcp.penpot.version :as version]
@@ -80,6 +81,7 @@
                                                  :execute #(bridge/execute! bridge %)
                                                  :persistence {:dirty (atom #{})}
                                                  :plugin-lock {:lock (ReentrantLock.) :wait-ms plugin-lock-wait-ms}
+                                                 :uploads (uploads/store {:now #(System/currentTimeMillis)})
                                                  :version-error #(version/check-error @version-state)}}))
                          server/stop!]])]
     (assoc (into {} (map (juxt first second)) started)
