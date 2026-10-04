@@ -83,26 +83,57 @@
 (def ^:private svg-markup
   [:and [:string {:min 1 :max 1000000}] [:re {:error/message "should be SVG markup"} #"(?is)^\s*(<\?xml[^>]*>\s*)?(<!--.*?-->\s*)*<svg[\s>].*"]])
 
+(defn- root-tag [svg]
+  (re-find #"(?is)<svg[\s>][^>]*>?" svg))
+
+(defn- length-attr [tag attr]
+  (some-> (re-find (re-pattern (str "(?i)[\\s]" attr "\\s*=\\s*[\"']\\s*([0-9.]+)\\s*(px)?\\s*[\"']")) tag)
+          second
+          parse-double))
+
+(defn- view-box [tag]
+  (when-let [[_ v] (re-find #"(?i)[\s]viewBox\s*=\s*[\"']([^\"']+)[\"']" tag)]
+    (let [[_ _ w h] (keep parse-double (str/split (str/trim v) #"[\s,]+"))]
+      (when (and w h (pos? w) (pos? h)) [w h]))))
+
+(defn svg-size [svg]
+  (let [tag (or (root-tag svg) "")
+        w   (length-attr tag "width")
+        h   (length-attr tag "height")
+        [vw vh] (view-box tag)]
+    (cond
+      (and w h) [w h]
+      (and w vw) [w (* w (/ vh vw))]
+      (and h vh) [(* h (/ vw vh)) h]
+      :else nil)))
+
 (def ^:private import-svg
   (canvas/plugin-tool
    {:name "import_svg"
-    :description "Import SVG markup as Penpot shapes inside a new group, for example an icon. Images referenced by the SVG are fetched and uploaded to the file. Returns the new group."
+    :description "Import SVG markup as Penpot shapes inside a new group, for example an icon. The group gets the size of the SVG's width and height attributes, not of its viewBox, unless width and height are given. Images referenced by the SVG are fetched and uploaded to the file. Returns the new group."
     :annotations tool/external
     :input-schema (into (schema [:svg {:description "SVG markup starting with <svg"} svg-markup]
                                 [:x {:description "Canvas X"} common/safe-number]
-                                [:y {:description "Canvas Y"} common/safe-number])
+                                [:y {:description "Canvas Y"} common/safe-number]
+                                [:width {:optional true :description "Width of the imported group; by default the width and height attributes of the SVG in pixels"} common/positive-size]
+                                [:height {:optional true :description "Height of the imported group"} common/positive-size])
                         create/placement-params)
     :body (str/join "\n" [create/place
                           "const s = (await penpot.createShapeFromSvgWithImages(args.svg)) ?? fail('create-failed', 'shapes from the SVG');"
                           "try {"
                           "  if (args.name !== undefined) s.name = args.name;"
+                          "  if (args.width !== undefined) s.resize(args.width, args.height);"
                           "  (parent ?? penpot.currentPage.root).appendChild(s);"
                           "  s.x = args.x;"
                           "  s.y = args.y;"
                           create/out-of-flow
                           "} catch (e) { s.remove(); throw e; }"
                           canvas/finish])
-    :args #(merge (create/shape-args %) {:svg (:svg %)})}))
+    :args (fn [{:keys [svg width height] :as p}]
+            (when (not= (some? width) (some? height))
+              (throw (tool/user-error "Give both width and height, or neither")))
+            (let [[w h] (if (and width height) [width height] (svg-size svg))]
+              (merge (dissoc (create/shape-args p) :width :height) {:svg svg} (when w {:width w :height h}))))}))
 
 (def ^:private align-shapes
   (canvas/plugin-tool

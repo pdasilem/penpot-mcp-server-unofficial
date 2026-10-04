@@ -37,7 +37,7 @@
 
 (deftest svg-import-places-the-group
   (let [svg "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\"><rect width=\"10\" height=\"10\"/></svg>"]
-    (is (= {"fileId" fid "svg" svg "x" 5 "y" 6 "name" "Icon"}
+    (is (= {"fileId" fid "svg" svg "x" 5 "y" 6 "name" "Icon" "width" 10.0 "height" 10.0}
            (:args (run "import_svg" {"svg" svg "x" 5 "y" 6 "name" "Icon"}))))
     (is (contains? (:result (run "import_svg" {"svg" "<div/>" "x" 0 "y" 0})) :error))))
 
@@ -56,3 +56,19 @@
 (deftest imported-svg-without-parent-is-moved-to-the-page-root
   (is (str/includes? (:script (run "import_svg" {"svg" "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>" "x" 0 "y" 0}))
                      "(parent ?? penpot.currentPage.root).appendChild(s);")))
+
+(def ^:private icon
+  "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1344 1344\" width=\"24\" height=\"24px\"><path d=\"M0 0h1344v1344z\"/></svg>")
+
+(deftest imported-svg-takes-its-size-from-width-and-height-not-the-view-box
+  (let [{:keys [args script]} (run "import_svg" {"svg" icon "x" 0 "y" 0})]
+    (is (= [24.0 24.0] [(get args "width") (get args "height")]))
+    (is (str/includes? script "if (args.width !== undefined) s.resize(args.width, args.height);"))))
+
+(deftest imported-svg-with-one-dimension-keeps-the-view-box-ratio
+  (is (= [48.0 24.0] ((juxt #(get % "width") #(get % "height"))
+                      (:args (run "import_svg" {"svg" "<svg viewBox=\"0 0 200 100\" width=\"48\"></svg>" "x" 0 "y" 0}))))))
+
+(deftest imported-svg-size-can-be-given-and-relative-sizes-are-ignored
+  (is (= [16 16] ((juxt #(get % "width") #(get % "height")) (:args (run "import_svg" {"svg" icon "x" 0 "y" 0 "width" 16 "height" 16})))))
+  (is (not (contains? (:args (run "import_svg" {"svg" "<svg viewBox=\"0 0 10 10\" width=\"100%\"></svg>" "x" 0 "y" 0})) "width"))))
