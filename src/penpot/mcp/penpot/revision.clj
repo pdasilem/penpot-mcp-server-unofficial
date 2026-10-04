@@ -7,9 +7,9 @@
 (def ^:private wait-body
   (str/join
    "\n"
-   ["if (storage.dirtySave === undefined) return true;"
+   ["if (storage.dirtySince === undefined) return true;"
     "for (let i = 0; i < 500; i++) {"
-    "  if (storage.saves > storage.dirtySave) return true;"
+    "  if (storage.lastSaveAt > storage.dirtySince + 3000) return true;"
     "  await settle(50);"
     "}"
     "fail('not-saved', args.fileId);"]))

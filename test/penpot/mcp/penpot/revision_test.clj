@@ -23,7 +23,7 @@
     (revision/mark-dirty! c file-id)
     (revision/await-clean! c file-id)
     (is (= 1 (count @(:scripts c))))
-    (is (str/includes? (first @(:scripts c)) "storage.saves > storage.dirtySave"))
+    (is (str/includes? (first @(:scripts c)) "storage.lastSaveAt > storage.dirtySince + 3000"))
     (is (empty? @(get-in c [:persistence :dirty])))))
 
 (deftest unsaved-changes-are-an-error
@@ -55,7 +55,7 @@
         c     {:plugin-lock {:lock lock :wait-ms 5000}
                :persistence {:dirty dirty}
                :execute (fn [code]
-                          (if (str/includes? code "storage.dirtySave === undefined")
+                          (if (str/includes? code "storage.dirtySince === undefined")
                             (do (Thread/sleep 200) {:result true :changed false})
                             {:result :ok :changed true}))}
         reader (future (revision/await-clean! c file-id))]

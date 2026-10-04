@@ -97,3 +97,16 @@
            (message #(scripts/serialized ctx (constantly :x)))))
     (deliver done true)
     @t))
+
+(deftest shapes-are-looked-up-on-the-open-page-first-and-by-id-elsewhere
+  (let [code (scripts/script "return 1;" {:file-id "f"})]
+    (is (str/includes? code "const here = penpot.currentPage.getShapeById(id);"))
+    (is (str/includes? code "const s = page.getShapeById(id);"))
+    (is (not (str/includes? code "penpotUtils.findShapeById")))
+    (is (not (str/includes? code "penpotUtils.getPageForShape")))))
+
+(deftest a-change-is-saved-only-by-a-save-after-the-editor-debounce
+  (let [code (scripts/script "return 1;" {:file-id "f"})]
+    (is (str/includes? code "storage.lastSaveAt = Date.now();"))
+    (is (str/includes? code "const startedAt = Date.now();"))
+    (is (str/includes? code "storage.dirtySince = Math.max(storage.dirtySince ?? 0, startedAt);"))))

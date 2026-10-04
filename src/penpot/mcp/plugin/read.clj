@@ -23,10 +23,8 @@
 (def shape-page-body
   (str/join
    "\n"
-   ["const found = penpotUtils.findShapeById(args.shapeId);"
-    "if (!found) return null;"
-    "const page = penpotUtils.getPageForShape(found);"
-    "return page ? page.id : null;"]))
+   ["const found = locateShape(args.shapeId);"
+    "return found ? found.page.id : null;"]))
 
 (def page-counts-body
   (str/join
@@ -62,7 +60,7 @@
     all-components
     ["return allComponents().map((c) => {"
      "  const main = c.mainInstance();"
-     "  const page = main ? penpotUtils.getPageForShape(main) : null;"
+     "  const page = main ? locateShape(main.id)?.page : null;"
      "  return { id: c.id, name: c.name, path: c.path, mainInstanceId: main ? main.id : null, mainInstancePage: page ? page.id : null };"
      "});"])))
 
@@ -151,7 +149,7 @@
 (def shape-info-body
   (str/join
    "\n"
-   ["const s = penpotUtils.findShapeById(args.shapeId);"
+   ["const s = locateShape(args.shapeId)?.shape;"
     "if (!s) return null;"
     "const layoutOf = (b) => b && b.type === 'board' ? (b.grid ? 'grid' : (b.flex ? 'flex' : null)) : null;"
     "return { type: s.type, layout: layoutOf(s), parentLayout: !!layoutOf(s.parent) };"]))
@@ -166,6 +164,7 @@
 (def svg-body
   (str/join
    "\n"
-   ["const s = penpotUtils.findShapeById(args.shapeId) ?? fail('shape-not-found', args.shapeId);"
-    "if (args.pageId && penpotUtils.getPageForShape(s)?.id !== args.pageId) fail('shape-not-found', args.shapeId);"
+   ["const found = locateShape(args.shapeId) ?? fail('shape-not-found', args.shapeId);"
+    "if (args.pageId && found.page.id !== args.pageId) fail('shape-not-found', args.shapeId);"
+    "const s = found.shape;"
     "return penpot.generateMarkup([s], { type: 'svg' });"]))

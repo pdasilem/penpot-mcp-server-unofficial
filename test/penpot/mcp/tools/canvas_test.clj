@@ -137,7 +137,7 @@
   (is (str/includes? (:code (call create/tools "create_group" {"file_id" fid "shape_ids" [sid]})) "fail('mixed-pages'")))
 
 (deftest delete-skips-already-removed-shapes
-  (is (str/includes? (:code (call modify/tools "delete_shapes" {"file_id" fid "shape_ids" [sid]})) "if (!penpotUtils.findShapeById(id)) continue;")))
+  (is (str/includes? (:code (call modify/tools "delete_shapes" {"file_id" fid "shape_ids" [sid]})) "if (!locateShape(id)) continue;")))
 
 (deftest radius-requires-a-value
   (is (= {:error "Give radius or at least one corner"}
