@@ -45,6 +45,18 @@
           (throw e))))
     (swap! (:dirty persistence) disj file-id)))
 
+(def ^:private saved-body
+  "return storage.dirtySince === undefined || storage.lastSaveAt > storage.dirtySince + 3000;")
+
+(defn unsaved? [{:keys [persistence] :as ctx} file-id]
+  (and persistence
+       (contains? @(:dirty persistence) file-id)
+       (let [saved (try (scripts/run! ctx saved-body {:file-id file-id})
+                        (catch clojure.lang.ExceptionInfo e
+                          (if (treat-as-saved? e) true (throw e))))]
+         (when (true? saved) (swap! (:dirty persistence) disj file-id))
+         (not (true? saved)))))
+
 (defn await-clean! [{:keys [persistence] :as ctx} file-id]
   (when (and persistence (contains? @(:dirty persistence) file-id))
     (scripts/serialized ctx #(wait-saved! ctx file-id))

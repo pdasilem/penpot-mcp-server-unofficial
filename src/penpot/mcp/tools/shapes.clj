@@ -3,6 +3,7 @@
    [app.common.uuid :as uuid]
    [clojure.string :as str]
    [penpot.mcp.penpot.file :as file]
+   [penpot.mcp.penpot.revision :as revision]
    [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.common :as common]
@@ -14,9 +15,13 @@
 (defn- missing-page [file-id page-id]
   (tool/user-error (str "Page " page-id " not found in file " file-id)))
 
-(defn- shapes-listing [ctx {:keys [file_id page_id type]}]
-  (if-let [{found :value} (read/in-editor ctx file_id read/list-shapes-body
-                                          (cond-> {} page_id (assoc :page-id page_id) type (assoc :type type)))]
+(defn- editor-listing [ctx {:keys [file_id page_id type]}]
+  (when (revision/unsaved? ctx file_id)
+    (read/in-editor ctx file_id read/list-shapes-body
+                    (cond-> {} page_id (assoc :page-id page_id) type (assoc :type type)))))
+
+(defn- shapes-listing [ctx {:keys [file_id page_id type] :as args}]
+  (if-let [{found :value} (editor-listing ctx args)]
     (if found
       {:page-id (parse-uuid (:pageId found)) :shapes (:shapes found)}
       (throw (missing-page file_id page_id)))

@@ -155,8 +155,9 @@
   {:id id :name nm :type type :parent_id parent :x 0 :y 0 :width 10 :height 10})
 
 (deftest list-shapes-reads-the-open-editor-without-downloading
-  (let [ctx    (fx/plugin-ctx {:pageId pid :shapes [(editor-brief "b" "B" "board" "r") (editor-brief "a" "A" "text" "r")]}
-                              (fx/file-responses fx/file))
+  (let [ctx    (assoc (fx/plugin-ctx {:pageId pid :shapes [(editor-brief "b" "B" "board" "r") (editor-brief "a" "A" "text" "r")]}
+                                     (fx/file-responses fx/file))
+                      :persistence {:dirty (atom #{fx/file-id})})
         result (fx/call (fx/find-tool shapes/tools "list_shapes") ctx {"file_id" fid "type" "text"})]
     (is (= pid (get result "page_id")))
     (is (= ["A" "B"] (mapv #(get % "name") (get result "shapes"))))
@@ -164,7 +165,7 @@
     (is (= {"fileId" fid "type" "text"} (fx/last-script-args ctx)))))
 
 (deftest list-shapes-in-the-editor-reports-a-missing-page
-  (let [ctx (fx/plugin-ctx nil (fx/file-responses fx/file))]
+  (let [ctx (assoc (fx/plugin-ctx nil (fx/file-responses fx/file)) :persistence {:dirty (atom #{fx/file-id})})]
     (is (= {:error (str "Page 99999999-0000-0000-0000-000000000000 not found in file " fid)}
            (fx/call (fx/find-tool shapes/tools "list_shapes") ctx {"file_id" fid "page_id" "99999999-0000-0000-0000-000000000000"})))))
 
@@ -183,3 +184,21 @@
     (is (= {:error (str "Shape 99999999-0000-0000-0000-000000000001 not found on page " pid)}
            (fx/call (fx/find-tool shapes/tools "get_shape_tree") ctx
                     {"file_id" fid "root_id" "99999999-0000-0000-0000-000000000001"})))))
+
+(deftest list-shapes-reads-the-saved-page-when-nothing-is-pending
+  (let [ctx (assoc (fx/plugin-ctx {:pageId pid :shapes []} (fx/file-responses fx/file)) :persistence {:dirty (atom #{})})]
+    (fx/call (fx/find-tool shapes/tools "list_shapes") ctx {"file_id" fid "page_id" pid})
+    (is (= [:get-page] (fx/rpc-commands ctx)))
+    (is (empty? @(:scripts ctx)))))
+
+(deftest list-shapes-reads-the-editor-while-edits-are-unsaved
+  (let [ctx (assoc (fx/plugin-ctx {:pageId pid :shapes []} (fx/file-responses fx/file)) :persistence {:dirty (atom #{fx/file-id})})]
+    (fx/call (fx/find-tool shapes/tools "list_shapes") ctx {"file_id" fid "page_id" pid})
+    (is (empty? (fx/rpc-commands ctx)))))
+
+(deftest list-shapes-reads-the-saved-page-once-the-editor-has-saved
+  (let [ctx (assoc (fx/plugin-ctx true (fx/file-responses fx/file)) :persistence {:dirty (atom #{fx/file-id})})]
+    (fx/call (fx/find-tool shapes/tools "list_shapes") ctx {"file_id" fid "page_id" pid})
+    (is (= [:get-page] (fx/rpc-commands ctx)))
+    (is (= 1 (count @(:scripts ctx))))
+    (is (empty? @(get-in ctx [:persistence :dirty])))))
