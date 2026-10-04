@@ -53,17 +53,21 @@
 (defn- pre? [style]
   (#{"pre" "pre-wrap" "break-spaces"} (get style "white-space")))
 
+(declare raw-runs)
+
+(defn- node-runs [nodes style computed]
+  (mapcat (fn [node]
+            (cond
+              (instance? TextNode node) [{:text (.getWholeText ^TextNode node) :style style}]
+              (and (instance? Element node) (= "br" (.tagName ^Element node))) [{:text "\n" :style style :break true}]
+              (and (instance? Element node) (= "inline" (get-in computed [node :style "display"]))) (raw-runs node computed)
+              :else nil))
+          nodes))
+
 (defn- raw-runs [^Element el computed]
   (let [{:keys [style pseudo]} (get computed el)
-        own   (fn [which] (when-let [p (get pseudo which)] [{:text (get p "content") :style p}]))
-        inner (mapcat (fn [node]
-                        (cond
-                          (instance? TextNode node) [{:text (.getWholeText ^TextNode node) :style style}]
-                          (and (instance? Element node) (= "br" (.tagName ^Element node))) [{:text "\n" :style style :break true}]
-                          (and (instance? Element node) (= "inline" (get-in computed [node :style "display"]))) (raw-runs node computed)
-                          :else nil))
-                      (.childNodes el))]
-    (concat (own "before") inner (own "after"))))
+        own (fn [which] (when-let [p (get pseudo which)] [{:text (get p "content") :style p}]))]
+    (concat (own "before") (node-runs (.childNodes el) style computed) (own "after"))))
 
 (defn- collapse [runs]
   (let [collapsed (map (fn [r] (if (or (:break r) (pre? (:style r))) r (update r :text #(str/replace % #"\s+" " ")))) runs)]
@@ -89,9 +93,8 @@
           []
           runs))
 
-(defn content [^Element el computed]
-  (let [style (get-in computed [el :style])
-        runs  (->> (raw-runs el computed)
+(defn- finish-runs [raw style]
+  (let [runs (->> raw
                    collapse
                    trim-edges
                    (remove #(empty? (:text %)))
@@ -101,3 +104,12 @@
       {:runs runs
        :align (case (get style "text-align" "left") ("center") "center" ("right" "end") "right" ("justify") "justify" "left")
        :nowrap (boolean (#{"nowrap" "pre"} (get style "white-space")))})))
+
+(defn content [^Element el computed]
+  (finish-runs (raw-runs el computed) (get-in computed [el :style])))
+
+(defn segment [nodes style computed]
+  (finish-runs (node-runs nodes style computed) style))
+
+(defn pseudo [style]
+  (finish-runs [{:text (get style "content") :style style}] style))
