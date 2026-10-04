@@ -96,7 +96,7 @@
                           "const s = (await penpot.createShapeFromSvgWithImages(args.svg)) ?? fail('create-failed', 'shapes from the SVG');"
                           "try {"
                           "  if (args.name !== undefined) s.name = args.name;"
-                          "  if (parent) parent.appendChild(s);"
+                          "  (parent ?? penpot.currentPage.root).appendChild(s);"
                           "  s.x = args.x;"
                           "  s.y = args.y;"
                           "} catch (e) { s.remove(); throw e; }"

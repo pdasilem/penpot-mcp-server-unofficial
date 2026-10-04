@@ -70,7 +70,7 @@
                 "const s = c.instance() ?? fail('create-failed', 'component instance');"
                 "try {"
                 "  if (args.name !== undefined) s.name = args.name;"
-                "  if (parent) parent.appendChild(s);"
+                "  (parent ?? penpot.currentPage.root).appendChild(s);"
                 "  s.x = args.x;"
                 "  s.y = args.y;"
                 "} catch (e) { s.remove(); throw e; }"

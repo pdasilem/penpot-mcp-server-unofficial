@@ -1,8 +1,8 @@
 (ns penpot.mcp.tools.tokens
   (:require
    [app.common.types.token :as cto]
+   [clojure.set :as set]
    [clojure.string :as str]
-   [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.revision :as revision]
    [penpot.mcp.plugin.read :as read]
    [penpot.mcp.plugin.scripts :as scripts]
@@ -64,11 +64,18 @@
     (update token :type cto/dtcg-token-type->token-type)
     (throw (tool/user-error (str "Token " token-id " not found in file " file-id)))))
 
+(def ^:private internal-type
+  (set/map-invert common/plugin-type))
+
+(def ^:private layout-parent-id
+  #uuid "00000000-0000-0000-0000-0000000000ff")
+
 (defn- shape-with-objects! [ctx file-id shape-id]
-  (let [page-id (or (some-> (scripts/run! ctx read/shape-page-body {:file-id file-id :shape-id shape-id}) parse-uuid)
-                    (throw (tool/user-error (str "Shape " shape-id " not found in file " file-id))))
-        {:keys [page shape]} (file/read-shape ctx file-id shape-id page-id)]
-    [shape (:objects page)]))
+  (let [{:keys [type layout parentLayout]}
+        (or (scripts/run! ctx read/shape-info-body {:file-id file-id :shape-id shape-id})
+            (throw (tool/user-error (str "Shape " shape-id " not found in file " file-id))))]
+    [{:id shape-id :type (get internal-type type (keyword type)) :layout (some-> layout keyword) :parent-id layout-parent-id}
+     (if parentLayout {layout-parent-id {:id layout-parent-id :type :frame :layout :flex}} {})]))
 
 (defn- attr-pairs [attrs]
   (mapv (fn [attr] {:name (rules/plugin-name attr) :key (rules/public-name attr)})

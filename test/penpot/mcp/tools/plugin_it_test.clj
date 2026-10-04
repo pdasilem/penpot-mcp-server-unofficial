@@ -127,13 +127,27 @@
                   (is (= 0.8 (get-in back ["shape" "changed" "opacity"])))
                   (is (= [0.5 "Card 2"] [(get-in @(first calls) ["shape" "changed" "opacity"]) (get-in @(second calls) ["shape" "changed" "name"])]))
                   (is (= ["OnSecond"] (mapv #(get % "name") (get (data s "list_shapes" {:file_id fid :page_id page2}) "shapes"))))
-                  (is (= "image" (get-in (tool s "export_shape" {:file_id fid :shape_id (get-in p2r ["shape" "id"])}) [:content 0 :type])))))
+                  (is (= "image" (get-in (tool s "export_shape" {:file_id fid :shape_id (get-in p2r ["shape" "id"])}) [:content 0 :type])))
+                  (testing "reads run inside the editor for shapes on a page that is not open"
+                    (data s "rename_shape" {:file_id fid :shape_id board :name "Card 3"})
+                    (is (= [[(get-in p2r ["shape" "id"]) page2 "rectangle"]]
+                           (mapv (juxt #(get % "id") #(get % "page_id") #(get % "type"))
+                                 (get (data s "search_shapes" {:file_id fid :query "onsecond"}) "shapes"))))
+                    (is (= ["Card 3"] (mapv #(get % "name") (get (data s "search_shapes" {:file_id fid :query "card" :type "board"}) "shapes"))))
+                    (is (str/starts-with? (str/trim (get (data s "get_shape_svg" {:file_id fid :shape_id (get-in p2r ["shape" "id"])}) "svg")) "<svg"))
+                    (is (some? (get (data s "create_comment" {:file_id fid :frame_id board :x 5 :y 5 :content "On the card"}) "thread_id")))
+                    (is (str/includes? (get-in (mcp/call-tool s "create_comment" {:file_id fid :page_id page2 :frame_id board :x 5 :y 5 :content "x"})
+                                               [:content 0 :text])
+                                       "not found on page")))))
               (testing "group, component and delete"
                 (let [e1 (get-in (data s "create_ellipse" {:file_id fid :x 600 :y 0 :width 40 :height 40}) ["shape" "id"])
                       e2 (get-in (data s "create_ellipse" {:file_id fid :x 660 :y 0 :width 40 :height 40}) ["shape" "id"])
                       g  (get-in (data s "create_group" {:file_id fid :shape_ids [e1 e2] :name "Dots"}) ["shape" "id"])
                       c  (data s "create_component" {:file_id fid :shape_ids [g] :name "Dots"})]
                   (is (some? (get c "componentId")))
+                  (is (= [[(get-in c ["shape" "id"]) (get c "componentId") fid true]]
+                         (mapv (juxt #(get % "id") #(get % "component_id") #(get % "component_file") #(get % "is_main"))
+                               (get (data s "get_component_instances" {:file_id fid :component_id (get c "componentId")}) "instances"))))
                   (is (= ["Dots"] (mapv #(get % "name") (get (data s "list_components" {:file_id fid}) "components"))))
                   (is (= [(get-in c ["shape" "id"])] (get (data s "delete_shapes" {:file_id fid :shape_ids [(get-in c ["shape" "id"])]}) "deleted")))))
               (testing "components and variants"
@@ -313,8 +327,11 @@
                       from-file (fn [tool-name]
                                   (let [t (first (filter #(= tool-name (:name %)) tools/all))]
                                     (json/read-str (get-in (tool/invoke t saved {"file_id" fid}) [:content 0 :text]))))]
-                  (doseq [tool-name ["list_components" "get_colors" "get_typographies" "get_design_tokens"]]
+                  (doseq [tool-name ["list_components" "get_colors" "get_design_tokens"]]
                     (is (= (from-file tool-name) (data s tool-name {:file_id fid})) tool-name))
+                  (let [without-line-height (fn [r] (update r "typographies" #(mapv (fn [t] (dissoc t "line_height")) %)))]
+                    (is (= (without-line-height (from-file "get_typographies"))
+                           (data s "get_typographies" {:file_id fid}))))
                   (let [editor (data s "get_file" {:file_id fid})
                         whole  (from-file "get_file")]
                     (is (= (get whole "pages") (get editor "pages")))

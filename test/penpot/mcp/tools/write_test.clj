@@ -211,3 +211,27 @@
                       :execute (fn [_] (reset! waited true) {:result true :changed false}))]
     (fx/call (fx/find-tool snapshots/tools "create_snapshot") ctx {"file_id" (str fx/file-id) "label" "v"})
     (is @waited)))
+
+(deftest comment-checks-run-in-the-open-editor
+  (let [ctx    (fx/plugin-ctx {:pageId (str fx/page-id) :frameFound true}
+                              (with-file {:create-comment-thread {:id thread-id :seqn 4 :file-id fx/file-id}}))
+        result (fx/call (fx/find-tool comments/tools "create_comment") ctx
+                        {"file_id" (str fx/file-id) "content" "x" "x" 1 "y" 1 "frame_id" (str fx/board-id)})]
+    (is (= {"thread_id" (str thread-id) "seqn" 4} result))
+    (is (= [:create-comment-thread] (fx/rpc-commands ctx)))
+    (is (= fx/board-id (:frame-id (second (last @(:calls ctx))))))))
+
+(deftest comment-frame-missing-in-the-open-editor-is-refused
+  (let [ctx    (fx/plugin-ctx {:pageId (str fx/page-id) :frameFound false} (fx/file-responses fx/file))
+        result (fx/call (fx/find-tool comments/tools "create_comment") ctx
+                        {"file_id" (str fx/file-id) "content" "x" "x" 1 "y" 1
+                         "frame_id" "99999999-0000-0000-0000-0000000000aa"})]
+    (is (= {:error (str "Board 99999999-0000-0000-0000-0000000000aa not found on page " fx/page-id)} result))
+    (is (empty? (fx/rpc-commands ctx)))))
+
+(deftest comment-page-missing-in-the-open-editor-is-refused
+  (let [ctx    (fx/plugin-ctx {:pageId nil :frameFound false} (fx/file-responses fx/file))
+        result (fx/call (fx/find-tool comments/tools "create_comment") ctx
+                        {"file_id" (str fx/file-id) "page_id" "99999999-0000-0000-0000-0000000000bb" "content" "x" "x" 1 "y" 1})]
+    (is (= {:error (str "Page 99999999-0000-0000-0000-0000000000bb not found in file " fx/file-id)} result))
+    (is (empty? (fx/rpc-commands ctx)))))

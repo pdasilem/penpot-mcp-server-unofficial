@@ -19,8 +19,8 @@
       (str/includes? code read/token-body)
       (when (= tid (get args "tokenId")) {:id tid :name "color.primary" :type "color"})
 
-      (str/includes? code read/shape-page-body)
-      (when (= sid (get args "shapeId")) (str fx/page-id))
+      (str/includes? code read/shape-info-body)
+      (when (= sid (get args "shapeId")) {:type "rectangle" :layout nil :parentLayout true})
 
       :else
       {:id sid :tokens {:fill "color.primary"}})))
@@ -33,8 +33,21 @@
   (some #(str/includes? % "applyToken") @(:scripts ctx)))
 
 (deftest token-checks-never-download-the-file
-  (let [{:keys [ctx]} (token-call "set_token" {"file_id" fid "shape_id" sid "token_id" tid})]
-    (is (= [:get-page] (fx/rpc-commands ctx)))))
+  (doseq [[tool-name args] [["set_token" {"file_id" fid "shape_id" sid "token_id" tid}]
+                            ["remove_token" {"file_id" fid "shape_id" sid "attr" "fill"}]]]
+    (let [{:keys [ctx]} (token-call tool-name args)]
+      (is (empty? (fx/rpc-commands ctx))))))
+
+(deftest spacing-on-a-layout-child-binds-margins-from-the-editor-facts
+  (let [ctx (fx/plugin-ctx (fn [code]
+                             (cond
+                               (str/includes? code read/token-body) {:id tid :name "space.m" :type "spacing"}
+                               (str/includes? code read/shape-info-body) {:type "rectangle" :layout nil :parentLayout true}
+                               :else {:id sid}))
+                           {})]
+    (fx/call (fx/find-tool tokens/tools "set_token") ctx {"file_id" fid "shape_id" sid "token_id" tid})
+    (is (= #{"margin-top" "margin-right" "margin-bottom" "margin-left"}
+           (set (map #(get % "name") (get (fx/last-script-args ctx) "attrs")))))))
 
 (deftest set-token-without-attribute-binds-token-type-defaults
   (let [{:keys [ctx result]} (token-call "set_token" {"file_id" fid "shape_id" sid "token_id" tid})]

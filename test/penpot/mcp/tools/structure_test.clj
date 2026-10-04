@@ -52,3 +52,7 @@
 (deftest arrangement-waits-for-penpot-instead-of-a-fixed-delay
   (is (str/includes? (:script (run "align_shapes" {"shape_ids" [a b] "horizontal" "left"})) "await waitFor(() => positions() !== before);"))
   (is (str/includes? (:script (run "distribute_shapes" {"shape_ids" [a b c] "axis" "vertical"})) "await waitFor(() => positions() !== before);")))
+
+(deftest imported-svg-without-parent-is-moved-to-the-page-root
+  (is (str/includes? (:script (run "import_svg" {"svg" "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>" "x" 0 "y" 0}))
+                     "(parent ?? penpot.currentPage.root).appendChild(s);")))

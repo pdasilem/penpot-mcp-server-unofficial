@@ -70,3 +70,7 @@
   (let [{:keys [ctx]} (run "swap_component" {"file_id" fid "shape_id" sid "component_id" cid "library_file_id" lib-id})]
     (is (= {"fileId" fid "shapeId" sid "componentId" cid "libraryId" lib-id} (fx/last-script-args ctx)))
     (is (str/includes? (last @(:scripts ctx)) "swapComponent("))))
+
+(deftest instance-without-parent-is-moved-to-the-page-root
+  (let [{:keys [ctx]} (run "create_component_instance" {"file_id" fid "component_id" cid "x" 10 "y" 20})]
+    (is (str/includes? (last @(:scripts ctx)) "(parent ?? penpot.currentPage.root).appendChild(s);"))))

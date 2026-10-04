@@ -4,6 +4,7 @@
    [app.common.uuid :as uuid]
    [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.rpc :as rpc]
+   [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.common :as common]))
 
@@ -25,12 +26,33 @@
 (def ^:private comment-content
   [:string {:min 1 :max 750}])
 
+(defn- missing-board [frame-id page-id]
+  (tool/user-error (str "Board " frame-id " not found on page " page-id)))
+
+(defn- editor-page-id [file-id page-id frame-id {found :pageId frame? :frameFound}]
+  (let [found (some-> found parse-uuid)]
+    (when-not found
+      (throw (tool/user-error (str "Page " page-id " not found in file " file-id))))
+    (when (and frame-id (not frame?))
+      (throw (missing-board frame-id found)))
+    found))
+
+(defn- saved-page-id [ctx file-id page-id frame-id]
+  (let [page (file/read-page ctx file-id page-id)]
+    (when (and frame-id (not (get-in page [:objects frame-id])))
+      (throw (missing-board frame-id (:id page))))
+    (:id page)))
+
+(defn- target-page-id [ctx file-id page-id frame-id]
+  (if-let [{target :value} (read/in-editor ctx file-id read/comment-target-body
+                                           (cond-> {} page-id (assoc :page-id page-id) frame-id (assoc :frame-id frame-id)))]
+    (editor-page-id file-id page-id frame-id target)
+    (saved-page-id ctx file-id page-id frame-id)))
+
 (defn- create-comment [{:keys [rpc] :as ctx} {:keys [file_id page_id frame_id x y content]}]
-  (let [page   (file/read-page ctx file_id page_id)
-        _      (when (and frame_id (not (get-in page [:objects frame_id])))
-                 (throw (tool/user-error (str "Board " frame_id " not found on page " (:id page)))))
+  (let [page-id (target-page-id ctx file_id page_id frame_id)
         thread (rpc/call rpc :create-comment-thread {:file-id file_id
-                                                     :page-id (:id page)
+                                                     :page-id page-id
                                                      :frame-id (or frame_id uuid/zero)
                                                      :position (gpt/point x y)
                                                      :content content})]

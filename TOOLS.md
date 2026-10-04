@@ -309,7 +309,7 @@ Group: `read`. Hints: read-only, idempotent
 
 ### `get_shape_svg`
 
-Render a shape and its visible descendants as a standalone SVG document from the saved file data, without the editor. Text is drawn as plain SVG text and images as placeholders; use export_shape for Penpot's exact rendering.
+Render a shape and its descendants as a standalone SVG document. With the file open in the editor the markup comes from Penpot itself; otherwise it is drawn from the saved file data, with text as plain SVG text and images as placeholders. Use export_shape for a raster image.
 
 Group: `read`. Hints: read-only, idempotent
 
@@ -360,7 +360,7 @@ Group: `read`. Hints: read-only, idempotent
 
 ### `get_typographies`
 
-List the typographies of the file's local library with their font family, size, weight, style, line height, letter spacing and text transform.
+List the typographies of the file's local library with their font family, size, weight, style, line height, letter spacing and text transform. While the file is open in the editor the line height is missing, because Penpot's plugin API does not report it.
 
 Group: `read`. Hints: read-only, idempotent
 
