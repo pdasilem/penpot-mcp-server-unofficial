@@ -95,11 +95,11 @@
 
 (defn- finish-runs [raw style]
   (let [runs (->> raw
-                   collapse
-                   trim-edges
-                   (remove #(empty? (:text %)))
-                   (map (fn [r] {:text (:text r) :style (run-style (:style r))}))
-                   merge-equal)]
+                  collapse
+                  trim-edges
+                  (remove #(empty? (:text %)))
+                  (map (fn [r] {:text (:text r) :style (run-style (:style r))}))
+                  merge-equal)]
     (when (some #(not (str/blank? (:text %))) runs)
       {:runs runs
        :align (case (get style "text-align" "left") ("center") "center" ("right" "end") "right" ("justify") "justify" "left")
