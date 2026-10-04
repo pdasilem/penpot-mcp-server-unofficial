@@ -39,13 +39,6 @@
 (deftest lists-component-instances
   (is (= instances-result (run "get_component_instances" {"file_id" fid "component_id" (str fx/component-id)}))))
 
-(deftest lists-component-instances-page-by-page-with-the-editor
-  (let [{:keys [result calls]} (run-in-editor "get_component_instances"
-                                              [{:id (str fx/page-id) :name "Screens"} {:id (str fx/page2-id) :name "Archive"}]
-                                              {"file_id" fid "component_id" (str fx/component-id)})]
-    (is (= instances-result result))
-    (is (= [:get-page :get-page] calls))))
-
 (def colors-result
   {"colors" [{"id" (str fx/color-id) "name" "Primary" "path" "Brand" "color" "#3366FF" "opacity" 1}]})
 
@@ -153,3 +146,13 @@
           result (fx/call (fx/find-tool library/tools tool-name) ctx {"file_id" fid})]
       (is (str/ends-with? (:error result) "; open it in the Penpot editor with MCP enabled") tool-name)
       (is (= [:get-file-stats] (fx/rpc-commands ctx)) tool-name))))
+
+(deftest lists-component-instances-in-the-open-editor-without-downloading-pages
+  (let [{:keys [result calls scripts]} (run-in-editor "get_component_instances"
+                                                      [{:id (str fx/instance-id) :name "Button Instance" :page_id (str fx/page-id)
+                                                        :component_id (str fx/component-id) :component_file (str fx/file-id)
+                                                        :is_main false}]
+                                                      {"file_id" fid "component_id" (str fx/component-id)})]
+    (is (= instances-result result))
+    (is (empty? calls))
+    (is (str/includes? (last scripts) "s.isComponentRoot()"))))

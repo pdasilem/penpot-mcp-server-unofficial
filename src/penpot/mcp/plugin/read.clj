@@ -93,3 +93,65 @@
     (map? x) (into {} (map (fn [[k v]] [(if (keyword? k) (file-key k) k) (file-keys v)])) x)
     (sequential? x) (mapv file-keys x)
     :else x))
+
+(def ^:private root-id "00000000-0000-0000-0000-000000000000")
+
+(def ^:private pages-to-scan
+  ["const pages = args.pageId"
+   "  ? [penpotUtils.getPageById(args.pageId) ?? fail('page-not-found', args.pageId)]"
+   "  : penpot.currentFile.pages;"])
+
+(def search-body
+  (str/join
+   "\n"
+   (concat
+    pages-to-scan
+    ["const found = [];"
+     "for (const page of pages) {"
+     "  for (const s of page.findShapes()) {"
+     (str "    if (s.id === '" root-id "') continue;")
+     "    if (!(s.name ?? '').toLowerCase().includes(args.query)) continue;"
+     "    if (args.type && s.type !== args.type) continue;"
+     (str "    found.push({ id: s.id, name: s.name, type: s.type, parent_id: s.parent ? s.parent.id : '" root-id "',")
+     "      x: s.x, y: s.y, width: s.width, height: s.height, page_id: page.id });"
+     "  }"
+     "}"
+     "return found;"])))
+
+(def instances-body
+  (str/join
+   "\n"
+   ["const found = [];"
+    "for (const page of penpot.currentFile.pages) {"
+    "  for (const s of page.findShapes()) {"
+    "    if (!s.isComponentRoot()) continue;"
+    "    const c = s.component();"
+    "    if (!c || (args.componentId && c.id !== args.componentId)) continue;"
+    "    const main = c.mainInstance();"
+    "    found.push({ id: s.id, name: s.name, page_id: page.id, component_id: c.id, component_file: c.libraryId,"
+    "      is_main: !!main && main.id === s.id });"
+    "  }"
+    "}"
+    "return found;"]))
+
+(def shape-info-body
+  (str/join
+   "\n"
+   ["const s = penpotUtils.findShapeById(args.shapeId);"
+    "if (!s) return null;"
+    "const layoutOf = (b) => b && b.type === 'board' ? (b.grid ? 'grid' : (b.flex ? 'flex' : null)) : null;"
+    "return { type: s.type, layout: layoutOf(s), parentLayout: !!layoutOf(s.parent) };"]))
+
+(def comment-target-body
+  (str/join
+   "\n"
+   ["const page = args.pageId ? penpotUtils.getPageById(args.pageId) : penpot.currentFile.pages[0];"
+    "if (!page) return { pageId: null, frameFound: false };"
+    "return { pageId: page.id, frameFound: !!(args.frameId && page.getShapeById(args.frameId)) };"]))
+
+(def svg-body
+  (str/join
+   "\n"
+   ["const s = penpotUtils.findShapeById(args.shapeId) ?? fail('shape-not-found', args.shapeId);"
+    "if (args.pageId && penpotUtils.getPageForShape(s)?.id !== args.pageId) fail('shape-not-found', args.shapeId);"
+    "return penpot.generateMarkup([s], { type: 'svg' });"]))

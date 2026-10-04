@@ -1,5 +1,6 @@
 (ns penpot.mcp.tools.shapes-test
   (:require
+   [clojure.string :as str]
    [clojure.test :refer [deftest is]]
    [penpot.mcp.fixtures :as fx]
    [penpot.mcp.tools.shapes :as shapes]))
@@ -74,15 +75,8 @@
     (is (= #{"Submit Button" "Button Instance"} (set (map #(get % "name") (get result "shapes")))))
     (is (every? #(= pid (get % "page_id")) (get result "shapes")))))
 
-(deftest search-shapes-walks-editor-pages-one-by-one
-  (let [ctx    (fx/plugin-ctx [{:id pid :name "Screens"} {:id (str fx/page2-id) :name "Archive"}]
-                              (fx/file-responses fx/file))
-        result (fx/call (fx/find-tool shapes/tools "search_shapes") ctx {"file_id" fid "query" "button"})]
-    (is (= #{"Submit Button" "Button Instance"} (set (map #(get % "name") (get result "shapes")))))
-    (is (= [:get-page :get-page] (fx/rpc-commands ctx)))))
-
-(deftest search-shapes-on-one-page-reads-only-that-page
-  (let [ctx (fx/ctx (fx/file-responses fx/file))]
+(deftest search-shapes-on-one-page-without-editor-reads-only-that-page
+  (let [ctx (fx/closed-editor-ctx (fx/file-responses fx/file))]
     (fx/call (fx/find-tool shapes/tools "search_shapes") ctx {"file_id" fid "query" "button" "page_id" pid})
     (is (= [:get-page] (fx/rpc-commands ctx)))))
 
@@ -124,3 +118,35 @@
     (is (= 4 (count (get rest-page "shapes"))))
     (is (not (contains? rest-page "next_cursor")))
     (is (empty? (filter (set (map #(get % "id") (get first-page "shapes"))) (map #(get % "id") (get rest-page "shapes")))))))
+
+(def ^:private editor-matches
+  [{:id (str fx/rect-id) :name "Submit Button" :type "rectangle" :parent_id (str fx/board-id)
+    :x 16 :y 24 :width 120 :height 40 :page_id pid}])
+
+(deftest search-shapes-runs-in-the-open-editor-without-downloading-pages
+  (let [ctx    (fx/plugin-ctx editor-matches (fx/file-responses fx/file))
+        result (fx/call (fx/find-tool shapes/tools "search_shapes") ctx {"file_id" fid "query" "Button" "type" "rectangle"})]
+    (is (= [{"id" (str fx/rect-id) "name" "Submit Button" "type" "rectangle" "parent_id" (str fx/board-id)
+             "x" 16 "y" 24 "width" 120 "height" 40 "page_id" pid}]
+           (get result "shapes")))
+    (is (empty? (fx/rpc-commands ctx)))
+    (is (= {"fileId" fid "query" "button" "type" "rectangle"} (fx/last-script-args ctx)))))
+
+(deftest search-shapes-on-one-page-runs-in-the-open-editor
+  (let [ctx (fx/plugin-ctx editor-matches (fx/file-responses fx/file))]
+    (fx/call (fx/find-tool shapes/tools "search_shapes") ctx {"file_id" fid "query" "button" "page_id" pid})
+    (is (empty? (fx/rpc-commands ctx)))
+    (is (= pid (get (fx/last-script-args ctx) "pageId")))))
+
+(deftest shape-svg-comes-from-penpot-in-the-open-editor
+  (let [ctx    (fx/plugin-ctx "<svg>penpot</svg>" (fx/file-responses fx/file))
+        result (fx/call (fx/find-tool shapes/tools "get_shape_svg") ctx {"file_id" fid "shape_id" (str fx/board-id)})]
+    (is (= {"svg" "<svg>penpot</svg>"} result))
+    (is (str/includes? (last @(:scripts ctx)) "penpot.generateMarkup([s], { type: 'svg' })"))
+    (is (empty? (fx/rpc-commands ctx)))))
+
+(deftest shape-svg-without-editor-renders-the-saved-page
+  (let [ctx    (fx/closed-editor-ctx (fx/file-responses fx/file))
+        result (fx/call (fx/find-tool shapes/tools "get_shape_svg") ctx {"file_id" fid "page_id" pid "shape_id" (str fx/board-id)})]
+    (is (re-find #"^<svg " (get result "svg")))
+    (is (= [:get-page] (fx/rpc-commands ctx)))))

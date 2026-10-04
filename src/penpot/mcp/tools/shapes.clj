@@ -3,6 +3,7 @@
    [app.common.uuid :as uuid]
    [clojure.string :as str]
    [penpot.mcp.penpot.file :as file]
+   [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.common :as common]
    [penpot.mcp.transform.css :as css]
@@ -47,11 +48,19 @@
 (def ^:private search-hint
   (str file/editor-hint ", or pass page_id"))
 
+(defn- saved-matches [ctx {:keys [file_id query page_id type]}]
+  (into [] (mapcat #(page-matches (str/lower-case query) type %))
+        (if page_id
+          [(file/read-page ctx file_id page_id)]
+          (file/read-pages ctx file_id search-hint))))
+
 (defn- search-shapes [ctx {:keys [file_id query page_id type] :as args}]
-  (let [matches (into [] (mapcat #(page-matches (str/lower-case query) type %))
-                      (if page_id
-                        [(file/read-page ctx file_id page_id)]
-                        (file/read-pages ctx file_id search-hint)))]
+  (let [matches (if-let [{found :value} (read/in-editor ctx file_id read/search-body
+                                                        (cond-> {:query (str/lower-case query)}
+                                                          type (assoc :type type)
+                                                          page_id (assoc :page-id page_id)))]
+                  found
+                  (saved-matches ctx args))]
     (tool/json-result (common/paged :shapes matches args))))
 
 (defn- subtree [objects shape]
@@ -72,8 +81,12 @@
       :css (str/join "\n\n" (map :css rules))})))
 
 (defn- shape-svg [ctx {:keys [file_id page_id shape_id]}]
-  (let [{:keys [objects shape]} (locate ctx file_id shape_id page_id)]
-    (tool/json-result {:svg (svg/shape->svg objects shape)})))
+  (tool/json-result
+   {:svg (if-let [{markup :value} (read/in-editor ctx file_id read/svg-body
+                                                  (cond-> {:shape-id shape_id} page_id (assoc :page-id page_id)))]
+           markup
+           (let [{:keys [objects shape]} (locate ctx file_id shape_id page_id)]
+             (svg/shape->svg objects shape)))}))
 
 (def tools
   [{:name "list_shapes"
@@ -120,7 +133,7 @@
                    [:include_children {:optional true :description "Also generate rules for all descendants"} :boolean]]
     :handler shape-css}
    {:name "get_shape_svg"
-    :description "Render a shape and its visible descendants as a standalone SVG document from the saved file data, without the editor. Text is drawn as plain SVG text and images as placeholders; use export_shape for Penpot's exact rendering."
+    :description "Render a shape and its descendants as a standalone SVG document. With the file open in the editor the markup comes from Penpot itself; otherwise it is drawn from the saved file data, with text as plain SVG text and images as placeholders. Use export_shape for a raster image."
     :annotations tool/read-only
     :input-schema [:map {:closed true} common/file-id-param common/shape-id-param common/shape-page-param]
     :handler shape-svg}])
