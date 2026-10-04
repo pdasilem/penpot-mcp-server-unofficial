@@ -161,3 +161,11 @@
 (deftest editor-component-lists-include-every-variant
   (doseq [body [read/components-body read/library-counts-body]]
     (is (str/includes? body "c.variants.variantComponents()"))))
+
+(deftest components-are-filtered-by-name-or-path
+  (let [listed [{:id "c1" :name "MENU_FOLD" :path "ICON" :mainInstanceId nil :mainInstancePage nil}
+                {:id "c2" :name "Primary" :path "Buttons" :mainInstanceId nil :mainInstancePage nil}]
+        names  #(mapv (fn [c] (get c "name")) (get (:result (run-in-editor "list_components" listed (assoc {"file_id" fid} "query" %))) "components"))]
+    (is (= ["MENU_FOLD"] (names "icon")))
+    (is (= ["MENU_FOLD"] (names "icon / menu")))
+    (is (= ["Primary"] (names "prim")))))
