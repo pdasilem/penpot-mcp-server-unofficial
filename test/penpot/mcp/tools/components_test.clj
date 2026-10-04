@@ -74,3 +74,8 @@
 (deftest instance-without-parent-is-moved-to-the-page-root
   (let [{:keys [ctx]} (run "create_component_instance" {"file_id" fid "component_id" cid "x" 10 "y" 20})]
     (is (str/includes? (last @(:scripts ctx)) "(parent ?? penpot.currentPage.root).appendChild(s);"))))
+
+(deftest instances-can-be-placed-out-of-the-layout-flow
+  (let [{:keys [ctx]} (run "create_component_instance" {"file_id" fid "component_id" cid "x" 1 "y" 2
+                                                        "parent_id" (str fx/board-id) "absolute" true})]
+    (is (str/includes? (last @(:scripts ctx)) ".absolute = true;"))))

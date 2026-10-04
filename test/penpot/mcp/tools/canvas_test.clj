@@ -200,3 +200,10 @@
     (is (str/includes? code "bindToken(args.typographyTokenId, 'typography', 'typography');"))
     (is (str/includes? code "bindToken(args.colorTokenId, 'color', 'fill');"))))
 
+(deftest shapes-can-be-created-out-of-the-layout-flow-in-one-call
+  (let [{:keys [code args]} (call create/tools "create_rect" {"file_id" fid "x" 5 "y" 6 "width" 10 "height" 10
+                                                              "parent_id" (str fx/board-id) "absolute" true
+                                                              "constraint_horizontal" "right" "constraint_vertical" "top"})]
+    (is (= [true "right" "top"] [(get args "absolute") (get args "constraintHorizontal") (get args "constraintVertical")]))
+    (is (str/includes? code "(s.layoutChild ?? fail('not-in-layout', s.id)).absolute = true;"))
+    (is (< (str/index-of code "parent.appendChild(s);") (str/index-of code ".absolute = true;")))))

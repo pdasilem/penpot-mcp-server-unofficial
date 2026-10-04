@@ -73,6 +73,7 @@
                 "  (parent ?? penpot.currentPage.root).appendChild(s);"
                 "  s.x = args.x;"
                 "  s.y = args.y;"
+                create/out-of-flow
                 "} catch (e) { s.remove(); throw e; }"
                 "await settle();"
                 "markChanged();"

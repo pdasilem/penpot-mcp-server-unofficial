@@ -19,12 +19,24 @@
 (def ^:private paint
   "if (args.name !== undefined) s.name = args.name;")
 
+(def out-of-flow
+  (str/join
+   "\n"
+   ["if (args.absolute) {"
+    "  (s.layoutChild ?? fail('not-in-layout', s.id)).absolute = true;"
+    "  if (args.x !== undefined) s.x = args.x;"
+    "  if (args.y !== undefined) s.y = args.y;"
+    "}"
+    "if (args.constraintHorizontal !== undefined) s.constraintsHorizontal = args.constraintHorizontal;"
+    "if (args.constraintVertical !== undefined) s.constraintsVertical = args.constraintVertical;"]))
+
 (def ^:private attach
   (str/join
    "\n"
    ["if (args.x !== undefined) s.x = args.x;"
     "if (args.y !== undefined) s.y = args.y;"
-    "if (parent) parent.appendChild(s);"]))
+    "if (parent) parent.appendChild(s);"
+    out-of-flow]))
 
 (defn- create-body [factory kind setup]
   (str/join "\n" [place
@@ -41,7 +53,10 @@
 (def placement-params
   [[:page_id {:optional true :description "Page to create the shape on; defaults to the page open in the editor"} :uuid]
    [:parent_id {:optional true :description "Board or group to put the shape into"} :uuid]
-   [:name {:optional true :description "Layer name"} common/short-text]])
+   [:name {:optional true :description "Layer name"} common/short-text]
+   [:absolute {:optional true :description "true places the shape out of the flex or grid layout of parent_id, at x and y"} :boolean]
+   [:constraint_horizontal {:optional true :description "left, right, leftright, center or scale"} [:enum "left" "right" "leftright" "center" "scale"]]
+   [:constraint_vertical {:optional true :description "top, bottom, topbottom, center or scale"} [:enum "top" "bottom" "topbottom" "center" "scale"]]])
 
 (def ^:private geometry-params
   [[:x {:description "Canvas X"} common/safe-number]
@@ -52,10 +67,13 @@
 (defn- schema [& groups]
   (into [:map {:closed true} common/file-id-param] (apply concat groups)))
 
-(defn shape-args [{:keys [page_id parent_id name x y width height]}]
+(defn shape-args [{:keys [page_id parent_id name x y width height absolute constraint_horizontal constraint_vertical]}]
   (when (and page_id parent_id)
     (throw (tool/user-error "Give page_id or parent_id, not both")))
-  (common/compact {:page-id page_id :parent-id parent_id :name name :x x :y y :width width :height height}))
+  (when (and absolute (not parent_id))
+    (throw (tool/user-error "absolute needs parent_id, a board with a flex or grid layout")))
+  (common/compact {:page-id page_id :parent-id parent_id :name name :x x :y y :width width :height height
+                   :absolute absolute :constraint-horizontal constraint_horizontal :constraint-vertical constraint_vertical}))
 
 (def ^:private create-board
   (canvas/plugin-tool
