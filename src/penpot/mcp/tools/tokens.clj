@@ -12,8 +12,8 @@
    [penpot.mcp.tools.token-rules :as rules]))
 
 (def ^:private attr-param
-  [:attr {:optional true :description "Shape attribute, as a Penpot Plugin API token property name"}
-   (into [:enum] rules/public-names)])
+  [:attr {:optional true :description "Shape attribute, as a Penpot Plugin API token property name, or a group: padding, margin and borderRadius for all four sides or corners, gap for both gaps"}
+   (into [:enum] rules/attr-names)])
 
 (def ^:private token-param
   [:token_id {:description "Token id from get_design_tokens"} :uuid])
@@ -84,7 +84,7 @@
 (defn- set-token [ctx {:keys [file_id shape_id token_id attr]}]
   (let [token           (token! ctx file_id token_id)
         [shape objects] (shape-with-objects! ctx file_id shape_id)
-        targets         (rules/target-attrs token shape objects (some-> attr rules/parse-attr))]
+        targets         (rules/target-attrs token shape objects (some-> attr rules/parse-attrs))]
     (tool/json-result
      {:shape (revision/mutate! ctx file_id set-body {:shape-id shape_id :token-id token_id :attrs (attr-pairs targets)})})))
 
@@ -94,7 +94,7 @@
   (let [_     (shape-with-objects! ctx file_id shape_id)
         token (when token_id (token! ctx file_id token_id))
         args  (if attr
-                {:attrs (attr-pairs [(rules/parse-attr attr)])}
+                {:attrs (attr-pairs (rules/parse-attrs attr))}
                 {:attrs (attr-pairs (map rules/parse-attr rules/public-names))
                  :token-name (:name token)})]
     (tool/json-result
@@ -102,7 +102,7 @@
 
 (def tools
   [{:name "set_token"
-    :description (str "Bind a design token to a shape, as Penpot's token panel does. Without attr the token binds the attributes Penpot uses for its type: color binds fill, borderRadius every corner, sizing and dimensions width and height, spacing the gaps of a layout board or the margins of a layout child, typography the text typography; other types bind their own attribute. Pass attr to bind one specific attribute, for example strokeColor for a color token. A different token bound to a target attribute is unbound first; attributes already bound to this token are left as they are, so repeating the call changes nothing. The token type and attribute are checked against the shape type before anything changes. Take token ids from get_design_tokens. Returns the changes." canvas/editor-note)
+    :description (str "Bind a design token to a shape, as Penpot's token panel does. Without attr the token binds the attributes Penpot uses for its type: color binds fill, borderRadius every corner, sizing and dimensions width and height, spacing the gaps of a layout board or the margins of a layout child, typography the text typography; other types bind their own attribute. Pass attr to bind one specific attribute, for example strokeColor for a color token, or a group: padding, margin or borderRadius for all four sides or corners, gap for both gaps. A different token bound to a target attribute is unbound first; attributes already bound to this token are left as they are, so repeating the call changes nothing. The token type and attribute are checked against the shape type before anything changes. Take token ids from get_design_tokens. Returns the changes." canvas/editor-note)
     :annotations tool/overwrite
     :input-schema [:map {:closed true}
                    common/file-id-param
@@ -111,7 +111,7 @@
                    attr-param]
     :handler set-token}
    {:name "remove_token"
-    :description (str "Unbind design tokens from a shape; attributes keep their current values. Pass exactly one of token_id, to unbind that token from every attribute of the shape, or attr, to unbind whatever token is bound to that attribute. Nothing changes if nothing is bound. Returns the changes." canvas/editor-note)
+    :description (str "Unbind design tokens from a shape; attributes keep their current values. Pass exactly one of token_id, to unbind that token from every attribute of the shape, or attr, to unbind whatever token is bound to that attribute or to each attribute of a group (padding, margin, borderRadius, gap). Nothing changes if nothing is bound. Returns the changes." canvas/editor-note)
     :annotations tool/overwrite
     :input-schema [:map {:closed true}
                    common/file-id-param
