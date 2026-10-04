@@ -150,3 +150,36 @@
         result (fx/call (fx/find-tool shapes/tools "get_shape_svg") ctx {"file_id" fid "page_id" pid "shape_id" (str fx/board-id)})]
     (is (re-find #"^<svg " (get result "svg")))
     (is (= [:get-page] (fx/rpc-commands ctx)))))
+
+(defn- editor-brief [id nm type parent]
+  {:id id :name nm :type type :parent_id parent :x 0 :y 0 :width 10 :height 10})
+
+(deftest list-shapes-reads-the-open-editor-without-downloading
+  (let [ctx    (fx/plugin-ctx {:pageId pid :shapes [(editor-brief "b" "B" "board" "r") (editor-brief "a" "A" "text" "r")]}
+                              (fx/file-responses fx/file))
+        result (fx/call (fx/find-tool shapes/tools "list_shapes") ctx {"file_id" fid "type" "text"})]
+    (is (= pid (get result "page_id")))
+    (is (= ["A" "B"] (mapv #(get % "name") (get result "shapes"))))
+    (is (empty? (fx/rpc-commands ctx)))
+    (is (= {"fileId" fid "type" "text"} (fx/last-script-args ctx)))))
+
+(deftest list-shapes-in-the-editor-reports-a-missing-page
+  (let [ctx (fx/plugin-ctx nil (fx/file-responses fx/file))]
+    (is (= {:error (str "Page 99999999-0000-0000-0000-000000000000 not found in file " fid)}
+           (fx/call (fx/find-tool shapes/tools "list_shapes") ctx {"file_id" fid "page_id" "99999999-0000-0000-0000-000000000000"})))))
+
+(deftest shape-tree-reads-the-open-editor-without-downloading
+  (let [tree   {:id "r" :name "Root Frame" :type "board" :child_count 1
+                :children [{:id "b" :name "Card" :type "board" :child_count 0}]}
+        ctx    (fx/plugin-ctx {:pageId pid :tree tree} (fx/file-responses fx/file))
+        result (fx/call (fx/find-tool shapes/tools "get_shape_tree") ctx {"file_id" fid "depth" 2})]
+    (is (= "Card" (get-in result ["children" 0 "name"])))
+    (is (empty? (fx/rpc-commands ctx)))
+    (is (= {"fileId" fid "depth" 2} (fx/last-script-args ctx)))
+    (is (str/includes? (last @(:scripts ctx)) "s.type === 'board' && s.flex ? [...c].reverse()"))))
+
+(deftest shape-tree-in-the-editor-reports-a-missing-root
+  (let [ctx (fx/plugin-ctx {:pageId pid :tree nil} (fx/file-responses fx/file))]
+    (is (= {:error (str "Shape 99999999-0000-0000-0000-000000000001 not found on page " pid)}
+           (fx/call (fx/find-tool shapes/tools "get_shape_tree") ctx
+                    {"file_id" fid "root_id" "99999999-0000-0000-0000-000000000001"})))))

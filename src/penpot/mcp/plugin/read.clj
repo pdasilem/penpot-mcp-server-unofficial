@@ -168,3 +168,39 @@
     "if (args.pageId && found.page.id !== args.pageId) fail('shape-not-found', args.shapeId);"
     "const s = found.shape;"
     "return penpot.generateMarkup([s], { type: 'svg' });"]))
+
+(def ^:private brief-js
+  (str "const brief = (s) => ({ id: s.id, name: s.name, type: s.type, parent_id: s.parent ? s.parent.id : '" root-id "',"
+       " x: s.x, y: s.y, width: s.width, height: s.height });"))
+
+(def ^:private page-or-first
+  "const page = args.pageId ? penpotUtils.getPageById(args.pageId) : penpot.currentFile.pages[0];")
+
+(def list-shapes-body
+  (str/join
+   "\n"
+   [page-or-first
+    "if (!page) return null;"
+    brief-js
+    (str "return { pageId: page.id, shapes: page.findShapes()"
+         ".filter((s) => s.id !== '" root-id "' && (!args.type || s.type === args.type)).map(brief) };")]))
+
+(def shape-tree-body
+  (str/join
+   "\n"
+   [page-or-first
+    "if (!page) return null;"
+    brief-js
+    "const root = args.rootId ? page.getShapeById(args.rootId) : page.root;"
+    "if (!root) return { pageId: page.id, tree: null };"
+    "const kids = (s) => {"
+    "  const c = ['board', 'group', 'boolean', 'svg-raw'].includes(s.type) ? (s.children ?? []) : [];"
+    "  return s.type === 'board' && s.flex ? [...c].reverse() : [...c];"
+    "};"
+    "const node = (s, depth) => {"
+    "  const c = kids(s);"
+    "  const n = { ...brief(s), child_count: c.length };"
+    "  if (depth > 0 && c.length) n.children = c.map((k) => node(k, depth - 1));"
+    "  return n;"
+    "};"
+    "return { pageId: page.id, tree: node(root, args.depth) };"]))
