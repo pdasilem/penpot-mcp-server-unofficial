@@ -33,6 +33,13 @@
 (defn- stroke-style [bs]
   (if (#{"dashed" "dotted"} bs) bs "solid"))
 
+(defn- side-shadow [{:keys [side width color opacity]}]
+  {:style "inner-shadow"
+   :offsetX (case side "left" width "right" (- width) 0.0)
+   :offsetY (case side "top" width "bottom" (- width) 0.0)
+   :blur 0.0 :spread 0.0 :hidden false
+   :color {:color color :opacity opacity}})
+
 (defn- borders [style ctx]
   (let [present (keep #(side-border style % ctx) sides)
         uniform (and (= 4 (count present)) (apply = (map #(dissoc % :side) present)))]
@@ -40,9 +47,9 @@
       (let [{:keys [width style color opacity]} (first present)]
         {:strokes [{:strokeColor color :strokeOpacity opacity :strokeWidth width
                     :strokeStyle (stroke-style style) :strokeAlignment "inner"}]
-         :lines []})
+         :border-shadows []})
       {:strokes []
-       :lines (mapv #(select-keys % [:side :width :color :opacity]) present)})))
+       :border-shadows (mapv side-shadow present)})))
 
 (defn- radius [style ctx]
   (mapv #(or (v/px (get style (str "border-" % "-radius") "0") ctx) 0.0)
@@ -55,12 +62,13 @@
         (v/shadows (get style "box-shadow" "none") ctx)))
 
 (defn decoration [style ctx]
-  (merge {:fills (fills style)
-          :radius (radius style ctx)
-          :shadows (shadows style ctx)
-          :opacity (or (some-> (get style "opacity") str/trim parse-double) 1.0)
-          :clip (boolean (some #{"hidden" "clip" "auto" "scroll"} [(get style "overflow-x") (get style "overflow-y")]))}
-         (borders style ctx)))
+  (let [{:keys [strokes border-shadows]} (borders style ctx)]
+    {:fills (fills style)
+     :strokes strokes
+     :radius (radius style ctx)
+     :shadows (into (shadows style ctx) border-shadows)
+     :opacity (or (some-> (get style "opacity") str/trim parse-double) 1.0)
+     :clip (boolean (some #{"hidden" "clip" "auto" "scroll"} [(get style "overflow-x") (get style "overflow-y")]))}))
 
 (defn- side-values [style prefix ctx]
   (mapv #(or (v/px (get style (str prefix "-" %) "0") ctx) 0.0) sides))

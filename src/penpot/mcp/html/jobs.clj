@@ -2,6 +2,7 @@
   (:refer-clojure :exclude [run!])
   (:require
    [clojure.tools.logging :as log]
+   [penpot.mcp.html.chunks :as chunks]
    [penpot.mcp.html.script :as script]
    [penpot.mcp.html.tree :as tree]
    [penpot.mcp.penpot.revision :as revision]
@@ -12,6 +13,7 @@
 (def ^:private gap 120)
 (def ^:private max-row-width 6000)
 (def ^:private finished-ttl-ms (* 60 60 1000))
+(def ^:private default-chunk-size 150)
 
 (defn- registry [ctx] (:import-jobs ctx))
 
@@ -53,23 +55,42 @@
   (let [same-row (= y (:y cursor))]
     {:x (+ x width gap) :y y :row-h (if same-row (max (or (:row-h cursor) 0) height) height)}))
 
-(defn- import-frame! [ctx {:keys [id file-id computed opts cursors] :as job} index]
+(defn- build-calls! [ctx {:keys [id file-id opts]} index page-id calls {:keys [x y]}]
+  (reduce (fn [acc [i units]]
+            (let [res (revision/mutate! ctx file-id script/frame-body
+                                        {:units units :ids (:ids acc) :root-id (:root-id acc) :page-id page-id
+                                         :x x :y y :font-family (:font-family opts)})]
+              (when (zero? i)
+                (update-job! ctx id assoc :partial {:index index :root-id (:boardId res)}))
+              {:ids (:ids res)
+               :root-id (:boardId res)
+               :fonts (into (:fonts acc) (:substitutedFonts res))
+               :last res}))
+          {:ids {} :root-id nil :fonts #{}}
+          (map-indexed vector calls)))
+
+(defn- import-frame! [ctx {:keys [id computed opts cursors] :as job} index]
   (let [{:keys [element section name]} (nth (:plan job) index)
         page-id (section-page! ctx job section)
         key     (or page-id :target)
         {:keys [node unsupported]} (tree/frame element computed {:viewport (:viewport opts)})
         node    (assoc node :name name)
-        {:keys [x y]} (placement (get cursors key) (:width node))
-        result  (revision/mutate! ctx file-id script/frame-body
-                                  {:node node :page-id page-id :x x :y y :font-family (:font-family opts)})]
+        calls   (chunks/split node (or (:chunk-size opts) default-chunk-size))
+        built   (build-calls! ctx job index page-id calls (placement (get cursors key) (:width node)))
+        result  (:last built)]
     (update-job! ctx id
                  (fn [j]
                    (-> j
                        (update :boards conj {:id (:boardId result) :name (:name result) :page_id (:pageId result) :section section})
                        (assoc-in [:cursors key] (advance (get-in j [:cursors key]) result))
                        (update :unsupported #(merge-with + % unsupported))
-                       (update :fonts into (:substitutedFonts result))
-                       (assoc :next (inc index)))))))
+                       (update :fonts into (:fonts built))
+                       (assoc :next (inc index) :partial nil))))))
+
+(defn- drop-partial! [ctx {:keys [id file-id partial next]}]
+  (when (and partial (= next (:index partial)) (:root-id partial))
+    (revision/mutate! ctx file-id script/remove-body {:shape-id (:root-id partial)})
+    (update-job! ctx id assoc :partial nil)))
 
 (defn run! [ctx id]
   (update-job! ctx id assoc :status "running")
@@ -86,7 +107,8 @@
 
         :else
         (let [outcome (try
-                        (import-frame! ctx job idx)
+                        (drop-partial! ctx job)
+                        (import-frame! ctx (job! ctx id) idx)
                         :ok
                         (catch Exception e
                           (when-not (tool/user-error? e) (log/error e "HTML import frame failed"))

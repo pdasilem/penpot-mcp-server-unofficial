@@ -72,9 +72,15 @@
            (mapv :cell (:children table))))
     (is (= "fill" (get-in table [:self :horizontalSizing])))))
 
-(deftest partial-borders-become-lines
+(deftest partial-borders-become-inner-shadows
   (let [{:keys [node]} (frame "<div id='f' style='width:400px'><div style='border-bottom:1px solid #e3e6e8;height:38px'>top</div></div>" "#f")]
-    (is (= [{:side "bottom" :width 1.0 :color "#e3e6e8" :opacity 1.0}] (:lines (first (:children node)))))))
+    (is (= [-1.0 "#e3e6e8"] ((juxt :offsetY (comp :color :color)) (first (:shadows (first (:children node)))))))))
+
+(deftest growing-items-fill-only-a-definite-height
+  (let [{:keys [node]} (frame "<div id='f' style='width:400px'><div style='display:flex;flex-direction:column'><div style='flex:1;border:1px solid #ccc'>x</div></div></div>" "#f")]
+    (is (= "auto" (get-in node [:children 0 :children 0 :self :verticalSizing]))))
+  (let [{:keys [node]} (frame "<div id='f' style='width:400px;height:300px;display:flex;flex-direction:column'><div style='flex:1;border:1px solid #ccc'>x</div></div>" "#f")]
+    (is (= "fill" (get-in node [:children 0 :self :verticalSizing])))))
 
 (deftest pseudo-elements-of-boards-are-text-children
   (let [{:keys [node]} (frame "<style>.sel{display:flex;justify-content:space-between;border:1px solid #ccc}.sel::after{content:'▾'}</style><div id='f' style='width:400px'><div class='sel'>Pick</div></div>" "#f")

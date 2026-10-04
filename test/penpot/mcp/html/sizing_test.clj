@@ -38,7 +38,8 @@
 
 (deftest child-height
   (is (= ["fix" 38.0] ((juxt :verticalSizing :height) (sizing/child {"height" "38px"} {:dir "row" :alignItems "center"} ctx))))
-  (is (= "fill" (:verticalSizing (sizing/child {"flex-grow" "1"} {:dir "column" :alignItems "stretch"} ctx))))
+  (is (= "auto" (:verticalSizing (sizing/child {"flex-grow" "1"} {:dir "column" :alignItems "stretch"} ctx))))
+  (is (= "fill" (:verticalSizing (sizing/child {"flex-grow" "1"} {:dir "column" :alignItems "stretch" :fixed-height true} ctx))))
   (is (= "auto" (:verticalSizing (sizing/child {} {:dir "column" :alignItems "stretch"} ctx))))
   (is (= "fill" (:verticalSizing (sizing/child {} {:dir "row" :alignItems "stretch" :fixed-height true} ctx))))
   (is (= "auto" (:verticalSizing (sizing/child {} {:dir "row" :alignItems "stretch"} ctx))))

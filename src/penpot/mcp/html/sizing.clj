@@ -61,7 +61,7 @@
   (let [px (v/px (get style "height" "auto") ctx)]
     (cond
       px [:fix px]
-      (and (not (row? dir)) (grow? style)) [:fill nil]
+      (and (not (row? dir)) (grow? style) fixed-height) [:fill nil]
       (and (row? dir) fixed-height (= "stretch" alignItems) (not (get style "align-self"))) [:fill nil]
       :else [:auto nil])))
 
