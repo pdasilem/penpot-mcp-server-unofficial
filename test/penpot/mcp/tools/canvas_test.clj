@@ -207,3 +207,8 @@
     (is (= [true "right" "top"] [(get args "absolute") (get args "constraintHorizontal") (get args "constraintVertical")]))
     (is (str/includes? code "(s.layoutChild ?? fail('not-in-layout', s.id)).absolute = true;"))
     (is (< (str/index-of code "parent.appendChild(s);") (str/index-of code ".absolute = true;")))))
+
+(deftest component-name-is-the-full-name-with-its-path
+  (let [{:keys [code]} (call create/tools "create_component" {"file_id" fid "shape_ids" [sid] "name" "ICON / MENU_FOLD"})]
+    (is (str/includes? code "const parts = args.name.split('/').map((p) => p.trim()).filter(Boolean);"))
+    (is (< (str/index-of code "c.path = path;") (str/index-of code "c.name = leaf;")))))

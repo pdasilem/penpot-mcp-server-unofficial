@@ -176,12 +176,18 @@
 (def ^:private create-component
   (canvas/plugin-tool
    {:name "create_component"
-    :description "Turn shapes into a component of the file's local library; the shapes become its main instance. Returns the component id, name, path and the main instance's state."
+    :description "Turn shapes into a component of the file's local library; the shapes become its main instance. name is the full component name, with the path before the last /, e.g. Icons / Menu. Returns the component id, name, path and the main instance's state."
     :annotations tool/additive
     :input-schema (schema [canvas/shape-ids-param [:name {:optional true :description "Name of the new group or component"} common/short-text]])
     :body (str/join "\n" [collect-shapes
                           "const c = penpot.library.local.createComponent(shapes) ?? fail('create-failed', 'component');"
-                          "if (args.name !== undefined) c.name = args.name;"
+                          "if (args.name !== undefined) {"
+                          "  const parts = args.name.split('/').map((p) => p.trim()).filter(Boolean);"
+                          "  const leaf = parts.pop() ?? c.name;"
+                          "  const path = parts.join(' / ');"
+                          "  if ((c.path ?? '') !== path) { c.path = path; await waitFor(() => (c.path ?? '') === path); }"
+                          "  if (c.name !== leaf) { c.name = leaf; await waitFor(() => c.name === leaf); }"
+                          "}"
                           "await settle();"
                           "markChanged();"
                           "const main = c.mainInstance();"
