@@ -33,3 +33,9 @@
 
 (deftest unknown-upload-is-nil
   (is (nil? (uploads/text (uploads/store {:now (constantly 0)}) "00000000-0000-0000-0000-000000000000"))))
+
+(deftest uploads-beyond-the-total-budget-are-refused
+  (let [s (uploads/store {:now (constantly 0) :max-bytes 10})]
+    (is (some? (uploads/put! s "123456")))
+    (is (nil? (uploads/put! s "123456")))
+    (is (some? (uploads/put! s "1234")))))

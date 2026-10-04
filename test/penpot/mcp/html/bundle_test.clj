@@ -52,3 +52,15 @@
         result   (bundle/unpack (bundle-html (str "<iframe src=\"about:blank#" page-id "\"></iframe>") manifest [page-id]))]
     (is (= 1 (:pages result)))
     (is (str/includes? (:html result) (str "about:blank#" page-id)))))
+
+(deftest unpacked-assets-beyond-the-budget-are-refused
+  (let [manifest {asset-id {"mime" "text/plain" "compressed" true "data" (gzip-b64 (apply str (repeat 5000 "a")))}}
+        html     (bundle-html (str "<p>" asset-id "</p>") manifest [])]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unpack to more than"
+                          (bundle/unpack html {:max-bytes 4000 :max-assets 10})))
+    (is (string? (:html (bundle/unpack html {:max-bytes 10000 :max-assets 10}))))))
+
+(deftest too-many-bundle-assets-are-refused
+  (let [manifest (into {} (for [i (range 3)] [(str "id-" i) {"mime" "text/plain" "data" "YQ=="}]))]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"more than 2 assets"
+                          (bundle/unpack (bundle-html "<p></p>" manifest []) {:max-bytes 1000 :max-assets 2})))))

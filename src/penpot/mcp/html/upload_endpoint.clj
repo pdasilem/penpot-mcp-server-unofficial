@@ -26,8 +26,9 @@
     (if-let [bytes (read-limited req limit)]
       (if (zero? (alength ^bytes bytes))
         (respond res 400 {:error "The body is empty"})
-        (respond res 201 {:upload_id (uploads/put! store (String. ^bytes bytes StandardCharsets/UTF_8))
-                          :bytes (alength ^bytes bytes)}))
+        (if-let [id (uploads/put! store (String. ^bytes bytes StandardCharsets/UTF_8))]
+          (respond res 201 {:upload_id id :bytes (alength ^bytes bytes)})
+          (respond res 507 {:error "Upload storage is full; finish or wait for earlier imports and try again"})))
       (respond res 413 {:error (str "The file is larger than " limit " bytes")}))))
 
 (defn upload-filter [store limit]

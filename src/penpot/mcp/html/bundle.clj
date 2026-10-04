@@ -1,7 +1,8 @@
 (ns penpot.mcp.html.bundle
   (:require
    [clojure.data.json :as json]
-   [clojure.string :as str])
+   [clojure.string :as str]
+   [penpot.mcp.tool :as tool])
   (:import
    (java.io ByteArrayInputStream)
    (java.util Base64)
@@ -13,32 +14,52 @@
   (when-let [^Element el (.selectFirst doc (str "script[type=__bundler/" kind "]"))]
     (json/read-str (.data el))))
 
-(defn- asset-bytes [{:strs [data compressed]}]
-  (let [raw (.decode (Base64/getDecoder) ^String data)]
-    (if compressed
-      (with-open [in (GZIPInputStream. (ByteArrayInputStream. raw))]
-        (.readAllBytes in))
-      raw)))
+(def ^:private default-limits {:max-bytes (* 64 1024 1024) :max-assets 500})
 
-(defn- data-uri [{:strs [mime] :as entry}]
-  (str "data:" mime ";base64," (.encodeToString (Base64/getEncoder) ^bytes (asset-bytes entry))))
+(defn- over-budget [max-bytes]
+  (tool/user-error (str "The design bundle's assets unpack to more than " max-bytes " bytes")))
 
-(defn- inline-assets [template manifest pages]
-  (reduce (fn [html [id entry]]
-            (if (contains? pages id) html (str/replace html id (data-uri entry))))
-          template
-          manifest))
+(defn- asset-bytes [{:strs [data compressed]} remaining max-bytes]
+  (let [raw   (.decode (Base64/getDecoder) ^String data)
+        bytes (if compressed
+                (with-open [in (GZIPInputStream. (ByteArrayInputStream. raw))]
+                  (.readNBytes in (int (min Integer/MAX_VALUE (inc remaining)))))
+                raw)]
+    (when (> (alength ^bytes bytes) remaining) (throw (over-budget max-bytes)))
+    bytes))
+
+(defn- data-uri [mime ^bytes bytes]
+  (str "data:" mime ";base64," (.encodeToString (Base64/getEncoder) bytes)))
+
+(defn- inline-assets [template manifest pages {:keys [max-bytes]}]
+  (let [ids  (remove #(contains? pages %) (keys manifest))
+        uris (:uris (reduce (fn [{:keys [remaining] :as acc} id]
+                              (let [entry (get manifest id)
+                                    bytes (asset-bytes entry remaining max-bytes)]
+                                (-> acc
+                                    (update :remaining - (alength ^bytes bytes))
+                                    (assoc-in [:uris id] (data-uri (get entry "mime") bytes)))))
+                            {:remaining max-bytes :uris {}}
+                            ids))]
+    (if (empty? uris)
+      template
+      (str/replace template (re-pattern (str/join "|" (map #(java.util.regex.Pattern/quote %) (keys uris))))
+                   #(java.util.regex.Matcher/quoteReplacement (get uris %))))))
 
 (defn- strip-integrity [html]
   (-> html
       (str/replace #"(?i)\s+integrity=\"[^\"]*\"" "")
       (str/replace #"(?i)\s+crossorigin=\"[^\"]*\"" "")))
 
-(defn unpack [html]
-  (let [doc (Jsoup/parse ^String html)]
-    (if-let [template (script-json doc "template")]
-      (let [manifest (or (script-json doc "manifest") {})
-            pages    (set (or (script-json doc "page_order") []))]
-        {:html (strip-integrity (inline-assets template manifest pages))
-         :pages (count pages)})
-      {:html html :pages 0})))
+(defn unpack
+  ([html] (unpack html default-limits))
+  ([html {:keys [max-assets] :as limits}]
+   (let [doc (Jsoup/parse ^String html)]
+     (if-let [template (script-json doc "template")]
+       (let [manifest (or (script-json doc "manifest") {})
+             pages    (set (or (script-json doc "page_order") []))]
+         (when (> (count manifest) max-assets)
+           (throw (tool/user-error (str "The design bundle has more than " max-assets " assets"))))
+         {:html (strip-integrity (inline-assets template manifest pages limits))
+          :pages (count pages)})
+       {:html html :pages 0}))))

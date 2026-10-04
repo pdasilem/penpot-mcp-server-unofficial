@@ -13,3 +13,4 @@
   (is (str/includes? script/finish-body "holder.appendChild(shape);"))
   (is (str/includes? script/finish-body "penpot.createShapeFromSvg(m.node.markup)"))
   (is (str/includes? script/finish-body "if (layout) layout.rowGap = layout.rowGap;")))
+

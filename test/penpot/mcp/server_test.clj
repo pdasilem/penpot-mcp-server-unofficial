@@ -2,6 +2,7 @@
   (:require
    [clojure.data.json]
    [clojure.test :refer [deftest is use-fixtures]]
+   [penpot.mcp.html.upload-endpoint]
    [penpot.mcp.html.uploads]
    [penpot.mcp.penpot.version :as version]
    [penpot.mcp.server :as server]
@@ -145,3 +146,23 @@
 (deftest html-upload-rejects-empty-and-oversized-bodies
   (is (= 400 (:status (raw-post (str "userToken=" mcp-key "&upload=html") ""))))
   (is (= 413 (:status (raw-post (str "userToken=" mcp-key "&upload=html") (apply str (repeat 2049 "a")))))))
+
+(deftest html-upload-beyond-the-store-budget-is-refused
+  (let [full (penpot.mcp.html.uploads/store {:now #(System/currentTimeMillis) :max-bytes 4})
+        f    (penpot.mcp.html.upload-endpoint/upload-filter full 2048)
+        out  (java.io.StringWriter.)
+        status (atom nil)
+        req  (reify jakarta.servlet.http.HttpServletRequest
+               (getQueryString [_] "upload=html")
+               (getMethod [_] "POST")
+               (getInputStream [_]
+                 (let [in (java.io.ByteArrayInputStream. (.getBytes "<html></html>"))]
+                   (proxy [jakarta.servlet.ServletInputStream] []
+                     (read ([] (.read in)) ([b o l] (.read in b o l)))
+                     (isFinished [] false) (isReady [] true) (setReadListener [_])))))
+        res  (reify jakarta.servlet.http.HttpServletResponse
+               (setStatus [_ s] (reset! status s))
+               (^void setContentType [_ ^String _]) (^void setCharacterEncoding [_ ^String _])
+               (getWriter [_] (java.io.PrintWriter. out)))]
+    (.doFilter f req res nil)
+    (is (= 507 @status))))

@@ -37,9 +37,13 @@
          (sort-by :key (fn [a b] (compare (vec a) (vec b))))
          (reduce (fn [m {:keys [prop value]}] (into m (v/expand prop value))) {}))))
 
+(def ^:private max-var-length (* 64 1024))
+
 (defn- resolve-vars [value props depth]
-  (if (or (> depth 8) (not (str/includes? (str value) "var(")))
-    value
+  (cond
+    (> (count (str value)) max-var-length) ""
+    (or (> depth 8) (not (str/includes? (str value) "var("))) value
+    :else
     (resolve-vars
      (str/replace value #"var\(\s*(--[\w-]+)\s*(?:,\s*([^()]*(?:\([^()]*\))?[^()]*))?\)"
                   (fn [[_ name fallback]] (or (get props name) (some-> fallback str/trim) "")))

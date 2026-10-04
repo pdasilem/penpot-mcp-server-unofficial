@@ -172,7 +172,10 @@
                                           (when-let [s (:sizing node)]
                                             {:layout-item-h-sizing (kw (:horizontal s))
                                              :layout-item-v-sizing (kw (:vertical s))})))
-        order    (if (= "flex" (get-in node [:layout :type])) (reverse placed) placed)
+        order    (if (and (= "flex" (get-in node [:layout :type]))
+                          (not (contains? #{"row-reverse" "column-reverse"} (get-in node [:layout :dir]))))
+                   (reverse placed)
+                   placed)
         inner    {:parent-id id :x x :y y}]
     (concat [board]
             (mapcat (fn [[child cid]] (node-shapes child (assoc inner :id cid) env)) order)

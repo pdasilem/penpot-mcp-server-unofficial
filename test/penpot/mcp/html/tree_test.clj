@@ -149,3 +149,15 @@
     (is (= "auto" (get-in code [:self :horizontalSizing])))
     (is (= "auto" (get-in tab [:self :horizontalSizing])))
     (is (= "auto" (get-in rigid [:self :horizontalSizing])) "flex-shrink 0 keeps the content width")))
+
+(deftest images-on-internal-hosts-are-dropped-and-reported
+  (let [{:keys [node unsupported]}
+        (frame (str "<div id='f' style='width:300px'>"
+                    "<img src='http://127.0.0.1/a.png' alt='loop'><img src='http://169.254.169.254/latest' alt='meta'>"
+                    "<img src='http://10.1.2.3/x.png' alt='lan'><img src='http://localhost:8080/x.png' alt='local'>"
+                    "<img src='http://[::1]/x.png' alt='v6'><img src='http://penpot-backend/x.png' alt='single'>"
+                    "<img src='data:image/png;base64,AAAA' alt='inline'><img src='https://8.8.8.8/x.png' alt='public'>"
+                    "</div>")
+               "#f")]
+    (is (= ["inline" "public"] (map :name (filter #(= "image" (:kind %)) (tree-seq :children :children node)))))
+    (is (= 6 (get unsupported "image on an internal address")))))

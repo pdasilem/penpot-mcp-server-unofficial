@@ -4,7 +4,8 @@
    [penpot.mcp.html.box :as box]
    [penpot.mcp.html.css.values :as v]
    [penpot.mcp.html.sizing :as sizing]
-   [penpot.mcp.html.text :as text])
+   [penpot.mcp.html.text :as text]
+   [penpot.mcp.html.urls :as urls])
   (:import
    (org.jsoup.nodes Element TextNode)))
 
@@ -268,7 +269,9 @@
             grid-pos (when (:grid parent) {:column (grid-line (get style "grid-column")) :row (grid-line (get style "grid-row"))})]
         (cond-> (case (.tagName el)
                   "svg" {:kind "svg" :name "svg" :markup (.outerHtml el) :self self}
-                  "img" {:kind "image" :name (clean-name (.attr el "alt") "image") :src (.attr el "src") :self self}
+                  "img" (if (urls/internal? (.attr el "src"))
+                          (do (note! ctx "image on an internal address") nil)
+                          {:kind "image" :name (clean-name (.attr el "alt") "image") :src (.attr el "src") :self self})
                   "iframe" nil
                   (cond
                     (table? style) (table-node el style ctx self)

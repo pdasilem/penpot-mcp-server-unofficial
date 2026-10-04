@@ -20,6 +20,7 @@
 (def ^:private below-gap 200)
 (def ^:private max-row-width 6000)
 (def ^:private finished-ttl-ms (* 60 60 1000))
+(def ^:private max-unfinished 2)
 
 (defn- registry [ctx] (:import-jobs ctx))
 
@@ -28,7 +29,7 @@
       (throw (tool/user-error (str "Import job " id " not found; jobs are kept for an hour after they finish")))))
 
 (defn- update-job! [ctx id f & args]
-  (swap! (registry ctx) #(apply update % id f args)))
+  (swap! (registry ctx) (fn [jobs] (cond-> jobs (contains? jobs id) (update id #(apply f % args))))))
 
 (defn- prune [jobs now]
   (into {} (remove (fn [[_ j]] (and (:finished-at j) (> (- now (:finished-at j)) finished-ttl-ms)))) jobs))
@@ -38,7 +39,12 @@
         job {:id id :file-id file-id :plan plan :computed computed :opts opts :on-done on-done
              :status "pending" :next 0 :boards [] :pages {} :cursors {} :unsupported {} :fonts #{}
              :font-map {} :fallback nil :vern nil}]
-    (swap! (registry ctx) #(assoc (prune % (System/currentTimeMillis)) id job))
+    (swap! (registry ctx)
+           (fn [jobs]
+             (let [jobs (prune jobs (System/currentTimeMillis))]
+               (when (>= (count (remove (comp :finished-at val) jobs)) max-unfinished)
+                 (throw (tool/user-error (str max-unfinished " imports are already running; wait for one to finish or cancel it"))))
+               (assoc jobs id job))))
     job))
 
 (defn- finish! [ctx id status extra]
@@ -122,8 +128,8 @@
         job       (job! ctx id)
         at        (placement (get-in job [:cursors page-id]) (:bottom prep) (:width node))
         built     (shapes/frame-objects node (merge at {:fonts (:font-map job) :fallback (:fallback job)}))]
-    (submit! ctx file-id (:revn prep) (vern! ctx job) (frame-changes page-id (:objects built)))
     (update-job! ctx id assoc :partial {:index index :root-id (:root-id built)})
+    (submit! ctx file-id (:revn prep) (vern! ctx job) (frame-changes page-id (:objects built)))
     (let [result (revision/mutate! ctx file-id script/finish-body
                                    {:page-id page-id :root-id (:root-id built) :media (:media built)})]
       (update-job! ctx id
@@ -158,7 +164,7 @@
                         (drop-partial! ctx job)
                         (import-frame! ctx (job! ctx id) idx)
                         :ok
-                        (catch Exception e
+                        (catch Throwable e
                           (when-not (tool/user-error? e) (log/error e "HTML import frame failed"))
                           e))]
           (if (= :ok outcome)
@@ -167,7 +173,12 @@
                                       :failed-frame {:index (inc idx) :name (:name (nth (:plan job) idx))}})))))))
 
 (defn start! [ctx id]
-  (future (run! ctx id))
+  (future
+    (try
+      (run! ctx id)
+      (catch Throwable e
+        (log/error e "HTML import job stopped")
+        (finish! ctx id "failed" {:error (or (ex-message e) (str e))}))))
   nil)
 
 (defn cancel! [ctx id]
@@ -176,10 +187,15 @@
   nil)
 
 (defn- resumable! [ctx id]
-  (let [job (job! ctx id)]
-    (when-not (#{"failed" "cancelled"} (:status job))
-      (throw (tool/user-error (str "Import job " id " is " (:status job) "; only failed or cancelled jobs can be resumed"))))
-    (update-job! ctx id merge {:status "pending" :error nil :failed-frame nil :finished-at nil :cancel-requested false})))
+  (job! ctx id)
+  (let [[before after] (swap-vals! (registry ctx)
+                                   (fn [jobs]
+                                     (cond-> jobs
+                                       (#{"failed" "cancelled"} (get-in jobs [id :status]))
+                                       (update id merge {:status "pending" :error nil :failed-frame nil
+                                                         :finished-at nil :cancel-requested false}))))]
+    (when (identical? before after)
+      (throw (tool/user-error (str "Import job " id " is " (get-in after [id :status]) "; only failed or cancelled jobs can be resumed"))))))
 
 (defn resume! [ctx id]
   (resumable! ctx id)

@@ -38,7 +38,7 @@
                  (cond
                    (and (contains? frame-set el) (not (inside? el (map :element frames))))
                    (update acc :frames conj {:element el :section section :name (label el (count frames))})
-                   (contains? section-set el)
+                   (and (contains? section-set el) (not (str/blank? (.text el))))
                    (assoc acc :section (subs (str/trim (.text el)) 0 (min max-label (count (str/trim (.text el))))))
                    :else acc))
                {:section nil :frames []}

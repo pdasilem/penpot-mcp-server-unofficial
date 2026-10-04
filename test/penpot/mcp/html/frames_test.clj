@@ -32,3 +32,8 @@
 (deftest invalid-selector-is-reported
   (is (thrown-with-msg? clojure.lang.ExceptionInfo #"frame_selector"
                         (frames/plan (Jsoup/parse html) {:frame-selector ".desk[["}))))
+
+(deftest blank-section-headings-keep-the-current-section
+  (let [plan (frames/plan (Jsoup/parse "<h2>One</h2><div class='desk'>a</div><h2> </h2><div class='desk'>b</div>")
+                          {:frame-selector ".desk" :section-selector "h2"})]
+    (is (= ["One" "One"] (map :section plan)))))

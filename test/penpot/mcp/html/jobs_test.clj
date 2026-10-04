@@ -52,13 +52,15 @@
                     {:result {} :changed false})))}))
 
 (defn- fake-rpc [{:keys [fail-at vern]}]
-  (let [updates (atom []) n (atom 0) lookups (atom 0)]
+  (let [updates (atom []) n (atom 0) lookups (atom 0) attempts (atom [])]
     {:updates updates
+     :attempts attempts
      :lookups lookups
      :client {:session-id #uuid "99999999-0000-0000-0000-000000000001"
               :send (fn [cmd params]
                       (case cmd
                         :update-file (let [i (swap! n inc)]
+                                       (swap! attempts conj params)
                                        (when (= i fail-at)
                                          (throw (ex-info "Penpot update-file failed: boom" {:type :tool/user-error})))
                                        (when (and vern (not= vern (:vern params)))
@@ -132,7 +134,7 @@
     (is (= 1 @(:lookups rpc)))))
 
 (deftest a-failing-frame-stops-the-job-and-resume-continues
-  (let [{:keys [ctx editor job-id]} (setup {:fail-at 2})]
+  (let [{:keys [ctx editor rpc job-id]} (setup {:fail-at 2})]
     (jobs/run! ctx job-id)
     (let [st (jobs/status ctx job-id)]
       (is (= "failed" (:status st)))
@@ -145,7 +147,8 @@
         (is (= "done" (:status st)))
         (is (= 3 (:frames_done st)))
         (is (= 2 (count (calls-of editor :page))) "each section page is created once")
-        (is (empty? (calls-of editor :remove)) "nothing was written for the failed frame")))))
+        (is (= [(str (:id (root-of (second @(:attempts rpc)))))] (map #(get % "shapeId") (calls-of editor :remove)))
+            "a frame sent without an answer may exist, so resume removes it first")))))
 
 (deftest resume-removes-a-frame-written-but-not-finished
   (let [{:keys [ctx editor rpc job-id]} (setup {})
@@ -178,3 +181,29 @@
         st (jobs/status ctx job-id)]
     (is (= #{:job_id :status :frames_total :frames_done :current_frame} (set (keys st))))
     (is (= {:index 1 :name "One" :section "One"} (:current_frame st)))))
+
+(deftest a-second-resume-of-the-same-job-is-refused
+  (let [{:keys [ctx job-id]} (setup {:fail-at 2})]
+    (jobs/run! ctx job-id)
+    (with-redefs [jobs/start! (fn [_ _] nil)]
+      (jobs/resume! ctx job-id)
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"is pending" (jobs/resume! ctx job-id))))))
+
+(deftest errors-beyond-exceptions-fail-the-job
+  (let [{:keys [ctx job-id]} (setup {})
+        ctx (assoc ctx :execute (fn [_] (throw (StackOverflowError.))))]
+    (jobs/run! ctx job-id)
+    (is (= "failed" (:status (jobs/status ctx job-id))))))
+
+(deftest unknown-jobs-are-not-created-by-updates
+  (let [ctx {:import-jobs (atom {})}]
+    (@#'jobs/update-job! ctx "nope" assoc :status "running")
+    (is (= {} @(:import-jobs ctx)))))
+
+(deftest only-two-imports-run-at-once
+  (let [{:keys [ctx]} (setup {})
+        doc  (Jsoup/parse ^String html)
+        plan (frames/plan doc {:frame-selector ".desk"})
+        mk   #(jobs/create! ctx {:file-id fx/file-id :plan plan :computed {} :opts {}})]
+    (mk)
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"already running" (mk)))))

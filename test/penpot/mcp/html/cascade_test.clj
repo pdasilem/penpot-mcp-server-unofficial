@@ -1,5 +1,6 @@
 (ns penpot.mcp.html.cascade-test
   (:require
+   [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
    [penpot.mcp.html.cascade :as cascade])
   (:import
@@ -75,3 +76,9 @@
 (deftest style-and-script-are-not-styled
   (let [{:keys [doc computed]} (styles "<style>.a{}</style><script>x()</script><div id='x'>t</div>")]
     (is (= "none" (get-in computed [(.selectFirst doc "script") :style "display"])))))
+
+(deftest custom-properties-that-explode-resolve-to-nothing
+  (let [defs (str/join ";" (for [i (range 1 8)]
+                             (str "--a" i ":" (str/join " " (repeat 10 (str "var(--a" (inc i) ")"))))))
+        s    (styles (str "<style>:root{" defs ";--a8:x}p{font-family:var(--a1)}</style><p>t</p>"))]
+    (is (< (count (str (get (style-of s "p") "font-family"))) 70000))))

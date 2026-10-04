@@ -170,3 +170,8 @@
       (is (< 5 (count objects)))
       (is (= (count objects) (count (distinct (map :id objects)))))
       (is (valid-changes? objects)))))
+
+(deftest reversed-flex-keeps-document-order-in-penpot
+  (let [{:keys [objects]} (build (root [(text "First") (text "Second")] :layout (assoc flex-layout :dir "row-reverse")))
+        kids (filter #(= (:id (first objects)) (:parent-id %)) objects)]
+    (is (= ["First" "Second"] (map :name kids)))))

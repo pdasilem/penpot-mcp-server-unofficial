@@ -155,11 +155,11 @@ The `import` group turns a static HTML design, such as a Claude Design export, i
    curl --data-binary @design.html "https://penpot.example.com/mcp/stream?userToken=<MCP key>&upload=html"
    ```
 
-   The answer holds `upload_id`. Uploads are limited to 20 MB and kept in memory for an hour.
+   The answer holds `upload_id`. Uploads are limited to 20 MB each and 100 MB in total and kept in memory for an hour; a full store answers 507.
 2. `import_html` with the file id, `upload_id`, `frame_selector` (each match becomes a board) and optionally `section_selector` (each section heading starts a new page) starts a background job.
 3. `get_import_status` reports progress; `cancel_import` stops after the current frame; `resume_import` continues a failed or cancelled job.
 
-Scripts are ignored. The file must be open in the editor during the import.
+Scripts are ignored. The file must be open in the editor during the import. At most two imports run at once. The assets of a Claude Design bundle may unpack to at most 64 MB. Images on loopback, private, link-local or single-label hosts are skipped and reported as unsupported.
 
 ## Reverse proxy in front of Penpot
 
