@@ -183,3 +183,9 @@
   (let [{:keys [ctx result]} (token-call "set_token" {"file_id" fid "shape_id" sid "token_id" tid "attr" "padding"})]
     (is (re-find #"does not take a color token" (:error result)))
     (is (not (changes-sent? ctx)))))
+
+(deftest export-opens-the-page-of-the-shape-first
+  (let [ctx (fx/plugin-ctx (fn [code] (if (str/includes? code "return { switched") {:switched true} {:__type "base64" :data "AA=="})))]
+    (tool/invoke (fx/find-tool export/tools "export_shape") ctx {"file_id" fid "shape_id" sid})
+    (is (= 2 (count @(:scripts ctx))))
+    (is (str/includes? (first @(:scripts ctx)) "await openPage(page);"))))

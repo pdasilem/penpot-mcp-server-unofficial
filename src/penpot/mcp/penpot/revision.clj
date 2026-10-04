@@ -19,10 +19,35 @@
     (swap! (:dirty persistence) conj file-id)
     nil))
 
+(def ^:private open-target-page-body
+  (str/join
+   "\n"
+   ["const single = [args.parentId, args.shapeId, args.boardId, args.groupId].filter(Boolean);"
+    "const ids = [...single, ...(args.shapeIds ?? [])];"
+    "let page = null;"
+    "if (args.pageId) {"
+    "  page = penpotUtils.getPageById(args.pageId);"
+    "} else {"
+    "  const found = ids.map((id) => locateShape(id)).filter(Boolean);"
+    "  if (found.length && found.every((f) => f.page.id === found[0].page.id)) page = found[0].page;"
+    "}"
+    "if (!page || page.id === penpot.currentPage.id) return { switched: false };"
+    "await openPage(page);"
+    "for (const id of ids) if (locateShape(id)?.page.id === page.id) await waitFor(() => penpot.currentPage.getShapeById(id), 25000);"
+    "return { switched: true, pageId: page.id };"]))
+
+(def ^:private target-keys
+  [:page-id :parent-id :shape-id :shape-ids :board-id :group-id])
+
+(defn open-target-page! [ctx file-id args]
+  (when (some #(some? (get args %)) target-keys)
+    (scripts/execute! ctx open-target-page-body (assoc (select-keys args target-keys) :file-id file-id))))
+
 (defn mutate! [ctx file-id body args]
   (scripts/serialized
    ctx
    (fn []
+     (open-target-page! ctx file-id args)
      (try
        (let [{:keys [result changed]} (scripts/execute! ctx body (assoc args :file-id file-id))]
          (when changed (mark-dirty! ctx file-id))

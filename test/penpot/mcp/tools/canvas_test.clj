@@ -15,7 +15,7 @@
 (defn- call [tools tool-name args]
   (let [ctx (fx/plugin-ctx shape-result)
         res (fx/call (fx/find-tool tools tool-name) ctx args)]
-    {:result res :args (some-> (first @(:scripts ctx)) fx/script-args) :code (first @(:scripts ctx)) :ctx ctx}))
+    {:result res :args (some-> (last @(:scripts ctx)) fx/script-args) :code (last @(:scripts ctx)) :ctx ctx}))
 
 (deftest create-rect-passes-geometry-and-parent
   (let [{:keys [result args code]} (call create/tools "create_rect"
