@@ -360,7 +360,7 @@ Group: `read`. Hints: read-only, idempotent
 
 ### `get_typographies`
 
-List the typographies of the file's local library with their font family, size, weight, style, line height, letter spacing and text transform.
+List the typographies of the file's local library with their font family, size, weight, style, line height, letter spacing and text transform. While the file is open in the editor the line height is missing, because Penpot's plugin API does not report it.
 
 Group: `read`. Hints: read-only, idempotent
 

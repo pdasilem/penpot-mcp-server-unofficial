@@ -130,7 +130,7 @@
     :input-schema (into file-only common/page-params)
     :handler colors}
    {:name "get_typographies"
-    :description "List the typographies of the file's local library with their font family, size, weight, style, line height, letter spacing and text transform."
+    :description "List the typographies of the file's local library with their font family, size, weight, style, line height, letter spacing and text transform. While the file is open in the editor the line height is missing, because Penpot's plugin API does not report it."
     :annotations tool/read-only
     :input-schema (into file-only common/page-params)
     :handler typographies}

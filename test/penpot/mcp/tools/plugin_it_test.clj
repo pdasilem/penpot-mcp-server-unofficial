@@ -327,8 +327,11 @@
                       from-file (fn [tool-name]
                                   (let [t (first (filter #(= tool-name (:name %)) tools/all))]
                                     (json/read-str (get-in (tool/invoke t saved {"file_id" fid}) [:content 0 :text]))))]
-                  (doseq [tool-name ["list_components" "get_colors" "get_typographies" "get_design_tokens"]]
+                  (doseq [tool-name ["list_components" "get_colors" "get_design_tokens"]]
                     (is (= (from-file tool-name) (data s tool-name {:file_id fid})) tool-name))
+                  (let [without-line-height (fn [r] (update r "typographies" #(mapv (fn [t] (dissoc t "line_height")) %)))]
+                    (is (= (without-line-height (from-file "get_typographies"))
+                           (data s "get_typographies" {:file_id fid}))))
                   (let [editor (data s "get_file" {:file_id fid})
                         whole  (from-file "get_file")]
                     (is (= (get whole "pages") (get editor "pages")))
