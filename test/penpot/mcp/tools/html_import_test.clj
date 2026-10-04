@@ -18,7 +18,11 @@
      :import-jobs (atom {})
      :persistence {:dirty (atom #{})}
      :version-error (constantly nil)
-     :rpc {:session-id (random-uuid) :send (fn [_ params] {:revn (:revn params) :lagged []})}
+     :rpc {:session-id (random-uuid) :send (fn [cmd params]
+                                             (case cmd
+                                               :get-all-projects [{:id :p}]
+                                               :get-project-files [{:id fx/file-id :vern 0}]
+                                               {:revn (:revn params) :lagged []}))}
      :execute (fn [code]
                 (let [args (fx/script-args code)]
                   (cond

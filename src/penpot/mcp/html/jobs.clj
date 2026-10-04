@@ -10,7 +10,6 @@
    [penpot.mcp.html.script :as script]
    [penpot.mcp.html.shapes :as shapes]
    [penpot.mcp.html.tree :as tree]
-   [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.revision :as revision]
    [penpot.mcp.penpot.rpc :as rpc]
    [penpot.mcp.tool :as tool])
@@ -38,7 +37,7 @@
   (let [id  (str (UUID/randomUUID))
         job {:id id :file-id file-id :plan plan :computed computed :opts opts :on-done on-done
              :status "pending" :next 0 :boards [] :pages {} :cursors {} :unsupported {} :fonts #{}
-             :font-map {} :fallback nil :vern 0}]
+             :font-map {} :fallback nil :vern nil}]
     (swap! (registry ctx) #(assoc (prune % (System/currentTimeMillis)) id job))
     job))
 
@@ -97,15 +96,17 @@
   (rpc/call rpc :update-file {:id file-id :session-id (:session-id rpc) :revn revn :vern vern
                               :features cfeat/supported-features :changes changes}))
 
-(defn- commit! [ctx {:keys [id file-id vern]} revn changes]
-  (try
-    (submit! ctx file-id revn vern changes)
-    (catch clojure.lang.ExceptionInfo e
-      (if (= :vern-conflict (:penpot/code (ex-data e)))
-        (let [current (:vern (file/fetch (:rpc ctx) file-id))]
-          (update-job! ctx id assoc :vern current)
-          (submit! ctx file-id revn current changes))
-        (throw e)))))
+(defn- file-vern [{:keys [rpc]} file-id]
+  (or (some (fn [{:keys [id]}]
+              (some #(when (= file-id (:id %)) (:vern %)) (rpc/call rpc :get-project-files {:project-id id})))
+            (rpc/call rpc :get-all-projects {}))
+      (throw (tool/user-error (str "File " file-id " was not found in the projects this account can edit")))))
+
+(defn- vern! [ctx {:keys [id file-id vern]}]
+  (or vern
+      (let [v (file-vern ctx file-id)]
+        (update-job! ctx id assoc :vern v)
+        v)))
 
 (defn- frame-name [name]
   (or (not-empty (str/trim (str/replace (str name) #"[\s ]+" " "))) "frame"))
@@ -121,7 +122,7 @@
         job       (job! ctx id)
         at        (placement (get-in job [:cursors page-id]) (:bottom prep) (:width node))
         built     (shapes/frame-objects node (merge at {:fonts (:font-map job) :fallback (:fallback job)}))]
-    (commit! ctx job (:revn prep) (frame-changes page-id (:objects built)))
+    (submit! ctx file-id (:revn prep) (vern! ctx job) (frame-changes page-id (:objects built)))
     (update-job! ctx id assoc :partial {:index index :root-id (:root-id built)})
     (let [result (revision/mutate! ctx file-id script/finish-body
                                    {:page-id page-id :root-id (:root-id built) :media (:media built)})]

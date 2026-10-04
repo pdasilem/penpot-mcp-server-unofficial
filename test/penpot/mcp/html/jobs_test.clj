@@ -52,8 +52,9 @@
                     {:result {} :changed false})))}))
 
 (defn- fake-rpc [{:keys [fail-at vern]}]
-  (let [updates (atom []) n (atom 0)]
+  (let [updates (atom []) n (atom 0) lookups (atom 0)]
     {:updates updates
+     :lookups lookups
      :client {:session-id #uuid "99999999-0000-0000-0000-000000000001"
               :send (fn [cmd params]
                       (case cmd
@@ -64,7 +65,10 @@
                                          (throw (ex-info "Penpot update-file failed: vern" {:penpot/code :vern-conflict})))
                                        (swap! updates conj params)
                                        {:revn (:revn params) :lagged []})
-                        :get-file {:id (:id params) :vern vern}
+                        :get-all-projects (do (swap! lookups inc) [{:id :p1} {:id :p2}])
+                        :get-project-files (if (= :p2 (:project-id params))
+                                             [{:id #uuid "11111111-0000-0000-0000-000000000001" :vern (or vern 0)}]
+                                             [{:id #uuid "11111111-0000-0000-0000-0000000000ff" :vern 9}])
                         (throw (ex-info (str "unexpected " cmd) {}))))}}))
 
 (defn- setup [opts]
@@ -120,11 +124,12 @@
       (is (= [0 1 0] (map count media)))
       (is (= "image" (get-in (first (second media)) ["node" "kind"]))))))
 
-(deftest a-restored-version-is-learned-once
+(deftest the-file-version-comes-from-the-project-listing-once
   (let [{:keys [ctx rpc job-id]} (setup {:vern 3})]
     (jobs/run! ctx job-id)
     (is (= "done" (:status (jobs/status ctx job-id))))
-    (is (= [3 3 3] (map :vern @(:updates rpc))))))
+    (is (= [3 3 3] (map :vern @(:updates rpc))))
+    (is (= 1 @(:lookups rpc)))))
 
 (deftest a-failing-frame-stops-the-job-and-resume-continues
   (let [{:keys [ctx editor job-id]} (setup {:fail-at 2})]
