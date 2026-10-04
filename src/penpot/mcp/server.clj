@@ -1,6 +1,7 @@
 (ns penpot.mcp.server
   (:require
    [penpot.mcp.auth :as auth]
+   [penpot.mcp.html.upload-endpoint :as upload-endpoint]
    [penpot.mcp.penpot.version :as version]
    [penpot.mcp.tool :as tool])
   (:import
@@ -102,7 +103,7 @@
     (deliver mcp server)
     server))
 
-(defn start! [{:keys [host port mcp-key ctx] :as opts}]
+(defn start! [{:keys [host port mcp-key ctx upload-limit] :as opts}]
   (let [transport (-> (HttpServletStreamableServerTransportProvider/builder)
                       (.jsonMapper (JacksonMcpJsonMapper. (ObjectMapper.)))
                       (.mcpEndpoint "/mcp")
@@ -111,6 +112,9 @@
         handler   (doto (ServletContextHandler.)
                     (.setContextPath "/")
                     (.addFilter (FilterHolder. ^Filter (auth/user-token-filter mcp-key)) "/*" (EnumSet/of DispatcherType/REQUEST))
+                    (cond-> (:uploads ctx)
+                      (.addFilter (FilterHolder. ^Filter (upload-endpoint/upload-filter (:uploads ctx) (or upload-limit upload-endpoint/default-limit)))
+                                  "/mcp" (EnumSet/of DispatcherType/REQUEST)))
                     (.addServlet (ServletHolder. transport) "/mcp"))
         jetty     (Server.)
         connector (doto (ServerConnector. jetty) (.setHost host) (.setPort port))]

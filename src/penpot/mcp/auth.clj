@@ -14,16 +14,19 @@
         (MessageDigest/isEqual (.getBytes expected StandardCharsets/UTF_8)
                                (.getBytes actual StandardCharsets/UTF_8)))))
 
-(defn query-token [^String query]
+(defn query-param [^String query param]
   (let [values (->> (str/split (or query "") #"&")
                     (keep (fn [pair]
                             (let [[k v] (str/split pair #"=" 2)]
-                              (when (= "userToken" k)
+                              (when (= param k)
                                 (try
                                   (URLDecoder/decode (or v "") StandardCharsets/UTF_8)
                                   (catch IllegalArgumentException _ ::malformed)))))))]
     (when (and (= 1 (count values)) (string? (first values)))
       (first values))))
+
+(defn query-token [^String query]
+  (query-param query "userToken"))
 
 (defn user-token-filter [expected]
   (reify Filter
