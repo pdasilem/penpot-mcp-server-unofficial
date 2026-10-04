@@ -188,7 +188,8 @@
 (def shape-tree-body
   (str/join
    "\n"
-   [page-or-first
+   ["const page = args.pageId ? penpotUtils.getPageById(args.pageId)"
+    "  : (args.rootId ? (locateShape(args.rootId)?.page ?? penpot.currentFile.pages[0]) : penpot.currentFile.pages[0]);"
     "if (!page) return null;"
     brief-js
     "const root = args.rootId ? page.getShapeById(args.rootId) : page.root;"

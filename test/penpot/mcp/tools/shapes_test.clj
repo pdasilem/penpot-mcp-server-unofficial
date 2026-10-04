@@ -202,3 +202,8 @@
     (is (= [:get-page] (fx/rpc-commands ctx)))
     (is (= 1 (count @(:scripts ctx))))
     (is (empty? @(get-in ctx [:persistence :dirty])))))
+
+(deftest shape-tree-finds-the-page-of-its-root
+  (let [ctx (fx/plugin-ctx {:pageId pid :tree {:id "b" :name "Card" :type "board" :child_count 0}} (fx/file-responses fx/file))]
+    (fx/call (fx/find-tool shapes/tools "get_shape_tree") ctx {"file_id" fid "root_id" (str fx/board-id)})
+    (is (str/includes? (last @(:scripts ctx)) "locateShape(args.rootId)?.page"))))

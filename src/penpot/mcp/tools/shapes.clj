@@ -133,7 +133,7 @@
     :annotations tool/read-only
     :input-schema [:map {:closed true}
                    common/file-id-param
-                   common/page-id-param
+                   [:page_id {:optional true :description "Page id; defaults to the page of root_id when the file is open in the editor, otherwise to the first page"} :uuid]
                    [:root_id {:optional true :description "Shape to start from; defaults to the root frame"} :uuid]
                    [:depth {:optional true :description "Levels of children to include (default 3)"} [:int {:min 0 :max 50}]]]
     :handler shape-tree}
