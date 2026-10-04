@@ -1,5 +1,6 @@
 (ns penpot.mcp.tools.write-test
   (:require
+   [clojure.string :as str]
    [clojure.test :refer [deftest is]]
    [penpot.mcp.fixtures :as fx]
    [penpot.mcp.tools.comments :as comments]
@@ -58,36 +59,64 @@
 (defn- update-changes [calls]
   (:changes (second (first (filter #(= :update-file (first %)) calls)))))
 
+(defn- with-file [extra]
+  (merge (fx/file-responses fx/file) extra))
+
 (deftest create-page-commits-add-page
-  (let [{:keys [result calls]} (run pages/tools "create_page" {:get-file fx/file :update-file []}
+  (let [{:keys [result calls]} (run pages/tools "create_page" (with-file {:update-file []})
                                     {"file_id" (str fx/file-id) "name" "Checkout"})
         [change] (update-changes calls)]
     (is (= :add-page (:type change)))
     (is (= "Checkout" (:name change)))
-    (is (= {"page_id" (str (:id change)) "name" "Checkout"} result))))
+    (is (= {"page_id" (str (:id change)) "name" "Checkout"} result))
+    (is (= [:get-teams :get-projects :get-project-files :update-file] (mapv first calls)))))
 
 (deftest rename-page-commits-mod-page
-  (let [{:keys [calls]} (run pages/tools "rename_page" {:get-file fx/file :update-file []}
+  (let [{:keys [calls]} (run pages/tools "rename_page" (with-file {:update-file []})
                              {"file_id" (str fx/file-id) "page_id" (str fx/page2-id) "name" "Old"})]
-    (is (= [{:type :mod-page :id fx/page2-id :name "Old"}] (map #(select-keys % [:type :id :name]) (update-changes calls))))))
+    (is (= [{:type :mod-page :id fx/page2-id :name "Old"}] (map #(select-keys % [:type :id :name]) (update-changes calls))))
+    (is (not-any? #{:get-file} (map first calls)))))
 
 (deftest delete-page-commits-del-page
-  (let [{:keys [result calls]} (run pages/tools "delete_page" {:get-file fx/file :update-file []}
+  (let [{:keys [result calls]} (run pages/tools "delete_page" (with-file {:update-file []})
                                     {"file_id" (str fx/file-id) "page_id" (str fx/page2-id)})]
     (is (= [:del-page] (mapv :type (update-changes calls))))
-    (is (= {"deleted" (str fx/page2-id)} result))))
+    (is (= {"deleted" (str fx/page2-id)} result))
+    (is (not-any? #{:get-file} (map first calls)))))
 
 (deftest refuses-to-delete-last-page
   (let [single (update fx/file :data assoc :pages [fx/page-id])
-        {:keys [result calls]} (run pages/tools "delete_page" {:get-file single}
+        {:keys [result calls]} (run pages/tools "delete_page" (fx/file-responses single)
                                     {"file_id" (str fx/file-id) "page_id" (str fx/page-id)})]
     (is (= {:error "A Penpot file must keep at least one page"} result))
     (is (empty? (update-changes calls)))))
 
+(defn- page-editor-ctx [result]
+  (fx/plugin-ctx result (with-file {:update-file []})))
+
+(deftest page-tools-use-the-open-editor
+  (let [ctx (page-editor-ctx "abababab-0000-0000-0000-0000000000cc")]
+    (is (= {"page_id" "abababab-0000-0000-0000-0000000000cc" "name" "Checkout"}
+           (fx/call (fx/find-tool pages/tools "create_page") ctx {"file_id" (str fx/file-id) "name" "Checkout"})))
+    (is (= {"name" "Checkout" "fileId" (str fx/file-id)} (fx/last-script-args ctx)))
+    (is (str/includes? (last @(:scripts ctx)) "penpot.createPage()")))
+  (let [ctx (page-editor-ctx (str fx/page2-id))]
+    (fx/call (fx/find-tool pages/tools "rename_page") ctx {"file_id" (str fx/file-id) "page_id" (str fx/page2-id) "name" "Old"})
+    (is (= {"pageId" (str fx/page2-id) "name" "Old" "fileId" (str fx/file-id)} (fx/last-script-args ctx))))
+  (let [ctx (page-editor-ctx (str fx/page2-id))]
+    (is (= {"deleted" (str fx/page2-id)}
+           (fx/call (fx/find-tool pages/tools "delete_page") ctx {"file_id" (str fx/file-id) "page_id" (str fx/page2-id)})))
+    (is (str/includes? (last @(:scripts ctx)) "page.remove()"))
+    (is (empty? (fx/rpc-commands ctx)))))
+
+(deftest page-tools-fall-back-to-the-api-without-editor
+  (let [ctx (fx/closed-editor-ctx (with-file {:update-file []}))]
+    (fx/call (fx/find-tool pages/tools "create_page") ctx {"file_id" (str fx/file-id) "name" "Checkout"})
+    (is (= [:get-teams :get-projects :get-project-files :update-file] (fx/rpc-commands ctx)))))
+
 (deftest create-comment-thread-on-page
   (let [{:keys [result calls]} (run comments/tools "create_comment"
-                                    {:get-file fx/file
-                                     :create-comment-thread {:id thread-id :seqn 3 :file-id fx/file-id}}
+                                    (with-file {:create-comment-thread {:id thread-id :seqn 3 :file-id fx/file-id}})
                                     {"file_id" (str fx/file-id) "content" "Fix spacing" "x" 10 "y" 20})
         [cmd params] (last calls)]
     (is (= :create-comment-thread cmd))
@@ -133,17 +162,17 @@
     (is (empty? calls))))
 
 (deftest comment-position-must-fit-penpot-range
-  (let [{:keys [result calls]} (run comments/tools "create_comment" {:get-file fx/file}
+  (let [{:keys [result calls]} (run comments/tools "create_comment" (fx/file-responses fx/file)
                                     {"file_id" (str fx/file-id) "content" "x" "x" 1e10 "y" 0})]
     (is (contains? result :error))
     (is (empty? calls))))
 
 (deftest comment-frame-must-exist-on-page
-  (let [{:keys [result calls]} (run comments/tools "create_comment" {:get-file fx/file}
+  (let [{:keys [result calls]} (run comments/tools "create_comment" (fx/file-responses fx/file)
                                     {"file_id" (str fx/file-id) "content" "x" "x" 1 "y" 1
                                      "frame_id" "99999999-0000-0000-0000-0000000000aa"})]
     (is (re-find #"not found" (:error result)))
-    (is (= [:get-file] (mapv first calls)))))
+    (is (= [:get-page] (mapv first calls)))))
 
 (deftest media-url-rejects-trailing-newline-and-accepts-uppercase-scheme
   (is (contains? (:result (run media/tools "upload_media_from_url" {}
@@ -161,15 +190,14 @@
 
 (deftest page-tools-report-missing-page-without-update
   (doseq [[tool-name extra] [["rename_page" {"name" "X"}] ["delete_page" {}]]]
-    (let [{:keys [result calls]} (run pages/tools tool-name {:get-file fx/file}
+    (let [{:keys [result calls]} (run pages/tools tool-name (fx/file-responses fx/file)
                                       (merge {"file_id" (str fx/file-id) "page_id" "99999999-0000-0000-0000-0000000000bb"} extra))]
       (is (re-find #"not found" (:error result)))
       (is (empty? (update-changes calls))))))
 
 (deftest create-page-keeps-page-id-across-conflict-retry
   (let [responses (atom [(ex-info "conflict" {:penpot/code :vern-conflict}) []])
-        ctx       (fx/ctx {:get-file fx/file
-                           :update-file (fn [_] (let [[r & more] @responses] (reset! responses more) (if (instance? Exception r) (throw r) r)))})
+        ctx       (fx/ctx (with-file {:update-file (fn [_] (let [[r & more] @responses] (reset! responses more) (if (instance? Exception r) (throw r) r)))}))
         result    (fx/call (fx/find-tool pages/tools "create_page") ctx {"file_id" (str fx/file-id) "name" "Retry"})
         updates   (map second (filter #(= :update-file (first %)) @(:calls ctx)))]
     (is (= 2 (count updates)))

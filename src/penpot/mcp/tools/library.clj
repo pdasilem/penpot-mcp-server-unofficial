@@ -1,45 +1,60 @@
 (ns penpot.mcp.tools.library
   (:require
+   [app.common.types.token :as cto]
    [app.common.types.tokens-lib :as ctob]
    [penpot.mcp.penpot.file :as file]
+   [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.common :as common]))
 
-(defn- fetch-data [ctx file-id]
-  (:data (common/fetch-file ctx file-id)))
+(defn- from-editor [ctx file-id body]
+  (some-> (read/in-editor ctx file-id body {}) :value))
+
+(defn- whole-data [ctx file-id]
+  (:data (file/read-whole ctx file-id file/editor-hint)))
+
+(defn- library-items [ctx file-id body k]
+  (if-let [items (from-editor ctx file-id body)]
+    (read/file-keys items)
+    (vals (get (whole-data ctx file-id) k))))
 
 (defn- list-components [ctx {:keys [file_id] :as args}]
   (tool/json-result
-   (common/paged :components (->> (vals (:components (fetch-data ctx file_id)))
+   (common/paged :components (->> (library-items ctx file_id read/components-body :components)
                                   (remove :deleted)
                                   (sort-by (juxt :path :name))
                                   (mapv #(select-keys % [:id :name :path :main-instance-id :main-instance-page]))) args)))
 
+(defn- page-instances [component-id page]
+  (for [shape (common/page-shapes page)
+        :when (and (:component-root shape) (:component-id shape))
+        :when (or (nil? component-id) (= component-id (:component-id shape)))]
+    {:id (:id shape)
+     :name (:name shape)
+     :page_id (:id page)
+     :component_id (:component-id shape)
+     :component_file (:component-file shape)
+     :is_main (boolean (:main-instance shape))}))
+
 (defn- component-instances [ctx {:keys [file_id component_id] :as args}]
-  (let [f (common/fetch-file ctx file_id)]
-    (tool/json-result
-     (common/paged :instances (vec (for [{page-id :id} (file/pages f)
-                                         shape (common/page-shapes (file/page f page-id))
-                                         :when (and (:component-root shape) (:component-id shape))
-                                         :when (or (nil? component_id) (= component_id (:component-id shape)))]
-                                     {:id (:id shape)
-                                      :name (:name shape)
-                                      :page_id page-id
-                                      :component_id (:component-id shape)
-                                      :component_file (:component-file shape)
-                                      :is_main (boolean (:main-instance shape))})) args))))
+  (tool/json-result
+   (common/paged :instances (into [] (mapcat #(page-instances component_id %)) (file/read-pages ctx file_id)) args)))
 
 (defn- colors [ctx {:keys [file_id] :as args}]
   (tool/json-result
-   (common/paged :colors (->> (vals (:colors (fetch-data ctx file_id)))
+   (common/paged :colors (->> (library-items ctx file_id read/colors-body :colors)
                               (sort-by (juxt :path :name))
                               (mapv #(select-keys % [:id :name :path :color :opacity :gradient :image]))) args)))
 
+(def ^:private typography-keys
+  [:id :name :path :font-id :font-family :font-variant-id :font-size :font-weight :font-style
+   :line-height :letter-spacing :text-transform])
+
 (defn- typographies [ctx {:keys [file_id] :as args}]
   (tool/json-result
-   (common/paged :typographies (->> (vals (:typographies (fetch-data ctx file_id)))
+   (common/paged :typographies (->> (library-items ctx file_id read/typographies-body :typographies)
                                     (sort-by (juxt :path :name))
-                                    (vec)) args)))
+                                    (mapv #(select-keys % typography-keys))) args)))
 
 (defn- token-set [lib token-set]
   {:id (ctob/get-id token-set)
@@ -55,13 +70,40 @@
    :active (boolean (ctob/theme-active? lib (:id theme)))
    :sets (vec (sort (:sets theme)))})
 
+(defn- file-tokens [lib]
+  {:sets (if lib (mapv #(token-set lib %) (ctob/get-sets lib)) [])
+   :themes (if lib
+             (mapv #(token-theme lib %) (remove ctob/hidden-theme? (ctob/get-themes lib)))
+             [])})
+
+(defn- token-type-name [plugin-type]
+  (or (some-> (cto/dtcg-token-type->token-type plugin-type) name) plugin-type))
+
+(defn- token-value [value]
+  (cond
+    (map? value) (into {} (map (fn [[k v]] [(or (cto/composite-dtcg-token-type->token-type (name k)) (read/file-key k)) v]))
+                       value)
+    (sequential? value) (mapv #(if (map? %) (read/file-keys %) %) value)
+    :else value))
+
+(defn- editor-token [token]
+  (-> (select-keys token [:id :name :type :value :description])
+      (update :type token-type-name)
+      (update :value token-value)))
+
+(defn- hidden-theme? [{:keys [group name]}]
+  (and (= ctob/hidden-theme-group group) (= ctob/hidden-theme-name name)))
+
+(defn- editor-tokens [{:keys [sets themes]}]
+  {:sets (mapv (fn [s] (assoc (select-keys s [:id :name :active]) :tokens (mapv editor-token (:tokens s)))) sets)
+   :themes (mapv (fn [t] (update (select-keys t [:id :group :name :active :sets]) :sets #(vec (sort %))))
+                 (remove hidden-theme? themes))})
+
 (defn- design-tokens [ctx {:keys [file_id]}]
-  (let [lib (:tokens-lib (fetch-data ctx file_id))]
-    (tool/json-result
-     {:sets (if lib (mapv #(token-set lib %) (ctob/get-sets lib)) [])
-      :themes (if lib
-                (mapv #(token-theme lib %) (remove ctob/hidden-theme? (ctob/get-themes lib)))
-                [])})))
+  (tool/json-result
+   (if-let [catalog (from-editor ctx file_id read/tokens-body)]
+     (editor-tokens catalog)
+     (file-tokens (:tokens-lib (whole-data ctx file_id))))))
 
 (def ^:private file-only
   [:map {:closed true} common/file-id-param])

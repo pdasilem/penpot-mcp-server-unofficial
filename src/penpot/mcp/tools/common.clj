@@ -1,9 +1,7 @@
 (ns penpot.mcp.tools.common
   (:require
    [app.common.uuid :as uuid]
-   [app.common.types.fills.impl :as fills-impl]
-   [penpot.mcp.penpot.file :as file]
-   [penpot.mcp.penpot.revision :as revision]))
+   [app.common.types.fills.impl :as fills-impl]))
 
 (def plugin-type
   {:frame "board"
@@ -35,6 +33,9 @@
 (def page-id-param
   [:page_id {:optional true :description "Page id; defaults to the first page of the file"} :uuid])
 
+(def shape-page-param
+  [:page_id {:optional true :description "Page the shape is on; required when the file is not open in the Penpot editor"} :uuid])
+
 (defn shape-type [shape]
   (get plugin-type (:type shape) (some-> (:type shape) name)))
 
@@ -50,13 +51,6 @@
    :y (:y shape)
    :width (:width shape)
    :height (:height shape)})
-
-(defn fetch-file [{:keys [rpc] :as ctx} file-id]
-  (revision/await-clean! ctx file-id)
-  (file/fetch rpc file-id))
-
-(defn resolve-page [f page-id]
-  (file/page f (or page-id (first (get-in f [:data :pages])))))
 
 (defn page-shapes [page]
   (remove root? (vals (:objects page))))

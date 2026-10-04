@@ -10,11 +10,8 @@
 
 (def ^:private default-depth 3)
 
-(defn- fetch [ctx file-id]
-  (common/fetch-file ctx file-id))
-
 (defn- list-shapes [ctx {:keys [file_id page_id type] :as args}]
-  (let [page (common/resolve-page (fetch ctx file_id) page_id)]
+  (let [page (file/read-page ctx file_id page_id)]
     (tool/json-result
      (merge {:page_id (:id page)} (common/paged :shapes (->> (common/page-shapes page)
                                                              (filter #(or (nil? type) (= type (common/shape-type %))))
@@ -29,39 +26,43 @@
       node)))
 
 (defn- shape-tree [ctx {:keys [file_id page_id root_id depth]}]
-  (let [page    (common/resolve-page (fetch ctx file_id) page_id)
+  (let [page    (file/read-page ctx file_id page_id)
         objects (:objects page)
         root    (or (get objects (or root_id uuid/zero))
                     (throw (tool/user-error (str "Shape " root_id " not found on page " (:id page)))))]
     (tool/json-result (tree-node objects root (or depth default-depth)))))
 
-(defn- get-shape [ctx {:keys [file_id shape_id]}]
-  (let [{:keys [page-id shape]} (file/locate-shape (fetch ctx file_id) shape_id)]
-    (tool/json-result {:page_id page-id
+(defn- get-shape [ctx {:keys [file_id page_id shape_id]}]
+  (let [{:keys [page shape]} (file/read-shape ctx file_id shape_id page_id)]
+    (tool/json-result {:page_id (:id page)
                        :type (common/shape-type shape)
                        :shape shape})))
 
+(defn- page-matches [needle type page]
+  (for [shape (common/page-shapes page)
+        :when (str/includes? (str/lower-case (or (:name shape) "")) needle)
+        :when (or (nil? type) (= type (common/shape-type shape)))]
+    (assoc (common/brief shape) :page_id (:id page))))
+
+(def ^:private search-hint
+  (str file/editor-hint ", or pass page_id"))
+
 (defn- search-shapes [ctx {:keys [file_id query page_id type] :as args}]
-  (let [f       (fetch ctx file_id)
-        needle  (str/lower-case query)
-        pages   (if page_id [(file/page f page_id)] (map #(file/page f (:id %)) (file/pages f)))
-        matches (for [page pages
-                      shape (common/page-shapes page)
-                      :when (str/includes? (str/lower-case (or (:name shape) "")) needle)
-                      :when (or (nil? type) (= type (common/shape-type shape)))]
-                  (assoc (common/brief shape) :page_id (:id page)))]
-    (tool/json-result (common/paged :shapes (vec matches) args))))
+  (let [matches (into [] (mapcat #(page-matches (str/lower-case query) type %))
+                      (if page_id
+                        [(file/read-page ctx file_id page_id)]
+                        (file/read-pages ctx file_id search-hint)))]
+    (tool/json-result (common/paged :shapes matches args))))
 
 (defn- subtree [objects shape]
   (tree-seq (comp seq :shapes) (fn [s] (remove :hidden (keep #(get objects %) (:shapes s)))) shape))
 
-(defn- locate [ctx file-id shape-id]
-  (let [f (fetch ctx file-id)
-        {:keys [page-id shape]} (file/locate-shape f shape-id)]
-    {:objects (:objects (file/page f page-id)) :shape shape}))
+(defn- locate [ctx file-id shape-id page-id]
+  (let [{:keys [page shape]} (file/read-shape ctx file-id shape-id page-id)]
+    {:objects (:objects page) :shape shape}))
 
-(defn- shape-css [ctx {:keys [file_id shape_id include_children]}]
-  (let [{:keys [objects shape]} (locate ctx file_id shape_id)
+(defn- shape-css [ctx {:keys [file_id page_id shape_id include_children]}]
+  (let [{:keys [objects shape]} (locate ctx file_id shape_id page_id)
         rules (map #(assoc (css/shape->css objects %) :shape_id (:id %))
                    (if include_children (subtree objects shape) [shape]))]
     (tool/json-result
@@ -70,8 +71,8 @@
                    rules)
       :css (str/join "\n\n" (map :css rules))})))
 
-(defn- shape-svg [ctx {:keys [file_id shape_id]}]
-  (let [{:keys [objects shape]} (locate ctx file_id shape_id)]
+(defn- shape-svg [ctx {:keys [file_id page_id shape_id]}]
+  (let [{:keys [objects shape]} (locate ctx file_id shape_id page_id)]
     (tool/json-result {:svg (svg/shape->svg objects shape)})))
 
 (def tools
@@ -97,7 +98,8 @@
     :annotations tool/read-only
     :input-schema [:map {:closed true}
                    common/file-id-param
-                   common/shape-id-param]
+                   common/shape-id-param
+                   common/shape-page-param]
     :handler get-shape}
    {:name "search_shapes"
     :description "Find shapes whose name contains the query, ignoring case, on every page or on one page. Returns id, name, type, parent id, geometry and page id of each match."
@@ -114,10 +116,11 @@
     :input-schema [:map {:closed true}
                    common/file-id-param
                    common/shape-id-param
+                   common/shape-page-param
                    [:include_children {:optional true :description "Also generate rules for all descendants"} :boolean]]
     :handler shape-css}
    {:name "get_shape_svg"
     :description "Render a shape and its visible descendants as a standalone SVG document from the saved file data, without the editor. Text is drawn as plain SVG text and images as placeholders; use export_shape for Penpot's exact rendering."
     :annotations tool/read-only
-    :input-schema [:map {:closed true} common/file-id-param common/shape-id-param]
+    :input-schema [:map {:closed true} common/file-id-param common/shape-id-param common/shape-page-param]
     :handler shape-svg}])

@@ -42,7 +42,13 @@
 
 (deftest lists-file-media
   (is (= {"media" [{"id" "99999999-0000-0000-0000-000000000001" "name" "logo.png" "width" 64 "height" 64 "mtype" "image/png"}]}
-         (fx/call (fx/find-tool media/tools "list_media") (fx/ctx {:get-file fx/file}) {"file_id" (str fx/file-id)}))))
+         (fx/call (fx/find-tool media/tools "list_media") (fx/ctx (fx/file-responses fx/file)) {"file_id" (str fx/file-id)}))))
+
+(deftest media-of-large-file-is-refused-without-downloading-it
+  (let [ctx (assoc-in (fx/ctx (fx/file-responses fx/file)) [:config :full-file-shapes-max] 5)]
+    (is (= {:error (str "File " fx/file-id " has 6 shapes, more than the 5 this server reads at once")}
+           (fx/call (fx/find-tool media/tools "list_media") ctx {"file_id" (str fx/file-id)})))
+    (is (= [:get-file-stats] (fx/rpc-commands ctx)))))
 
 (deftest lists-team-fonts
   (let [font (parse-uuid "dddddddd-0000-0000-0000-000000000001")

@@ -197,6 +197,7 @@ location /mcp/ {
 | `LOG_LEVEL` | no | `info` | `trace`, `debug`, `info`, `warn`, `error` |
 | `PENPOT_MCP_TOOLSETS` | no | `read,edit` | Tool groups enabled at start: `read`, `edit`, `manage`, `export`, `import`; `read` is always enabled |
 | `PENPOT_MCP_IMPORT_MAX_ASSET_MB` | no | `64` | Megabytes the assets packed into an imported HTML bundle may unpack to |
+| `FULL_FILE_SHAPES_MAX` | no | `5000` | Most shapes in a file that the server downloads whole; larger files are read page by page and through the open editor |
 
 ## Versions
 

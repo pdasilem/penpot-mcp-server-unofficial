@@ -2,6 +2,7 @@
   (:require
    [app.common.geom.point :as gpt]
    [app.common.uuid :as uuid]
+   [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.rpc :as rpc]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.common :as common]))
@@ -25,7 +26,7 @@
   [:string {:min 1 :max 750}])
 
 (defn- create-comment [{:keys [rpc] :as ctx} {:keys [file_id page_id frame_id x y content]}]
-  (let [page   (common/resolve-page (common/fetch-file ctx file_id) page_id)
+  (let [page   (file/read-page ctx file_id page_id)
         _      (when (and frame_id (not (get-in page [:objects frame_id])))
                  (throw (tool/user-error (str "Board " frame_id " not found on page " (:id page)))))
         thread (rpc/call rpc :create-comment-thread {:file-id file_id

@@ -23,8 +23,22 @@
         (let [created (rpc/call client :create-file {:project-id (:id project) :name "it-file"})
               page-id (uuid/next)]
           (changes/commit! client (:id created)
-                           (fn [_] (pcb/add-empty-page (pcb/empty-changes) page-id "IT page")))
+                           #(pcb/add-empty-page (pcb/empty-changes) page-id "IT page"))
           (let [fetched (file/fetch client (:id created))]
             (is (= ["Page 1" "IT page"] (mapv :name (file/pages fetched))))
             (is (= "IT page" (:name (file/page fetched page-id))))
-            (is (map? (:objects (file/page fetched page-id))))))))))
+            (is (map? (:objects (file/page fetched page-id)))))
+          (is (= "IT page" (:name (file/fetch-page client (:id created) page-id))))
+          (is (= "Page 1" (:name (file/fetch-page client (:id created) nil))))
+          (is (= 1 (:revn (file/revision client (:id created)))))
+          (is (= 2 (:page-count (file/stats client (:id created))))))))))
+
+(deftest unknown-page-is-user-error
+  (let [client (it/client)]
+    (it/with-temp-project client
+      (fn [project]
+        (let [created (rpc/call client :create-file {:project-id (:id project) :name "it-page"})
+              ex      (try (file/fetch-page client (:id created) (uuid/next)) nil
+                           (catch clojure.lang.ExceptionInfo e e))]
+          (is (= :tool/user-error (:type (ex-data ex))))
+          (is (re-find #"^Page .+ not found in file" (ex-message ex))))))))

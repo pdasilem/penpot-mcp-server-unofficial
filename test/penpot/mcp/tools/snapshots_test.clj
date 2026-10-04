@@ -28,8 +28,8 @@
                                           {:id (parse-uuid "11111111-0000-0000-0000-0000000000ff") :name "Gone" :objects {}}))))))
 
 (deftest compares-snapshot-with-current-file
-  (let [ctx    (fx/ctx {:get-file-snapshot (fn [p] (is (= snap-id (:id p))) old-file)
-                        :get-file fx/file})
+  (let [ctx    (fx/ctx (assoc (fx/file-responses fx/file)
+                              :get-file-snapshot (fn [p] (is (= snap-id (:id p))) old-file)))
         result (fx/call (fx/find-tool snapshots/tools "compare_snapshots") ctx
                         {"file_id" (str fx/file-id) "from_snapshot_id" (str snap-id)})
         page   (first (filter #(= (str fx/page-id) (get % "page_id")) (get result "pages")))]
@@ -42,7 +42,15 @@
 
 (deftest compares-two-snapshots
   (let [other (parse-uuid "ffffffff-0000-0000-0000-000000000002")
-        ctx   (fx/ctx {:get-file-snapshot (fn [p] (if (= snap-id (:id p)) old-file fx/file))})
+        ctx   (fx/ctx (assoc (fx/file-responses fx/file)
+                             :get-file-snapshot (fn [p] (if (= snap-id (:id p)) old-file fx/file))))
         result (fx/call (fx/find-tool snapshots/tools "compare_snapshots") ctx
                         {"file_id" (str fx/file-id) "from_snapshot_id" (str snap-id) "to_snapshot_id" (str other)})]
     (is (= ["Gone"] (mapv #(get % "name") (get result "removed_pages"))))))
+
+(deftest refuses-to-compare-versions-of-a-large-file
+  (let [ctx    (assoc-in (fx/ctx (fx/file-responses fx/file)) [:config :full-file-shapes-max] 5)
+        result (fx/call (fx/find-tool snapshots/tools "compare_snapshots") ctx
+                        {"file_id" (str fx/file-id) "from_snapshot_id" (str snap-id)})]
+    (is (= {:error (str "File " fx/file-id " has 6 shapes, more than the 5 this server reads at once")} result))
+    (is (= [:get-file-stats] (fx/rpc-commands ctx)))))

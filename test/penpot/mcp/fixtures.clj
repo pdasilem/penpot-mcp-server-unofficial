@@ -106,11 +106,28 @@
                                         :font-size "24" :font-weight "700" :font-style "normal"
                                         :line-height "1.2" :letter-spacing "0" :text-transform "none"}}}})
 
+(defn- shape-total [f]
+  (reduce + (map #(dec (count (:objects %))) (vals (get-in f [:data :pages-index])))))
+
+(defn file-responses [f]
+  {:get-file f
+   :get-page (fn [{:keys [page-id]}]
+               (or (get-in f [:data :pages-index (or page-id (first (get-in f [:data :pages])))])
+                   {:objects {}}))
+   :get-file-stats {:file-id (:id f) :revn (:revn f) :updated-at (java.time.Instant/parse "2026-10-01T10:00:00Z")
+                    :page-count (count (get-in f [:data :pages])) :shape-counts {:total (shape-total f) :by-type {}}}
+   :get-teams [{:id (:team-id f) :name "Team"}]
+   :get-projects [{:id (:project-id f) :name "Project"}]
+   :get-project-files [(select-keys f [:id :name :project-id :team-id :revn :vern :is-shared])]})
+
+(def full-file-shapes-max 1000)
+
 (defn ctx
   ([responses] (ctx responses nil))
   ([responses bridge]
    (let [calls (atom [])]
      {:calls calls
+      :config {:full-file-shapes-max full-file-shapes-max}
       :rpc {:session-id (uuid/next)
             :send (fn [cmd params]
                     (swap! calls conj [cmd params])
@@ -143,6 +160,18 @@
             :execute (fn [code]
                        (swap! scripts conj code)
                        {:result (if (fn? result) (result code) result) :changed true})))))
+
+(defn closed-editor-ctx [responses]
+  (let [scripts (atom [])]
+    (assoc (ctx responses)
+           :scripts scripts
+           :execute (fn [code]
+                      (swap! scripts conj code)
+                      (throw (ex-info "Penpot editor is not connected; open the file in Penpot with MCP enabled"
+                                      {:type :tool/user-error :plugin/code "not-connected"}))))))
+
+(defn rpc-commands [ctx]
+  (mapv first @(:calls ctx)))
 
 (defn script-args [code]
   (json/read-str (second (re-find #"(?s)^const args = (.*?);\n" code))))

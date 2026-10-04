@@ -9,8 +9,11 @@
    [clojure.test :refer [deftest is testing]]
    [penpot.mcp.it :as it]
    [penpot.mcp.penpot.changes :as changes]
+   [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.rpc :as rpc]
-   [penpot.mcp.test-client :as mcp])
+   [penpot.mcp.test-client :as mcp]
+   [penpot.mcp.tool :as tool]
+   [penpot.mcp.tools :as tools])
   (:import
    (java.util Base64)
    (java.util.concurrent TimeUnit)))
@@ -22,8 +25,9 @@
 
 (defn- add-tokens [client file-id]
   (changes/commit! client file-id
-                   (fn [f]
-                     (let [set-id (uuid/next)
+                   (fn []
+                     (let [f      (file/fetch client file-id)
+                           set-id (uuid/next)
                            lib    (-> (or (get-in f [:data :tokens-lib]) (ctob/make-tokens-lib))
                                       (ctob/add-set (ctob/make-token-set :id set-id :name set-name))
                                       (ctob/add-token set-id (ctob/make-token :id token-id :name "it.primary" :type :color :value "#3366FF"))
@@ -303,6 +307,18 @@
                 (is (str/includes? (get (data s "export_shape" {:file_id fid :shape_id board :format "svg"}) "svg") "<svg")))
               (testing "layout removal"
                 (is (nil? (get (data s "remove_layout" {:file_id fid :board_id board}) "layout"))))
+              (testing "reads through the open editor match the saved file"
+                (data s "list_media" {:file_id fid})
+                (let [saved     {:rpc client :config {:full-file-shapes-max 100000} :version-error (constantly nil)}
+                      from-file (fn [tool-name]
+                                  (let [t (first (filter #(= tool-name (:name %)) tools/all))]
+                                    (json/read-str (get-in (tool/invoke t saved {"file_id" fid}) [:content 0 :text]))))]
+                  (doseq [tool-name ["list_components" "get_colors" "get_typographies" "get_design_tokens"]]
+                    (is (= (from-file tool-name) (data s tool-name {:file_id fid})) tool-name))
+                  (let [editor (data s "get_file" {:file_id fid})
+                        whole  (from-file "get_file")]
+                    (is (= (get whole "pages") (get editor "pages")))
+                    (is (= (dissoc (get whole "counts") "media") (get editor "counts"))))))
               (testing "file must be open in the editor"
                 (let [other  (str (:id (rpc/call client :create-file {:project-id (:id project) :name "closed"})))
                       result (mcp/call-tool s "set_opacity" {:file_id other :shape_id board :opacity 0.5})]

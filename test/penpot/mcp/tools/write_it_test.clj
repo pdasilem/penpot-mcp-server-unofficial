@@ -18,7 +18,7 @@
 
 (deftest write-tools-against-live-penpot
   (let [client  (it/client)
-        ctx     {:rpc client :version-error (constantly nil)}
+        ctx     {:rpc client :version-error (constantly nil) :config {:full-file-shapes-max 5000} :file-cache (atom nil)}
         team-id (str (:default-team-id (rpc/call client :get-profile {})))
         project (call ctx "create_project" {"team_id" team-id "name" (str "it-write-" (System/currentTimeMillis))})
         pid     (get project "id")]

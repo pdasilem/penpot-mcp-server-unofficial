@@ -87,6 +87,8 @@
    ["Tools for Penpot files, built on Penpot's own data model and plugin API."
     "Tools marked [editor] change the canvas through the Penpot editor: the file must be open in a browser tab with MCP enabled,"
     "and the editor switches to the page of the shape it works on. Other tools use the Penpot API and need no open editor."
+    "Shapes are read one page at a time. When the file is open in the editor, page lists, the library and design tokens"
+    "are read from the editor; without it, tools that need the whole file refuse files above the server's size limit."
     "A read always sees the result of the edits made before it; there is no need to wait between calls."
     "An [editor] edit returns the shape id and changed: only the values the call changed, empty when nothing changed;"
     "use get_shape for the full state. Create tools return the new shape. Results leave out empty and default values."
