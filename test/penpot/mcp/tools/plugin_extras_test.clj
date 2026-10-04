@@ -3,6 +3,7 @@
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]
    [penpot.mcp.fixtures :as fx]
+   [penpot.mcp.plugin.bridge :as bridge]
    [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.export :as export]
@@ -189,3 +190,11 @@
     (tool/invoke (fx/find-tool export/tools "export_shape") ctx {"file_id" fid "shape_id" sid})
     (is (= 2 (count @(:scripts ctx))))
     (is (str/includes? (first @(:scripts ctx)) "await openPage(page);"))))
+
+(deftest export-waits-longer-than-an-edit
+  (let [seen (atom [])
+        ctx  (assoc (fx/plugin-ctx {:__type "base64" :data "AA=="})
+                    :execute (fn [code] (swap! seen conj bridge/*task-timeout-ms*)
+                               {:result (if (str/includes? code "return { switched") {:switched false} {:__type "base64" :data "AA=="}) :changed false}))]
+    (tool/invoke (fx/find-tool export/tools "export_shape") ctx {"file_id" fid "shape_id" sid})
+    (is (= [120000] (distinct (rest @seen))))))

@@ -102,6 +102,8 @@
 (defn connected? [{:keys [state]}]
   (some? (:session @state)))
 
+(def ^:dynamic *task-timeout-ms* nil)
+
 (defn- seconds [ms]
   (let [secs (/ ms 1000.0)]
     (if (== secs (Math/floor secs)) (str (long secs)) (str secs))))
@@ -155,7 +157,7 @@
       (swap! state assoc-in [:pending id] {:future fut :session session})
       (try
         (.sendText session (json/write-str {:id id :task "executeCode" :params {:code code}}) (send-callback fut))
-        (let [{:keys [success error data]} (await-reply fut task-timeout-ms)]
+        (let [{:keys [success error data]} (await-reply fut (or *task-timeout-ms* task-timeout-ms))]
           (if success
             (:result data)
             (throw (tool/user-error (str "Penpot editor reported an error: " error)))))

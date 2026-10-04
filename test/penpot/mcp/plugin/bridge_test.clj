@@ -173,3 +173,8 @@
   (await-connected true)
   (user-error-message #(bridge/execute! *bridge* "first"))
   (is (re-find #"still busy with a previous request" (str (user-error-message #(bridge/execute! *bridge* "second"))))))
+
+(deftest a-longer-timeout-can-be-given-for-one-call
+  (connect-plugin mcp-key (slow-plugin 800))
+  (await-connected true)
+  (is (= {:echo "slow"} (binding [bridge/*task-timeout-ms* 3000] (bridge/execute! *bridge* "slow")))))
