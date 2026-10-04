@@ -323,13 +323,14 @@ Group: `read`. Hints: read-only, idempotent
 
 ### `list_components`
 
-List the components of the file's local library: id, name, path and the id and page of the main instance.
+List the components of the file's local library: id, name, path and the id and page of the main instance. query keeps the components whose path and name, written as path / name, contain it, ignoring case.
 
 Group: `read`. Hints: read-only, idempotent
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `file_id` | uuid | yes | Penpot file id |
+| `query` | string | no | Text to find in the component path and name |
 | `limit` | integer | no | Maximum number of items to return, default 100 |
 | `cursor` | string | no | next_cursor from the previous call, to get the next items |
 
@@ -538,12 +539,15 @@ Group: `edit`. Hints: changes data
 | `width` | number | yes | Width |
 | `file_id` | uuid | yes | Penpot file id |
 | `height` | number | yes | Height |
+| `constraint_vertical` | `top`, `bottom`, `topbottom`, `center`, `scale` | no | top, bottom, topbottom, center or scale |
 | `x` | number | yes | Canvas X |
 | `page_id` | uuid | no | Page to create the shape on; defaults to the page open in the editor |
+| `constraint_horizontal` | `left`, `right`, `leftright`, `center`, `scale` | no | left, right, leftright, center or scale |
 | `name` | string | no | Layer name |
 | `y` | number | yes | Canvas Y |
 | `parent_id` | uuid | no | Board or group to put the shape into |
 | `clip_content` | boolean | no | Clip children to the board bounds (default true) |
+| `absolute` | boolean | no | true places the shape out of the flex or grid layout of parent_id, at x and y |
 
 ### `create_rect`
 
@@ -557,11 +561,14 @@ Group: `edit`. Hints: changes data
 | `file_id` | uuid | yes | Penpot file id |
 | `height` | number | yes | Height |
 | `border_radius` | number | no | Corner radius for all corners |
+| `constraint_vertical` | `top`, `bottom`, `topbottom`, `center`, `scale` | no | top, bottom, topbottom, center or scale |
 | `x` | number | yes | Canvas X |
 | `page_id` | uuid | no | Page to create the shape on; defaults to the page open in the editor |
+| `constraint_horizontal` | `left`, `right`, `leftright`, `center`, `scale` | no | left, right, leftright, center or scale |
 | `name` | string | no | Layer name |
 | `y` | number | yes | Canvas Y |
 | `parent_id` | uuid | no | Board or group to put the shape into |
+| `absolute` | boolean | no | true places the shape out of the flex or grid layout of parent_id, at x and y |
 
 ### `create_ellipse`
 
@@ -571,34 +578,42 @@ Group: `edit`. Hints: changes data
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `file_id` | uuid | yes | Penpot file id |
-| `page_id` | uuid | no | Page to create the shape on; defaults to the page open in the editor |
-| `parent_id` | uuid | no | Board or group to put the shape into |
-| `name` | string | no | Layer name |
-| `x` | number | yes | Canvas X |
-| `y` | number | yes | Canvas Y |
 | `width` | number | yes | Width |
+| `file_id` | uuid | yes | Penpot file id |
 | `height` | number | yes | Height |
+| `constraint_vertical` | `top`, `bottom`, `topbottom`, `center`, `scale` | no | top, bottom, topbottom, center or scale |
+| `x` | number | yes | Canvas X |
+| `page_id` | uuid | no | Page to create the shape on; defaults to the page open in the editor |
+| `constraint_horizontal` | `left`, `right`, `leftright`, `center`, `scale` | no | left, right, leftright, center or scale |
+| `name` | string | no | Layer name |
+| `y` | number | yes | Canvas Y |
+| `parent_id` | uuid | no | Board or group to put the shape into |
+| `absolute` | boolean | no | true places the shape out of the flex or grid layout of parent_id, at x and y |
 
 ### `create_text`
 
-Create a text layer. Penpot measures the text with the real font: with grow_type auto-width (the default) the box fits the text, with auto-height the width is fixed and the height grows. Returns the new shape. [editor]
+Create a text layer. Penpot measures the text with the real font: with grow_type auto-width (the default) the box fits the text, with auto-height the width is fixed and the height grows. A typography token and a color token can be bound in the same call. Returns the new shape. [editor]
 
 Group: `edit`. Hints: changes data
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
+| `color_token_id` | uuid | no | Color token to bind to the text fill, from get_design_tokens |
 | `file_id` | uuid | yes | Penpot file id |
 | `font_family` | string | no | Font family, e.g. sourcesanspro or a family from list_fonts |
 | `grow_type` | `fixed`, `auto-width`, `auto-height` | no | Default auto-width |
+| `constraint_vertical` | `top`, `bottom`, `topbottom`, `center`, `scale` | no | top, bottom, topbottom, center or scale |
+| `typography_token_id` | uuid | no | Typography token to bind, from get_design_tokens |
 | `x` | number | yes | Canvas X |
 | `page_id` | uuid | no | Page to create the shape on; defaults to the page open in the editor |
+| `constraint_horizontal` | `left`, `right`, `leftright`, `center`, `scale` | no | left, right, leftright, center or scale |
 | `name` | string | no | Layer name |
 | `text` | string | yes | Text content |
 | `font_size` | number | no | Font size in pixels |
 | `font_weight` | `100`, `200`, `300`, `400`, `500`, `600`, `700`, `800`, `900` | no | Font weight |
 | `y` | number | yes | Canvas Y |
 | `parent_id` | uuid | no | Board or group to put the shape into |
+| `absolute` | boolean | no | true places the shape out of the flex or grid layout of parent_id, at x and y |
 
 ### `create_path`
 
@@ -608,13 +623,16 @@ Group: `edit`. Hints: changes data
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `file_id` | uuid | yes | Penpot file id |
-| `page_id` | uuid | no | Page to create the shape on; defaults to the page open in the editor |
-| `parent_id` | uuid | no | Board or group to put the shape into |
-| `name` | string | no | Layer name |
 | `d` | string | yes | SVG path data, e.g. M0 0 L100 0 L100 100 Z |
+| `file_id` | uuid | yes | Penpot file id |
+| `constraint_vertical` | `top`, `bottom`, `topbottom`, `center`, `scale` | no | top, bottom, topbottom, center or scale |
 | `x` | number | no | Canvas X to move the path to |
+| `page_id` | uuid | no | Page to create the shape on; defaults to the page open in the editor |
+| `constraint_horizontal` | `left`, `right`, `leftright`, `center`, `scale` | no | left, right, leftright, center or scale |
+| `name` | string | no | Layer name |
 | `y` | number | no | Canvas Y to move the path to |
+| `parent_id` | uuid | no | Board or group to put the shape into |
+| `absolute` | boolean | no | true places the shape out of the flex or grid layout of parent_id, at x and y |
 
 ### `create_group`
 
@@ -630,7 +648,7 @@ Group: `edit`. Hints: changes data
 
 ### `create_component`
 
-Turn shapes into a component of the file's local library; the shapes become its main instance. Returns the component id, name, path and the main instance's state. [editor]
+Turn shapes into a component of the file's local library; the shapes become its main instance. name is the full component name, with the path before the last /, e.g. Icons / Menu. Returns the component id, name, path and the main instance's state. [editor]
 
 Group: `edit`. Hints: changes data
 
@@ -651,17 +669,20 @@ Group: `edit`. Hints: changes data
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `file_id` | uuid | yes | Penpot file id |
-| `component_id` | uuid | yes | Component id from list_components |
-| `library_file_id` | uuid | no | Id of the connected shared library the component belongs to; omit for the file's own components |
+| `constraint_vertical` | `top`, `bottom`, `topbottom`, `center`, `scale` | no | top, bottom, topbottom, center or scale |
 | `x` | number | yes | Canvas X |
-| `y` | number | yes | Canvas Y |
 | `page_id` | uuid | no | Page to create the shape on; defaults to the page open in the editor |
-| `parent_id` | uuid | no | Board or group to put the shape into |
+| `component_id` | uuid | yes | Component id from list_components |
+| `constraint_horizontal` | `left`, `right`, `leftright`, `center`, `scale` | no | left, right, leftright, center or scale |
 | `name` | string | no | Layer name |
+| `library_file_id` | uuid | no | Id of the connected shared library the component belongs to; omit for the file's own components |
+| `y` | number | yes | Canvas Y |
+| `parent_id` | uuid | no | Board or group to put the shape into |
+| `absolute` | boolean | no | true places the shape out of the flex or grid layout of parent_id, at x and y |
 
 ### `create_variants`
 
-Combine components of the file's own library into one variant set, as Penpot's "Combine as variants" does. Their main instances must be on the same page. Penpot derives the first properties from the component names. Returns the variant set: its id, property names and each variant component with its property values. [editor]
+Combine components of the file's own library into one variant set, as Penpot's "Combine as variants" does. Their main instances must be on the same page. Penpot derives the first properties from the component names; property and values name the first property and set each variant's value in the same call. Returns the variant set: its id, property names and each variant component with its property values. [editor]
 
 Group: `edit`. Hints: changes data, destructive, idempotent
 
@@ -669,6 +690,8 @@ Group: `edit`. Hints: changes data, destructive, idempotent
 |---|---|---|---|
 | `file_id` | uuid | yes | Penpot file id |
 | `component_ids` | array of uuid | yes | Ids of two or more components of this file |
+| `property` | string | no | Name for the first property instead of Penpot's Property 1 |
+| `values` | array of string | no | Value of that property for each component, in the order of component_ids |
 
 ### `set_variant_property`
 
@@ -1093,19 +1116,24 @@ Group: `edit`. Hints: changes data, destructive, idempotent
 
 ### `import_svg`
 
-Import SVG markup as Penpot shapes inside a new group, for example an icon. Images referenced by the SVG are fetched and uploaded to the file. Returns the new group. [editor]
+Import SVG markup as Penpot shapes inside a new group, for example an icon. The group gets the size of the SVG's width and height attributes, not of its viewBox, unless width and height are given. Images referenced by the SVG are fetched and uploaded to the file. Returns the new group. [editor]
 
 Group: `edit`. Hints: changes data, open world
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
+| `width` | number | no | Width of the imported group; by default the width and height attributes of the SVG in pixels |
 | `file_id` | uuid | yes | Penpot file id |
-| `svg` | string | yes | SVG markup starting with <svg |
+| `height` | number | no | Height of the imported group |
+| `constraint_vertical` | `top`, `bottom`, `topbottom`, `center`, `scale` | no | top, bottom, topbottom, center or scale |
 | `x` | number | yes | Canvas X |
-| `y` | number | yes | Canvas Y |
 | `page_id` | uuid | no | Page to create the shape on; defaults to the page open in the editor |
-| `parent_id` | uuid | no | Board or group to put the shape into |
+| `svg` | string | yes | SVG markup starting with <svg |
+| `constraint_horizontal` | `left`, `right`, `leftright`, `center`, `scale` | no | left, right, leftright, center or scale |
 | `name` | string | no | Layer name |
+| `y` | number | yes | Canvas Y |
+| `parent_id` | uuid | no | Board or group to put the shape into |
+| `absolute` | boolean | no | true places the shape out of the flex or grid layout of parent_id, at x and y |
 
 ### `align_shapes`
 
@@ -1332,7 +1360,7 @@ Group: `edit`. Hints: changes data
 
 ### `set_token`
 
-Bind a design token to a shape, as Penpot's token panel does. Without attr the token binds the attributes Penpot uses for its type: color binds fill, borderRadius every corner, sizing and dimensions width and height, spacing the gaps of a layout board or the margins of a layout child, typography the text typography; other types bind their own attribute. Pass attr to bind one specific attribute, for example strokeColor for a color token. A different token bound to a target attribute is unbound first; attributes already bound to this token are left as they are, so repeating the call changes nothing. The token type and attribute are checked against the shape type before anything changes. Take token ids from get_design_tokens. Returns the changes. [editor]
+Bind a design token to a shape, as Penpot's token panel does. Without attr the token binds the attributes Penpot uses for its type: color binds fill, borderRadius every corner, sizing and dimensions width and height, spacing the gaps of a layout board or the margins of a layout child, typography the text typography; other types bind their own attribute. Pass attr to bind one specific attribute, for example strokeColor for a color token, or a group: padding, margin or borderRadius for all four sides or corners, gap for both gaps. A different token bound to a target attribute is unbound first; attributes already bound to this token are left as they are, so repeating the call changes nothing. The token type and attribute are checked against the shape type before anything changes. Take token ids from get_design_tokens. Returns the changes. [editor]
 
 Group: `edit`. Hints: changes data, destructive, idempotent
 
@@ -1341,11 +1369,11 @@ Group: `edit`. Hints: changes data, destructive, idempotent
 | `file_id` | uuid | yes | Penpot file id |
 | `shape_id` | uuid | yes | Shape id |
 | `token_id` | uuid | yes | Token id from get_design_tokens |
-| `attr` | `fill`, `strokeColor`, `strokeWidth`, `shadow`, `opacity`, `rotation`, `borderRadiusTopLeft`, `borderRadiusTopRight`, `borderRadiusBottomRight`, `borderRadiusBottomLeft`, `x`, `y`, `width`, `height`, `layoutItemMinW`, `layoutItemMaxW`, `layoutItemMinH`, `layoutItemMaxH`, `rowGap`, `columnGap`, `paddingTop`, `paddingRight`, `paddingBottom`, `paddingLeft`, `marginTop`, `marginRight`, `marginBottom`, `marginLeft`, `fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`, `textCase`, `textDecoration`, `typography` | no | Shape attribute, as a Penpot Plugin API token property name |
+| `attr` | `fill`, `strokeColor`, `strokeWidth`, `shadow`, `opacity`, `rotation`, `borderRadiusTopLeft`, `borderRadiusTopRight`, `borderRadiusBottomRight`, `borderRadiusBottomLeft`, `x`, `y`, `width`, `height`, `layoutItemMinW`, `layoutItemMaxW`, `layoutItemMinH`, `layoutItemMaxH`, `rowGap`, `columnGap`, `paddingTop`, `paddingRight`, `paddingBottom`, `paddingLeft`, `marginTop`, `marginRight`, `marginBottom`, `marginLeft`, `fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`, `textCase`, `textDecoration`, `typography`, `padding`, `margin`, `borderRadius`, `gap` | no | Shape attribute, as a Penpot Plugin API token property name, or a group: padding, margin and borderRadius for all four sides or corners, gap for both gaps |
 
 ### `remove_token`
 
-Unbind design tokens from a shape; attributes keep their current values. Pass exactly one of token_id, to unbind that token from every attribute of the shape, or attr, to unbind whatever token is bound to that attribute. Nothing changes if nothing is bound. Returns the changes. [editor]
+Unbind design tokens from a shape; attributes keep their current values. Pass exactly one of token_id, to unbind that token from every attribute of the shape, or attr, to unbind whatever token is bound to that attribute or to each attribute of a group (padding, margin, borderRadius, gap). Nothing changes if nothing is bound. Returns the changes. [editor]
 
 Group: `edit`. Hints: changes data, destructive, idempotent
 
@@ -1354,11 +1382,11 @@ Group: `edit`. Hints: changes data, destructive, idempotent
 | `file_id` | uuid | yes | Penpot file id |
 | `shape_id` | uuid | yes | Shape id |
 | `token_id` | uuid | no | Token id from get_design_tokens; unbinds it from every attribute of the shape |
-| `attr` | `fill`, `strokeColor`, `strokeWidth`, `shadow`, `opacity`, `rotation`, `borderRadiusTopLeft`, `borderRadiusTopRight`, `borderRadiusBottomRight`, `borderRadiusBottomLeft`, `x`, `y`, `width`, `height`, `layoutItemMinW`, `layoutItemMaxW`, `layoutItemMinH`, `layoutItemMaxH`, `rowGap`, `columnGap`, `paddingTop`, `paddingRight`, `paddingBottom`, `paddingLeft`, `marginTop`, `marginRight`, `marginBottom`, `marginLeft`, `fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`, `textCase`, `textDecoration`, `typography` | no | Shape attribute, as a Penpot Plugin API token property name |
+| `attr` | `fill`, `strokeColor`, `strokeWidth`, `shadow`, `opacity`, `rotation`, `borderRadiusTopLeft`, `borderRadiusTopRight`, `borderRadiusBottomRight`, `borderRadiusBottomLeft`, `x`, `y`, `width`, `height`, `layoutItemMinW`, `layoutItemMaxW`, `layoutItemMinH`, `layoutItemMaxH`, `rowGap`, `columnGap`, `paddingTop`, `paddingRight`, `paddingBottom`, `paddingLeft`, `marginTop`, `marginRight`, `marginBottom`, `marginLeft`, `fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`, `textCase`, `textDecoration`, `typography`, `padding`, `margin`, `borderRadius`, `gap` | no | Shape attribute, as a Penpot Plugin API token property name, or a group: padding, margin and borderRadius for all four sides or corners, gap for both gaps |
 
 ### `create_token_set`
 
-Create a design token set in the file; use / in the name to group sets. A new set is active unless active is false. Returns the set. [editor]
+Create a design token set in the file; use / in the name to group sets. A new set is active unless active is false. As in Penpot's token panel, activating a set switches off the active themes, since their sets no longer match; deactivatedThemes lists them, and set_theme_sets adds the new set to a theme so that it can be switched on again with the set. If a set with this name exists it is returned unchanged. Returns the set. [editor]
 
 Group: `edit`. Hints: changes data
 
@@ -1393,7 +1421,7 @@ Group: `edit`. Hints: changes data, destructive, idempotent
 
 ### `create_token`
 
-Create a design token in a set. Penpot validates the value for the type and rejects invalid ones. Returns the token with the value Penpot resolves from the active sets. [editor]
+Create a design token in a set. Penpot validates the value for the type and rejects invalid ones. Repeating the call with the same name, type and value returns the existing token; a different token with the same name is an error. Returns the token with the value Penpot resolves from the active sets. [editor]
 
 Group: `edit`. Hints: changes data
 
