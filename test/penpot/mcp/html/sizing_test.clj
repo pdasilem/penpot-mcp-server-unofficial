@@ -60,3 +60,16 @@
     (is (= 1392.0 (sizing/frame-width el computed 1440)))
     (is (= 870.0 (sizing/aspect-height (get-in computed [el :style]) 1392.0)))
     (is (nil? (sizing/aspect-height {} 1392.0)))))
+
+(deftest grid-tracks-parse
+  (is (= [{:type "flex" :value 1.0} {:type "fixed" :value 200.0} {:type "auto"} {:type "percent" :value 25.0}]
+         (sizing/tracks "1fr 200px auto 25%" ctx)))
+  (is (= [{:type "flex" :value 1.0} {:type "flex" :value 1.0} {:type "flex" :value 1.0}] (sizing/tracks "repeat(3, 1fr)" ctx)))
+  (is (= [{:type "flex" :value 2.0} {:type "auto"}] (sizing/tracks "minmax(100px, 2fr) minmax(0, auto)" ctx)))
+  (is (= [] (sizing/tracks "none" ctx))))
+
+(deftest grid-container-maps-to-penpot-grid
+  (is (= {:type "grid" :dir "row" :columns [{:type "flex" :value 1.0} {:type "flex" :value 1.0}] :rows []
+          :rowGap 8.0 :columnGap 8.0 :padding [4.0 4.0 4.0 4.0]}
+         (sizing/grid-container {"display" "grid" "grid-template-columns" "1fr 1fr" "row-gap" "8px" "column-gap" "8px"
+                                 "padding-top" "4px" "padding-right" "4px" "padding-bottom" "4px" "padding-left" "4px"} ctx))))

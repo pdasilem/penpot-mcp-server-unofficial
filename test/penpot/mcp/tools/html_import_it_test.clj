@@ -23,12 +23,20 @@
        ".btn{border:1px solid #5a6167;border-radius:6px;padding:7px 12px;background:var(--fill);font-weight:600}"
        ".sel::after{content:\" ▾\";color:#6b7276}"
        "table{border-collapse:collapse;width:100%}td,th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}"
+       ".media{color:#c00}@media (min-width:1000px){.media{color:#0a0}}"
        "</style></head><body>"
        "<h2>First</h2><div class='desk'><div class='top'><b>Admin</b><span>Users</span><span class='who'>me</span></div>"
        "<div class='main'><div>Hello <b>bold</b> and <em>italic</em> text</div><div class='sel'>Pick one</div>"
        "<span class='btn'>Save</span></div></div>"
        "<div class='desk'><div class='main'><table><tr><th>Name</th><th>Role</th></tr><tr><td>Ann</td><td>Admin</td></tr></table></div></div>"
-       "<h2>Second</h2><div class='desk'><div class='main'><div class='btn'>Only</div></div></div>"
+       "<h2>Second</h2><div class='desk'><div class='main'>"
+       "<div style='display:grid;grid-template-columns:repeat(3,1fr);gap:8px'>"
+       "<div style='background:linear-gradient(90deg,#ff7a59,#ffd166);height:40px;border-radius:6px'></div>"
+       "<div style='grid-column:span 2;background:#e9ecee;padding:8px'>Wide cell</div>"
+       "<div><svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><circle cx='12' cy='12' r='10' fill='#5a6167'/></svg></div>"
+       "<div><img alt='dot' width='8' height='8' src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAEklEQVR4nGNgGAWjYBSMAggAAAQQAAFVN1rQAAAAAElFTkSuQmCC'></div>"
+       "<div class='media'>Media</div></div>"
+       "<div class='btn'>Only</div></div></div>"
        "</body></html>"))
 
 (defn- source []

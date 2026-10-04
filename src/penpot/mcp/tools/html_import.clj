@@ -47,7 +47,7 @@
     :input-schema [:map {:closed true}
                    common/file-id-param
                    [:upload_id {:description "upload_id returned by the upload"} :uuid]
-                   [:frame_selector {:optional true :description "CSS selector of the frames, e.g. .desk; without it the whole page is one board"} [:string {:min 1 :max 500}]]
+                   [:frame_selector {:optional true :description "CSS selector of the frames, e.g. .screen; without it the whole page is one board"} [:string {:min 1 :max 500}]]
                    [:section_selector {:optional true :description "CSS selector of section headings, e.g. h2; each section goes to a new page"} [:string {:min 1 :max 500}]]
                    [:page_id {:optional true :description "Page for frames outside sections; defaults to the page open in the editor"} :uuid]
                    [:viewport_width {:optional true :description "Viewport width in pixels for percentages and media queries, default 1440"} [:int {:min 320 :max 3840}]]

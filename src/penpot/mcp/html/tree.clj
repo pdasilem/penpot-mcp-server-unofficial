@@ -27,7 +27,8 @@
   (when (set-value? style "animation-name") (note! ctx "animation"))
   (when (some-> (get style "background-image") (str/includes? "url(")) (note! ctx "background-image url"))
   (when (some-> (get style "background-image") (str/includes? "radial-gradient")) (note! ctx "radial-gradient"))
-  (when (= "iframe" (.tagName el)) (note! ctx "iframe")))
+  (when (= "iframe" (.tagName el)) (note! ctx "iframe"))
+  (when (set-value? style "grid-template-areas") (note! ctx "grid-template-areas")))
 
 (defn- hidden? [style]
   (or (= "none" (get style "display")) (#{"hidden" "collapse"} (get style "visibility"))))
@@ -35,6 +36,8 @@
 (defn- inline? [style] (= "inline" (get style "display")))
 
 (defn- flex? [style] (#{"flex" "inline-flex"} (get style "display")))
+
+(defn- grid? [style] (#{"grid" "inline-grid"} (get style "display")))
 
 (defn- table? [style] (= "table" (get style "display")))
 
@@ -112,7 +115,7 @@
       (and open-bot (seq collapsed) (:self (peek collapsed))) (assoc-in [(dec (count collapsed)) :self :margin 2] 0.0))))
 
 (defn- children [^Element el style ctx parent]
-  (let [item?    (if (or (flex? style) (= "grid" (get style "display")))
+  (let [item?    (if (or (flex? style) (grid? style))
                    #(instance? TextNode %)
                    #(text-content? ctx %))
         segments (partition-by item? (.childNodes el))
@@ -124,7 +127,7 @@
                              (keep #(when (instance? Element %) (element-node % ctx parent)) seg)))
                          segments)
         nodes    (with-spacers (remove nil? (concat [(pseudo "before")] items [(pseudo "after")])))]
-    (if (or (flex? style) (= "grid" (get style "display")))
+    (if (or (flex? style) (grid? style))
       nodes
       (block-margins nodes style ctx))))
 
@@ -133,10 +136,49 @@
                (and (instance? Element %) (#{"inline" "inline-block"} (get (style-of ctx %) "display"))))
           (.childNodes el)))
 
+(defn- grid-line [value]
+  (let [v (str/trim (str value))]
+    (cond
+      (or (str/blank? v) (= "auto" v)) {}
+      :else (let [[a b] (map str/trim (str/split v #"/"))
+                  span  (fn [t] (some-> (re-find #"span\s+(\d+)" (str t)) second parse-long))
+                  num   (fn [t] (when (re-matches #"\d+" (str t)) (parse-long t)))]
+              (cond-> {}
+                (num a) (assoc :start (num a))
+                (span a) (assoc :span (span a))
+                (and (num a) (num b)) (assoc :span (max 1 (- (num b) (num a))))
+                (span b) (assoc :span (span b)))))))
+
+(defn- free? [taken row col cols span]
+  (and (<= (+ col span -1) cols)
+       (not-any? #(contains? taken [row %]) (range col (+ col span)))))
+
+(defn- place-cells [nodes cols]
+  (let [cols (max 1 cols)]
+    (:out (reduce (fn [{:keys [taken cursor out]} n]
+                    (let [{c :column r :row} (:grid n)
+                          cspan (min cols (or (:span c) 1))
+                          rspan (or (:span r) 1)
+                          [row col] (if (and (:start c) (:start r))
+                                      [(:start r) (:start c)]
+                                      (loop [[row col] cursor]
+                                        (cond
+                                          (and (:start c) (free? taken row (:start c) cols cspan)) [row (:start c)]
+                                          (and (nil? (:start c)) (free? taken row col cols cspan)) [row col]
+                                          (>= col cols) (recur [(inc row) 1])
+                                          :else (recur [row (inc col)]))))
+                          cells (for [rr (range row (+ row rspan)) cc (range col (+ col cspan))] [rr cc])]
+                      {:taken (into taken cells)
+                       :cursor (if (and (:start c) (:start r)) cursor [row (+ col cspan)])
+                       :out (conj out (-> n (dissoc :grid) (assoc :cell {:row row :column col :rowSpan rspan :columnSpan cspan})))}))
+                  {:taken #{} :cursor [1 1] :out []}
+                  nodes))))
+
 (defn- layout-for [^Element el style ctx]
   (let [pc     (px-ctx style ctx)
         layout (sizing/container style pc)]
     (cond
+      (grid? style) (sizing/grid-container style pc)
       (flex? style) layout
       (and (#{"inline" "inline-block"} (get style "display")) (inline-flow? el ctx))
       (assoc layout :dir "row" :alignItems "center" :wrap "nowrap")
@@ -150,11 +192,21 @@
 (defn- board-node [^Element el style ctx parent self]
   (let [layout (layout-for el style ctx)
         fixed  (or (#{"fix" "fill"} (:verticalSizing self)) (:fixed-height parent))
-        info   {:dir (:dir layout) :alignItems (:alignItems layout) :block (not (flex? style))
-                :fixed-height (boolean (and fixed (#{"fix" "fill"} (:verticalSizing self))))}]
-    (merge {:kind "board" :name (node-name el) :layout layout :self self
-            :children (children el style ctx info)}
-           (decorated style ctx))))
+        info   {:dir (:dir layout) :alignItems (:alignItems layout) :block (not (or (flex? style) (grid? style)))
+                :grid (grid? style)
+                :fixed-height (boolean (and fixed (#{"fix" "fill"} (:verticalSizing self))))}
+        kids   (children el style ctx info)]
+    (if (grid? style)
+      (let [cols   (max 1 (count (:columns layout)))
+            placed (place-cells kids cols)
+            rows   (reduce max 1 (map #(+ (get-in % [:cell :row]) (get-in % [:cell :rowSpan]) -1) placed))
+            layout (-> layout
+                       (assoc :columns (if (seq (:columns layout)) (:columns layout) [{:type "flex" :value 1}]))
+                       (assoc :rows (vec (take rows (concat (:rows layout) (repeat {:type "auto"}))))))]
+        (merge {:kind "board" :name (node-name el) :layout layout :self self :children placed}
+               (decorated style ctx)))
+      (merge {:kind "board" :name (node-name el) :layout layout :self self :children kids}
+             (decorated style ctx)))))
 
 (defn- table-rows [^Element table]
   (mapcat (fn [^Element c]
@@ -195,15 +247,20 @@
   (let [style (style-of ctx el)]
     (when-not (hidden? style)
       (check-unsupported! ctx el style)
-      (let [self (sizing/child style parent (px-ctx style ctx))]
-        (case (.tagName el)
-          "svg" {:kind "svg" :name "svg" :markup (.outerHtml el) :self self}
-          "img" {:kind "image" :name (or (not-empty (.attr el "alt")) "image") :src (.attr el "src") :self self}
-          "iframe" nil
-          (cond
-            (table? style) (table-node el style ctx self)
-            (or (boxy? style ctx) (not (every? #(text-content? ctx %) (.childNodes el)))) (board-node el style ctx parent self)
-            :else (some-> (text/content el (:computed ctx)) (text-node self parent))))))))
+      (let [self (cond-> (sizing/child style parent (px-ctx style ctx))
+                   (:grid parent) (as-> sf (cond-> sf
+                                             (not= "fix" (:horizontalSizing sf)) (assoc :horizontalSizing "fill")
+                                             (not= "fix" (:verticalSizing sf)) (assoc :verticalSizing "fill"))))
+            grid-pos (when (:grid parent) {:column (grid-line (get style "grid-column")) :row (grid-line (get style "grid-row"))})]
+        (cond-> (case (.tagName el)
+                  "svg" {:kind "svg" :name "svg" :markup (.outerHtml el) :self self}
+                  "img" {:kind "image" :name (clean-name (.attr el "alt") "image") :src (.attr el "src") :self self}
+                  "iframe" nil
+                  (cond
+                    (table? style) (table-node el style ctx self)
+                    (or (boxy? style ctx) (not (every? #(text-content? ctx %) (.childNodes el)))) (board-node el style ctx parent self)
+                    :else (some-> (text/content el (:computed ctx)) (text-node self parent))))
+          grid-pos (some-> (assoc :grid grid-pos)))))))
 
 (defn frame [^Element el computed {:keys [viewport]}]
   (let [ctx    {:computed computed :viewport viewport :unsupported (atom {})}

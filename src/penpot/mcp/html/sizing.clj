@@ -117,3 +117,29 @@
     (let [[a b] (map #(parse-double (str/trim %)) (str/split ratio #"/"))]
       (when (and a (pos? a))
         (/ width (/ a (or b 1.0)))))))
+
+(defn- track [token ctx]
+  (let [t (str/trim token)]
+    (cond
+      (str/starts-with? t "minmax(") (track (last (v/comma-split (subs t 7 (dec (count t))))) ctx)
+      (re-matches #"[\d.]+fr" t) {:type "flex" :value (parse-double (subs t 0 (- (count t) 2)))}
+      (str/ends-with? t "%") {:type "percent" :value (parse-double (subs t 0 (dec (count t))))}
+      (v/px t ctx) {:type "fixed" :value (v/px t ctx)}
+      :else {:type "auto"})))
+
+(defn tracks [value ctx]
+  (let [v (str/trim (str value))]
+    (if (or (str/blank? v) (= "none" v))
+      []
+      (vec (mapcat (fn [token]
+                     (if-let [[_ n inner] (re-matches #"repeat\(\s*(\d+)\s*,(.*)\)" token)]
+                       (apply concat (repeat (parse-long n) (map #(track % ctx) (v/tokens inner))))
+                       [(track token ctx)]))
+                   (v/tokens v))))))
+
+(defn grid-container [style ctx]
+  (let [{:keys [padding gap]} (box/spacing style ctx)]
+    {:type "grid" :dir (if (str/starts-with? (str (get style "grid-auto-flow" "row")) "column") "column" "row")
+     :columns (tracks (get style "grid-template-columns") ctx)
+     :rows (tracks (get style "grid-template-rows") ctx)
+     :rowGap (first gap) :columnGap (second gap) :padding padding}))

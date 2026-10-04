@@ -119,3 +119,19 @@
         names          (map :name (tree-seq :children :children node))]
     (is (every? #(and (string? %) (re-find #"[^\s ]" %)) names))
     (is (not-any? #(re-find #"^[\s ]|[\s ]$" %) names))))
+
+(deftest css-grid-becomes-a-penpot-grid-with-placed-cells
+  (let [{:keys [node unsupported]} (frame "<div id='f' style='width:400px'><div style='display:grid;grid-template-columns:repeat(3,1fr);gap:8px'><div>a</div><div style='grid-column:span 2'>b</div><div>c</div><div style='grid-column:3;grid-row:3'>d</div></div></div>" "#f")
+        grid  (first (:children node))]
+    (is (= "grid" (get-in grid [:layout :type])))
+    (is (= 3 (count (get-in grid [:layout :columns]))))
+    (is (= 3 (count (get-in grid [:layout :rows]))))
+    (is (= [{:row 1 :column 1 :rowSpan 1 :columnSpan 1} {:row 1 :column 2 :rowSpan 1 :columnSpan 2}
+            {:row 2 :column 1 :rowSpan 1 :columnSpan 1} {:row 3 :column 3 :rowSpan 1 :columnSpan 1}]
+           (mapv :cell (:children grid))))
+    (is (= "fill" (get-in grid [:children 0 :self :horizontalSizing])))
+    (is (= {} unsupported))))
+
+(deftest grid-template-areas-are-reported
+  (is (= {"grid-template-areas" 1}
+         (:unsupported (frame "<div id='f' style='width:400px'><div style='display:grid;grid-template-areas:\"a b\"'><div>a</div></div></div>" "#f")))))

@@ -1502,7 +1502,7 @@ Group: `import`. Hints: changes data, open world
 |---|---|---|---|
 | `file_id` | uuid | yes | Penpot file id |
 | `upload_id` | uuid | yes | upload_id returned by the upload |
-| `frame_selector` | string | no | CSS selector of the frames, e.g. .desk; without it the whole page is one board |
+| `frame_selector` | string | no | CSS selector of the frames, e.g. .screen; without it the whole page is one board |
 | `section_selector` | string | no | CSS selector of section headings, e.g. h2; each section goes to a new page |
 | `page_id` | uuid | no | Page for frames outside sections; defaults to the page open in the editor |
 | `viewport_width` | integer | no | Viewport width in pixels for percentages and media queries, default 1440 |
