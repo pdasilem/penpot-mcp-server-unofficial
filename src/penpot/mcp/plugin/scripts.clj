@@ -17,11 +17,12 @@
     "const markChanged = () => { changed = true; storage.dirtySince = Math.max(storage.dirtySince ?? 0, startedAt); };"
     "const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms ?? 150));"
     "const ensureFile = () => { const f = penpot.currentFile; if (!f || f.id !== args.fileId) fail('not-open', f ? f.id : ''); };"
-    "const waitFor = async (check) => { for (let i = 0; i < 60; i++) { const v = check(); if (v) return v; await settle(50); } return null; };"
+    "const waitFor = async (check, ms) => { const until = Date.now() + (ms ?? 3000); for (;;) { const v = check(); if (v) return v; if (Date.now() > until) return null; await settle(20); } };"
     "const openPage = async (page) => {"
     "  if (penpot.currentPage.id === page.id) return;"
-    "  await penpot.openPage(page);"
-    "  await waitFor(() => penpot.currentPage.id === page.id);"
+    "  const opening = penpot.openPage(page);"
+    "  if (opening && opening.catch) opening.catch(() => {});"
+    "  if (!(await waitFor(() => penpot.currentPage.id === page.id, 25000))) fail('page-not-opened', page.id);"
     "};"
     "const focusPage = async (pageId) => {"
     "  if (!pageId) return penpot.currentPage;"
@@ -109,6 +110,7 @@
                     (if (str/blank? detail) "no file is open" (str "the editor has file " detail " open")))
     "shape-not-found" (str "Shape " detail " not found in the open file")
     "page-not-found" (str "Page " detail " not found in the open file")
+    "page-not-opened" (str "Penpot did not open page " detail " within 25 seconds; try again")
     "wrong-token-type" (str "Token " detail)
     "last-page" "A Penpot file must keep at least one page"
     "not-a-board" (str "Shape " detail " is not a board")

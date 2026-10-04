@@ -111,3 +111,8 @@
     (is (str/includes? code "storage.lastSaveAt = Date.now();"))
     (is (str/includes? code "const startedAt = Date.now();"))
     (is (str/includes? code "storage.dirtySince = Math.max(storage.dirtySince ?? 0, startedAt);"))))
+
+(deftest opening-a-page-is-bounded-and-does-not-await-penpot
+  (let [code (scripts/script "return 1;" {:file-id "f"})]
+    (is (str/includes? code "fail('page-not-opened', page.id);"))
+    (is (not (str/includes? code "await penpot.openPage(page);")))))
