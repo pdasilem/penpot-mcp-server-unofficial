@@ -1,6 +1,5 @@
 (ns penpot.mcp.penpot.version-test
   (:require
-   [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
    [penpot.mcp.penpot.version :as version]))
 
@@ -67,5 +66,5 @@
         (version/stop-checker! checker)))))
 
 (deftest server-version-is-penpot-version-plus-fix-number
-  (is (= "2.18.1.0" version/server-version))
-  (is (str/starts-with? version/server-version (str version/supported "."))))
+  (is (re-matches #"\d+\.\d+\.\d+" version/supported))
+  (is (re-matches (re-pattern (str (java.util.regex.Pattern/quote version/supported) "\\.\\d+")) version/server-version)))

@@ -1,6 +1,7 @@
 (ns penpot.mcp.server-test
   (:require
    [clojure.test :refer [deftest is use-fixtures]]
+   [penpot.mcp.penpot.version :as version]
    [penpot.mcp.server :as server]
    [penpot.mcp.test-client :as client]
    [penpot.mcp.tool :as tool]))
@@ -53,7 +54,7 @@
     (is (= 200 (:status init)))
     (is (some? session-id))
     (is (= "penpot-mcp" (get-in init [:body :result :serverInfo :name])))
-    (is (= "2.18.1.0" (get-in init [:body :result :serverInfo :version])))
+    (is (= version/server-version (get-in init [:body :result :serverInfo :version])))
     (is (= "Shared rules" (get-in init [:body :result :instructions])))))
 
 (deftest lists-registered-tools-with-json-schema
