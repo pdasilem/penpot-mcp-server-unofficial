@@ -36,21 +36,35 @@
     "  shapeCount: p.findShapes().filter((s) => s.id !== '00000000-0000-0000-0000-000000000000').length"
     "}));"]))
 
+(def ^:private all-components
+  ["const allComponents = () => {"
+   "  const found = new Map();"
+   "  for (const c of penpot.library.local.components) {"
+   "    found.set(c.id, c);"
+   "    if (c.isVariant() && c.variants) for (const v of c.variants.variantComponents()) if (v && v.id) found.set(v.id, v);"
+   "  }"
+   "  return [...found.values()];"
+   "};"])
+
 (def library-counts-body
   (str/join
    "\n"
-   ["const lib = penpot.library.local;"
-    "return { components: lib.components.length, colors: lib.colors.length,"
-    "  typographies: lib.typographies.length, tokenSets: lib.tokens.sets.length };"]))
+   (concat
+    all-components
+    ["const lib = penpot.library.local;"
+     "return { components: allComponents().length, colors: lib.colors.length,"
+     "  typographies: lib.typographies.length, tokenSets: lib.tokens.sets.length };"])))
 
 (def components-body
   (str/join
    "\n"
-   ["return penpot.library.local.components.map((c) => {"
-    "  const main = c.mainInstance();"
-    "  const page = main ? penpotUtils.getPageForShape(main) : null;"
-    "  return { id: c.id, name: c.name, path: c.path, mainInstanceId: main ? main.id : null, mainInstancePage: page ? page.id : null };"
-    "});"]))
+   (concat
+    all-components
+    ["return allComponents().map((c) => {"
+     "  const main = c.mainInstance();"
+     "  const page = main ? penpotUtils.getPageForShape(main) : null;"
+     "  return { id: c.id, name: c.name, path: c.path, mainInstanceId: main ? main.id : null, mainInstancePage: page ? page.id : null };"
+     "});"])))
 
 (def colors-body
   (str/join

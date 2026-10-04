@@ -4,6 +4,7 @@
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]
    [penpot.mcp.fixtures :as fx]
+   [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tools.library :as library]))
 
 (defn- run [tool-name args]
@@ -156,3 +157,7 @@
     (is (= instances-result result))
     (is (empty? calls))
     (is (str/includes? (last scripts) "s.isComponentRoot()"))))
+
+(deftest editor-component-lists-include-every-variant
+  (doseq [body [read/components-body read/library-counts-body]]
+    (is (str/includes? body "c.variants.variantComponents()"))))
