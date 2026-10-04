@@ -58,7 +58,8 @@
                            ["not-text" "Shape x is not a text"]
                            ["token-not-applied" "Penpot did not apply the token to x; check that the attribute fits the token type"]
                            ["create-failed" "Penpot could not create the x"]
-                           ["mixed-pages" "All shapes must be on the same page; x is on another page"]]]
+                           ["mixed-pages" "All shapes must be on the same page; x is on another page"]
+                           ["wrong-token-type" "Token x"]]]
     (is (= expected (message #(run-with (tool/user-error (str "Penpot editor reported an error: MCP_ERR:" code ":x"))))) code)))
 
 (deftest serializes-plugin-executions

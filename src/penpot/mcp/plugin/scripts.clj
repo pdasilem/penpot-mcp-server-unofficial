@@ -109,6 +109,7 @@
                     (if (str/blank? detail) "no file is open" (str "the editor has file " detail " open")))
     "shape-not-found" (str "Shape " detail " not found in the open file")
     "page-not-found" (str "Page " detail " not found in the open file")
+    "wrong-token-type" (str "Token " detail)
     "last-page" "A Penpot file must keep at least one page"
     "not-a-board" (str "Shape " detail " is not a board")
     "not-a-container" (str "Shape " detail " cannot contain other shapes")

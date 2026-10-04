@@ -91,7 +91,7 @@
 (def ^:private create-text
   (canvas/plugin-tool
    {:name "create_text"
-    :description "Create a text layer. Penpot measures the text with the real font: with grow_type auto-width (the default) the box fits the text, with auto-height the width is fixed and the height grows. Returns the new shape."
+    :description "Create a text layer. Penpot measures the text with the real font: with grow_type auto-width (the default) the box fits the text, with auto-height the width is fixed and the height grows. A typography token and a color token can be bound in the same call. Returns the new shape."
     :annotations tool/additive
     :input-schema (schema placement-params
                           [[:text {:description "Text content"} [:string {:min 1 :max 10000}]]
@@ -100,18 +100,29 @@
                            [:font_family {:optional true :description "Font family, e.g. sourcesanspro or a family from list_fonts"} common/short-text]
                            [:font_size {:optional true :description "Font size in pixels"} common/positive-size]
                            [:font_weight {:optional true :description "Font weight"} [:enum "100" "200" "300" "400" "500" "600" "700" "800" "900"]]
-                           [:grow_type {:optional true :description "Default auto-width"} [:enum "fixed" "auto-width" "auto-height"]]])
+                           [:grow_type {:optional true :description "Default auto-width"} [:enum "fixed" "auto-width" "auto-height"]]
+                           [:typography_token_id {:optional true :description "Typography token to bind, from get_design_tokens"} :uuid]
+                           [:color_token_id {:optional true :description "Color token to bind to the text fill, from get_design_tokens"} :uuid]])
     :body (create-body "penpot.createText(args.text)" "text"
                        (str/join "\n"
                                  ["s.growType = args.growType ?? 'auto-width';"
                                   "if (args.fontFamily !== undefined) s.fontFamily = args.fontFamily;"
                                   "if (args.fontSize !== undefined) s.fontSize = args.fontSize;"
-                                  "if (args.fontWeight !== undefined) s.fontWeight = args.fontWeight;"]))
-    :args (fn [{:keys [text font_family font_size font_weight grow_type] :as p}]
+                                  "if (args.fontWeight !== undefined) s.fontWeight = args.fontWeight;"
+                                  "const bindToken = async (id, type, attr) => {"
+                                  "  const t = penpot.library.local.tokens.sets.flatMap((set) => set.tokens).find((x) => x.id === id) ?? fail('token-not-found', id);"
+                                  "  if (t.type !== type) fail('wrong-token-type', t.name + ' is a ' + t.type + ' token; expected ' + type);"
+                                  "  s.applyToken(t, [attr]);"
+                                  "  if (!(await waitFor(() => s.tokens[attr] === t.name))) fail('token-not-applied', s.id + '/' + attr);"
+                                  "};"
+                                  "if (args.typographyTokenId) await bindToken(args.typographyTokenId, 'typography', 'typography');"
+                                  "if (args.colorTokenId) await bindToken(args.colorTokenId, 'color', 'fill');"]))
+    :args (fn [{:keys [text font_family font_size font_weight grow_type typography_token_id color_token_id] :as p}]
             (common/compact (assoc (shape-args p)
                                    :text text :font-family font_family
                                    :font-size (some-> font_size str) :font-weight font_weight
-                                   :grow-type grow_type)))}))
+                                   :grow-type grow_type :typography-token-id typography_token_id
+                                   :color-token-id color_token_id)))}))
 
 (def ^:private create-path
   (canvas/plugin-tool

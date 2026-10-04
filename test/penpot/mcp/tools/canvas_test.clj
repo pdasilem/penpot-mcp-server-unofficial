@@ -190,3 +190,13 @@
   (let [code (:code (call modify/tools "set_opacity" {"file_id" fid "shape_id" sid "opacity" 0.5}))]
     (is (str/includes? code "const defaults = { rotation: 0, opacity: 1, visible: true, blocked: false };"))
     (is (str/includes? code "return { id, changed };"))))
+
+(deftest text-is-created-with-typography-and-color-tokens-in-one-call
+  (let [typo "88888888-0000-0000-0000-0000000000a1"
+        color "88888888-0000-0000-0000-0000000000a2"
+        {:keys [code args]} (call create/tools "create_text" {"file_id" fid "x" 0 "y" 0 "text" "Hi"
+                                                              "typography_token_id" typo "color_token_id" color})]
+    (is (= [typo color] [(get args "typographyTokenId") (get args "colorTokenId")]))
+    (is (str/includes? code "bindToken(args.typographyTokenId, 'typography', 'typography');"))
+    (is (str/includes? code "bindToken(args.colorTokenId, 'color', 'fill');"))))
+
