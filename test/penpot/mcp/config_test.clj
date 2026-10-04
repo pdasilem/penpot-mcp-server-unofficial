@@ -19,11 +19,14 @@
     (is (= "127.0.0.1" (:ws-host cfg)))
     (is (= 4402 (:ws-port cfg)))
     (is (= 300 (:version-check-interval cfg)))
-    (is (= "info" (:log-level cfg)))))
+    (is (= "info" (:log-level cfg)))
+    (is (= 64 (:import-max-asset-mb cfg)))))
 
 (deftest parses-numeric-settings-from-strings
-  (let [cfg (config/load-config (assoc required-env "MCP_PORT" "5000" "VERSION_CHECK_INTERVAL" "60"))]
+  (let [cfg (config/load-config (assoc required-env "MCP_PORT" "5000" "VERSION_CHECK_INTERVAL" "60"
+                                       "PENPOT_MCP_IMPORT_MAX_ASSET_MB" "256"))]
     (is (= 5000 (:mcp-port cfg)))
+    (is (= 256 (:import-max-asset-mb cfg)))
     (is (= 60 (:version-check-interval cfg)))))
 
 (deftest strips-trailing-slash-from-base-url

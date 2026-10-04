@@ -18,7 +18,7 @@ Tools marked `[editor]` run in the Penpot editor through the bundled MCP plugin.
 
 Shapes are read one page at a time. When the file is open in the editor, page lists, the page of a shape, the library and design tokens come from the editor, and `create_page`, `rename_page` and `delete_page` run there. Without the editor, tools that need the whole file (`search_shapes` without `page_id`, `get_component_instances`, the library tools, `list_media`, `compare_snapshots`) refuse files with more shapes than `FULL_FILE_SHAPES_MAX`; `list_media` and `compare_snapshots` refuse them with the editor too.
 
-Groups: `read` and `edit` are enabled by default, `manage` and `export` are enabled with `set_toolset` or `PENPOT_MCP_TOOLSETS`.
+Groups: `read` and `edit` are enabled by default, `manage`, `export` and `import` are enabled with `set_toolset` or `PENPOT_MCP_TOOLSETS`.
 
 Hints are the MCP tool annotations: read-only tools do not change Penpot data; destructive tools overwrite or delete existing data; idempotent tools have no further effect when repeated with the same arguments.
 
@@ -1494,4 +1494,52 @@ Group: `export`. Hints: read-only, idempotent
 | `format` | `png`, `svg` | no | png (default) or svg |
 | `mode` | `shape`, `fill` | no | shape (default) or fill |
 | `max_size` | integer | no | Longest side of a png in pixels, default 1568; smaller shapes keep their size |
+
+## Import of HTML designs (editor)
+
+### `import_html`
+
+Start importing a static HTML design, such as a Claude Design export, into a Penpot file as native boards with flex and grid layouts, text, fills, strokes and shadows. Upload the file first, without passing it through the model: curl --data-binary @design.html "<MCP URL>&upload=html" returns upload_id. Each element matching frame_selector becomes a board; with section_selector each section heading starts a new page named after it. Scripts are ignored. The import runs in the background frame by frame; poll get_import_status. Returns the job id and the number of frames and sections. [editor]
+
+Group: `import`. Hints: changes data, open world
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `upload_id` | uuid | yes | upload_id returned by the upload |
+| `frame_selector` | string | no | CSS selector of the frames, e.g. .screen; without it the whole page is one board |
+| `section_selector` | string | no | CSS selector of section headings, e.g. h2; each section goes to a new page |
+| `page_id` | uuid | no | Page for frames outside sections; defaults to the page open in the editor |
+| `viewport_width` | integer | no | Viewport width in pixels for percentages and media queries, default 1440 |
+| `font_family` | string | no | Font for families Penpot does not have, default sourcesanspro |
+
+### `get_import_status`
+
+Show the progress of an HTML import. While it runs: status (pending, running, cancelling), frames done of total and the frame in progress. Once finished (done, failed, cancelled): also the created boards with their pages, the error and failed frame, unsupported CSS with counts and fonts replaced by the fallback. Poll at most once a minute.
+
+Group: `import`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | uuid | yes | Job id from import_html |
+
+### `cancel_import`
+
+Stop an HTML import after the frame in progress; created boards stay. Returns the job status.
+
+Group: `import`. Hints: changes data, destructive, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | uuid | yes | Job id from import_html |
+
+### `resume_import`
+
+Continue a failed or cancelled HTML import from its first frame that was not created, for example after opening the file in the editor again. Returns the job status.
+
+Group: `import`. Hints: changes data
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | uuid | yes | Job id from import_html |
 

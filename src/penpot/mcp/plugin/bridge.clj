@@ -59,12 +59,18 @@
           (fail-pending! state session)
           (log/info "Penpot plugin disconnected"))))))
 
-(defn- upgrade-handler [jetty state mcp-key]
+(def ^:private min-idle-timeout-ms (* 10 60 1000))
+
+(defn idle-timeout-ms [{:keys [task-timeout-ms idle-timeout-ms]}]
+  (or idle-timeout-ms (max min-idle-timeout-ms (* 2 (or task-timeout-ms 0)))))
+
+(defn- upgrade-handler [jetty state mcp-key idle-ms]
   (WebSocketUpgradeHandler/from
    jetty
    (reify Consumer
      (accept [_ container]
        (.setMaxTextMessageSize container max-message-bytes)
+       (.setIdleTimeout container (java.time.Duration/ofMillis idle-ms))
        (.addMapping container endpoint-path
                     (reify WebSocketCreator
                       (createWebSocket [_ request response callback]
@@ -74,12 +80,12 @@
                               (Response/writeError ^Request request ^Response response ^org.eclipse.jetty.util.Callback callback 401)
                               nil)))))))))
 
-(defn start! [{:keys [host port mcp-key task-timeout-ms]}]
+(defn start! [{:keys [host port mcp-key task-timeout-ms] :as opts}]
   (let [state     (atom {:pending {}})
         jetty     (Server.)
         connector (doto (ServerConnector. jetty) (.setHost host) (.setPort port))]
     (.addConnector jetty connector)
-    (.setHandler jetty (upgrade-handler jetty state mcp-key))
+    (.setHandler jetty (upgrade-handler jetty state mcp-key (idle-timeout-ms opts)))
     (try
       (.start jetty)
       (catch Throwable t

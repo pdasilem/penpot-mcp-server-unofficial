@@ -143,7 +143,23 @@ claude plugin install penpot@penpot-mcp
 
 Other clients: configure a Streamable HTTP MCP server with the same URL.
 
-Tools are grouped into `read`, `edit`, `manage` (projects, files, versions, webhooks) and `export`. `PENPOT_MCP_TOOLSETS` sets the groups enabled at start; agents switch groups with `list_toolsets` and `set_toolset`. A switch applies to every session of the server until it restarts.
+Tools are grouped into `read`, `edit`, `manage` (projects, files, versions, webhooks), `export` and `import` (HTML designs). `PENPOT_MCP_TOOLSETS` sets the groups enabled at start; agents switch groups with `list_toolsets` and `set_toolset`. A switch applies to every session of the server until it restarts.
+
+## Importing HTML designs
+
+The `import` group turns a static HTML design, such as a Claude Design export, into native Penpot boards with flex and grid layouts. Enable it with `set_toolset` or `PENPOT_MCP_TOOLSETS`.
+
+1. Upload the file directly to the server, so that it does not pass through the model:
+
+   ```bash
+   curl --data-binary @design.html "https://penpot.example.com/mcp/stream?userToken=<MCP key>&upload=html"
+   ```
+
+   The answer holds `upload_id`. Uploads are limited to 20 MB each and 100 MB in total and kept in memory for an hour; a full store answers 507.
+2. `import_html` with the file id, `upload_id`, `frame_selector` (each match becomes a board) and optionally `section_selector` (each section heading starts a new page) starts a background job.
+3. `get_import_status` reports progress; `cancel_import` stops after the current frame; `resume_import` continues a failed or cancelled job.
+
+Scripts are ignored. The file must be open in the editor during the import. At most two imports run at once. The assets packed into a Claude Design bundle may unpack to at most `PENPOT_MCP_IMPORT_MAX_ASSET_MB`; raise it together with the server memory for designs with large images. Images on loopback, private, link-local or single-label hosts are skipped and reported as unsupported.
 
 ## Reverse proxy in front of Penpot
 
@@ -179,7 +195,8 @@ location /mcp/ {
 | `WS_PORT` | no | `4402` | Plugin WebSocket port, path `/mcp/ws` |
 | `VERSION_CHECK_INTERVAL` | no | `300` | Seconds between Penpot version checks |
 | `LOG_LEVEL` | no | `info` | `trace`, `debug`, `info`, `warn`, `error` |
-| `PENPOT_MCP_TOOLSETS` | no | `read,edit` | Tool groups enabled at start: `read`, `edit`, `manage`, `export`; `read` is always enabled |
+| `PENPOT_MCP_TOOLSETS` | no | `read,edit` | Tool groups enabled at start: `read`, `edit`, `manage`, `export`, `import`; `read` is always enabled |
+| `PENPOT_MCP_IMPORT_MAX_ASSET_MB` | no | `64` | Megabytes the assets packed into an imported HTML bundle may unpack to |
 | `FULL_FILE_SHAPES_MAX` | no | `5000` | Most shapes in a file that the server downloads whole; larger files are read page by page and through the open editor |
 
 ## Versions

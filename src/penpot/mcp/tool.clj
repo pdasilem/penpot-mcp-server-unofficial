@@ -77,7 +77,7 @@
 (defn user-error [message]
   (ex-info message {:type :tool/user-error}))
 
-(defn- user-error? [e]
+(defn user-error? [e]
   (= :tool/user-error (:type (ex-data e))))
 
 (defn invoke [{:keys [name input-schema handler]} {:keys [version-error] :as ctx} args]
