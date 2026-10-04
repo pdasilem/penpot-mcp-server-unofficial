@@ -113,3 +113,9 @@
       (is (= ["text" "board" "text"] (kinds node)))
       (is (= "fill" (get-in node [:children 1 :self :horizontalSizing])))
       (is (true? (get-in node [:children 1 :spacer]))))))
+
+(deftest names-never-end-up-blank
+  (let [{:keys [node]} (frame "<div id='f' style='width:400px'><table><tr><td>&nbsp;</td><td> x </td></tr></table></div>" "#f")
+        names          (map :name (tree-seq :children :children node))]
+    (is (every? #(and (string? %) (re-find #"[^\s ]" %)) names))
+    (is (not-any? #(re-find #"^[\s ]|[\s ]$" %) names))))

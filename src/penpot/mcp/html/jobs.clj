@@ -1,6 +1,7 @@
 (ns penpot.mcp.html.jobs
   (:refer-clojure :exclude [run!])
   (:require
+   [clojure.string :as str]
    [clojure.tools.logging :as log]
    [penpot.mcp.html.chunks :as chunks]
    [penpot.mcp.html.script :as script]
@@ -74,7 +75,7 @@
         page-id (section-page! ctx job section)
         key     (or page-id :target)
         {:keys [node unsupported]} (tree/frame element computed {:viewport (:viewport opts)})
-        {:keys [node lines]} (chunks/extract-lines (assoc node :name name))
+        {:keys [node lines]} (chunks/extract-lines (assoc node :name (or (not-empty (str/trim (str/replace (str name) #"[\s\u00a0]+" " "))) "frame")))
         calls   (chunks/split node (or (:chunk-size opts) default-chunk-size))
         built   (build-calls! ctx job index page-id calls (placement (get cursors key) (:width node)))
         _       (when (seq lines)

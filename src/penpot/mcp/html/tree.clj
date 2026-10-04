@@ -59,9 +59,13 @@
 (defn- node-name [^Element el]
   (str (.tagName el) (some->> (first (.classNames el)) (str "."))))
 
+(defn- clean-name [s fallback]
+  (let [t (-> (str s) (str/replace #"[\s\u00a0\u200b]+" " ") (str/replace #"^ | $" ""))
+        t (str/replace (subs t 0 (min 40 (count t))) #" $" "")]
+    (if (str/blank? t) fallback t)))
+
 (defn- text-name [{:keys [runs]}]
-  (let [t (str/trim (apply str (map :text runs)))]
-    (subs t 0 (min 40 (count t)))))
+  (clean-name (apply str (map :text runs)) "text"))
 
 (defn- row? [dir] (str/starts-with? (str dir) "row"))
 
