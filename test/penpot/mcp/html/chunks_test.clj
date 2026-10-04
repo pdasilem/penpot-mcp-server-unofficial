@@ -29,3 +29,16 @@
         shell (some #(when (= "cell" (get-in % [:node :name])) %) (apply concat calls))]
     (is (= {:row 1 :column 2} (get-in shell [:node :cell])))
     (is (= [] (get-in shell [:node :children])))))
+
+(deftest lines-are-taken-out-and-their-boards-keyed
+  (let [line  {:side "bottom" :width 1.0 :color "#eee" :opacity 1.0}
+        tree  (assoc (board "root" (assoc (board "top" (text "t")) :lines [line]) (text "x")) :lines [(assoc line :side "top")])
+        {:keys [node lines]} (chunks/extract-lines tree)]
+    (is (= [{:key "k0" :side "top" :width 1.0 :color "#eee" :opacity 1.0} {:key "k0.0" :side "bottom" :width 1.0 :color "#eee" :opacity 1.0}] lines))
+    (is (= ["k0" "k0.0"] (keep :key (tree-seq :children :children node))))
+    (is (not-any? :lines (tree-seq :children :children node)))))
+
+(deftest split-keeps-existing-keys
+  (let [tree  (assoc (board "root" (text "a") (text "b") (text "c")) :key "k0")
+        calls (chunks/split tree 2)]
+    (is (= "k0" (get-in (ffirst calls) [:node :key])))))

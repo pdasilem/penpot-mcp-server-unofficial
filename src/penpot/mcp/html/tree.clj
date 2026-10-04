@@ -42,7 +42,7 @@
   (let [pc (px-ctx style ctx)
         d  (box/decoration style pc)
         sp (box/spacing style pc)]
-    (boolean (or (seq (:fills d)) (seq (:strokes d)) (seq (:shadows d)) (:clip d)
+    (boolean (or (seq (:fills d)) (seq (:strokes d)) (seq (:lines d)) (seq (:shadows d)) (:clip d)
                  (some pos? (:padding sp))
                  (v/px (get style "width" "auto") pc) (v/px (get style "height" "auto") pc)
                  (flex? style) (table? style) (= "grid" (get style "display"))
@@ -82,7 +82,7 @@
 (declare element-node)
 
 (def ^:private spacer
-  {:kind "board" :name "spacer" :spacer true :fills [] :strokes [] :shadows [] :radius [0.0 0.0 0.0 0.0]
+  {:kind "board" :name "spacer" :spacer true :fills [] :strokes [] :lines [] :shadows [] :radius [0.0 0.0 0.0 0.0]
    :opacity 1.0 :clip false :children []
    :self {:horizontalSizing "fill" :verticalSizing "auto" :margin [0.0 0.0 0.0 0.0]}})
 

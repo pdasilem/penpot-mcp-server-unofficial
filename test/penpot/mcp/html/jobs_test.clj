@@ -28,6 +28,9 @@
                     (str/includes? code "return { removed")
                     {:result {:removed true} :changed true}
 
+                    (str/includes? code "return { lines")
+                    {:result {:lines (count (get args "lines"))} :changed true}
+
                     :else
                     (let [n     (swap! calls inc)
                           units (get args "units")
@@ -35,7 +38,10 @@
                           id    (if root? (str "board-" (swap! boards inc)) (get args "rootId"))]
                       (when (= n fail-at)
                         (throw (ex-info "Penpot editor reported an error: boom" {:type :tool/user-error})))
-                      {:result {:ids (into (or (get args "ids") {}) (keep (fn [u] (when-let [k (get-in u ["node" "key"])] [k (str "id-" k)])) units))
+                      {:result {:ids (into (or (get args "ids") {})
+                                           (for [u units n (tree-seq #(get % "children") #(get % "children") (get u "node"))
+                                                 :let [k (get n "key")] :when k]
+                                             [k (str "id-" k)]))
                                 :boardId id :name "x" :pageId (get args "pageId")
                                 :x (get args "x") :y (or (get args "y") 0) :width 400 :height 250
                                 :shapes 2 :substitutedFonts (if (= n 1) ["Inter"] [])}
@@ -54,7 +60,7 @@
 
 (defn- frame-args [editor]
   (->> @(:scripts editor)
-       (remove #(or (str/includes? % "penpot.createPage()") (str/includes? % "return { removed")))
+       (remove #(or (str/includes? % "penpot.createPage()") (str/includes? % "return { removed") (str/includes? % "return { lines")))
        (map fx/script-args)))
 
 (deftest frames-are-created-one-call-each-with-a-page-per-section
@@ -118,6 +124,20 @@
     (is (= "done" (:status (jobs/status ctx job-id))))
     (is (some #(str/includes? % "return { removed") @(:scripts editor)) "the half-built frame is removed first")
     (is (= "board-1" (get (fx/script-args (first (filter #(str/includes? % "return { removed") @(:scripts editor)))) "shapeId")))))
+
+(deftest one-sided-borders-are-drawn-after-the-frame
+  (let [doc      (Jsoup/parse "<style>.desk{width:400px;height:250px}.top{border-bottom:1px solid #eee;height:30px}</style><div class='desk'><div class='top'>t</div></div>")
+        computed (cascade/compute doc {:viewport 1440})
+        editor   (fake-editor {})
+        ctx      {:execute (:execute editor) :persistence {:dirty (atom #{})} :import-jobs (atom {})}
+        job      (jobs/create! ctx {:file-id fx/file-id :plan (frames/plan doc {:frame-selector ".desk"}) :computed computed
+                                    :opts {:viewport 1440 :font-family "sourcesanspro"}})]
+    (jobs/run! ctx (:id job))
+    (let [lines-call (last @(:scripts editor))
+          args       (fx/script-args lines-call)]
+      (is (str/includes? lines-call "return { lines"))
+      (is (= [{"key" "k0.0" "side" "bottom" "width" 1.0 "color" "#eeeeee" "opacity" 1.0}] (get args "lines")))
+      (is (contains? (get args "ids") "k0.0")))))
 
 (deftest unknown-job-is-reported
   (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Import job .* not found"

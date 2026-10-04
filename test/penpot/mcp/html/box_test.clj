@@ -26,15 +26,13 @@
 (deftest equal-borders-become-an-inner-stroke
   (let [d (box/decoration all-borders ctx)]
     (is (= [{:strokeColor "#c9cdd0" :strokeOpacity 1.0 :strokeWidth 1.0 :strokeStyle "solid" :strokeAlignment "inner"}] (:strokes d)))
-    (is (= [] (:shadows d)))))
+    (is (= [] (:lines d)))))
 
-(deftest partial-borders-become-inner-shadows
+(deftest partial-borders-become-lines
   (let [d (box/decoration (merge (border "bottom" "1px" "solid" "#e3e6e8") (border "left" "2px" "solid" "#000") (border "top" "0" "solid" "#000")) ctx)]
     (is (= [] (:strokes d)))
-    (is (= [{:style "inner-shadow" :offsetX 0.0 :offsetY -1.0 :blur 0.0 :spread 0.0 :hidden false :color {:color "#e3e6e8" :opacity 1.0}}
-            {:style "inner-shadow" :offsetX 2.0 :offsetY 0.0 :blur 0.0 :spread 0.0 :hidden false :color {:color "#000000" :opacity 1.0}}]
-           (:shadows d)))
-    (is (not (contains? d :lines)))))
+    (is (= [] (:shadows d)))
+    (is (= [{:side "bottom" :width 1.0 :color "#e3e6e8" :opacity 1.0} {:side "left" :width 2.0 :color "#000000" :opacity 1.0}] (:lines d)))))
 
 (deftest dashed-borders-keep-their-style
   (is (= "dashed" (get-in (box/decoration (assoc all-borders "border-top-style" "dashed" "border-right-style" "dashed"

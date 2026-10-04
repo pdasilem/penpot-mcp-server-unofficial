@@ -74,9 +74,11 @@
         page-id (section-page! ctx job section)
         key     (or page-id :target)
         {:keys [node unsupported]} (tree/frame element computed {:viewport (:viewport opts)})
-        node    (assoc node :name name)
+        {:keys [node lines]} (chunks/extract-lines (assoc node :name name))
         calls   (chunks/split node (or (:chunk-size opts) default-chunk-size))
         built   (build-calls! ctx job index page-id calls (placement (get cursors key) (:width node)))
+        _       (when (seq lines)
+                  (revision/mutate! ctx (:file-id job) script/lines-body {:lines lines :ids (:ids built) :page-id page-id}))
         result  (:last built)]
     (update-job! ctx id
                  (fn [j]

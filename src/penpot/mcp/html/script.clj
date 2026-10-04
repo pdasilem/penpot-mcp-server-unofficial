@@ -196,6 +196,35 @@
      "return { ids, boardId: root.id, name: root.name, pageId: penpot.currentPage.id, x: root.x, y: root.y, width: root.width, height: root.height,"
      "         shapes: count, substitutedFonts: [...substituted] };"])))
 
+(def lines-body
+  (str/join
+   "\n"
+   ["await focusPage(args.pageId);"
+    "const pairs = args.lines.map((line) => [line, penpot.currentPage.getShapeById(args.ids[line.key])]).filter(([, p]) => p);"
+    "const boxes = () => JSON.stringify(pairs.map(([, p]) => [p.x, p.y, p.width, p.height]));"
+    "let previous = '';"
+    "for (let i = 0; i < 30; i++) { const now = boxes(); if (now === previous) break; previous = now; await settle(100); }"
+    "const block = penpot.history.undoBlockBegin();"
+    "try {"
+    "  for (const [line, parent] of pairs) {"
+    "    const r = penpot.createRectangle();"
+    "    r.name = 'border-' + line.side;"
+    "    r.fills = [{ fillColor: line.color, fillOpacity: line.opacity }];"
+    "    parent.appendChild(r);"
+    "    if (r.layoutChild) r.layoutChild.absolute = true;"
+    "    const horizontal = line.side === 'top' || line.side === 'bottom';"
+    "    r.resize(horizontal ? parent.width : line.width, horizontal ? line.width : parent.height);"
+    "    r.x = line.side === 'right' ? parent.x + parent.width - line.width : parent.x;"
+    "    r.y = line.side === 'bottom' ? parent.y + parent.height - line.width : parent.y;"
+    "    r.constraintsHorizontal = horizontal ? 'leftright' : line.side;"
+    "    r.constraintsVertical = horizontal ? line.side : 'topbottom';"
+    "  }"
+    "  if (pairs.length) markChanged();"
+    "} finally {"
+    "  penpot.history.undoBlockFinish(block);"
+    "}"
+    "return { lines: pairs.length };"]))
+
 (def remove-body
   (str/join
    "\n"

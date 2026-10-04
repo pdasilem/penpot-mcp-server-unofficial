@@ -21,9 +21,22 @@
         base (cond-> {:parent parent-key} root (assoc :root true))]
     (if (<= n (:budget state))
       (add-unit state (assoc base :node node) n)
-      (-> state
-          (add-unit (assoc base :node (assoc node :children [] :key path)) 1)
-          (emit-children path (:children node) path)))))
+      (let [key (or (:key node) path)]
+        (-> state
+            (add-unit (assoc base :node (assoc node :children [] :key key)) 1)
+            (emit-children key (:children node) path))))))
 
 (defn split [node budget]
   (:calls (emit {:calls [[]] :room budget :budget budget} nil node "k0")))
+
+(defn- keyed [node path]
+  (let [lines (seq (:lines node))
+        node  (cond-> (dissoc node :lines) lines (assoc :key path))
+        kids  (map-indexed (fn [i c] (keyed c (str path "." i))) (:children node))]
+    {:node (cond-> node (contains? node :children) (assoc :children (mapv :node kids)))
+     :lines (into (mapv #(assoc % :key path) lines) (mapcat :lines kids))}))
+
+(defn extract-lines [node]
+  (let [{:keys [node lines]} (keyed node "k0")]
+    {:node node
+     :lines (mapv #(select-keys % [:key :side :width :color :opacity]) lines)}))
