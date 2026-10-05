@@ -16,7 +16,7 @@ Tools of the server, grouped as in the server, plus `list_toolsets` and `set_too
 
 Tools marked `[editor]` run in the Penpot editor through the bundled MCP plugin. They need the file open in a browser tab with MCP enabled; when the shape is on another page the editor switches to it. Reads issued after editor changes return the saved state.
 
-Shapes are read one page at a time. When the file is open in the editor, page lists, the page of a shape, the library and design tokens come from the editor, and `create_page`, `rename_page` and `delete_page` run there. Without the editor, tools that need the whole file (`search_shapes` without `page_id`, `get_component_instances`, the library tools, `list_media`, `compare_snapshots`) refuse files with more shapes than `FULL_FILE_SHAPES_MAX`; `list_media` and `compare_snapshots` refuse them with the editor too.
+Shapes are read one page at a time. When the file is open in the editor, page lists, the page of a shape, the library and design tokens come from the editor, and `create_page`, `rename_page` and `delete_page` run there. Without the editor, tools that need the whole file (`search_shapes` without `page_id`, `get_component_instances`, the library tools, `token_usage`, `list_media`, `compare_snapshots`) refuse files with more shapes than `FULL_FILE_SHAPES_MAX`; `list_media` and `compare_snapshots` refuse them with the editor too.
 
 Groups: `read` and `edit` are enabled by default, `manage`, `export` and `import` are enabled with `set_toolset` or `PENPOT_MCP_TOOLSETS`.
 
@@ -380,6 +380,20 @@ Group: `read`. Hints: read-only, idempotent
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `file_id` | uuid | yes | Penpot file id |
+
+### `token_usage`
+
+Audit how the file uses its design tokens, across every page including component pages. Returns a summary; unused: tokens no shape applies and no used token references, with their sets and values; missing: token names applied to shapes that are not in the token catalog; referenced_only: tokens used only through other tokens; references: tokens whose value contains other tokens and whether they are used; usage: for each used token the number of shapes, how many of them are component copies, the pages and the attributes it is applied to; raw_values: values set as plain numbers or colors instead of tokens (padding, the gaps the layout uses, radius, fill, stroke color and width, font size, and the size of fixed nested boards), grouped by top-level board and shape. Zeros, library colors and typographies are left out; component copies are not checked, so values overridden on a copy are not reported. Each raw value lists the tokens of the default theme combination with the same value in matches, or off_scale when none has it; summary.unresolved_tokens names tokens whose value could not be computed. sections picks the parts to return besides the summary. page_id narrows raw_values to one page; raw_values are paged with limit and cursor.
+
+Group: `read`. Hints: read-only, idempotent
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `page_id` | uuid | no | Only report raw values on this page |
+| `sections` | array of `unused`, `missing`, `referenced_only`, `references`, `usage`, `raw_values` | no | Parts to return besides the summary; all by default |
+| `limit` | integer | no | Maximum number of items to return, default 100 |
+| `cursor` | string | no | next_cursor from the previous call, to get the next items |
 
 ## Comments
 

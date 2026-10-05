@@ -24,6 +24,7 @@
    [penpot.mcp.tools.styles :as styles]
    [penpot.mcp.tools.text :as text]
    [penpot.mcp.tools.token-catalog :as token-catalog]
+   [penpot.mcp.tools.token-usage :as token-usage]
    [penpot.mcp.tools.tokens :as tokens]))
 
 (def ^:private manage-tools
@@ -63,6 +64,7 @@
                            pages/tools
                            shapes/tools
                            library/tools
+                           token-usage/tools
                            comments/tools
                            media/tools
                            integrations/tools
@@ -80,7 +82,7 @@
                            export/tools
                            design-system/tools
                            html-import/tools))
-        reads (set (map :name (concat shapes/tools library/tools)))]
+        reads (set (map :name (concat shapes/tools library/tools token-usage/tools)))]
     (mapv #(assoc % :toolset (if (reads (:name %)) "read" (toolset-of %))) tools)))
 
 (def instructions

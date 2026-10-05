@@ -161,6 +161,10 @@ The `import` group turns a static HTML design, such as a Claude Design export, i
 
 Scripts are ignored. The file must be open in the editor during the import. At most two imports run at once. The assets packed into a Claude Design bundle may unpack to at most `PENPOT_MCP_IMPORT_MAX_ASSET_MB`; raise it together with the server memory for designs with large images. Images on loopback, private, link-local or single-label hosts are skipped and reported as unsupported.
 
+## Auditing design token usage
+
+`token_usage` in the `read` group reads every page of a file, including component pages, and reports the tokens that no shape applies and no used token references, token names that shapes apply but the catalog no longer has, the tokens that are used only through other tokens, where each token is applied, and the padding, gap, radius, color, stroke and font size values set as plain values instead of tokens, grouped by top-level board. Each plain value names the tokens of the default theme combination that have the same value, or is marked off the scale.
+
 ## Exporting the design system
 
 `export_design_system` in the `export` group (enable it with `set_toolset` or `PENPOT_MCP_TOOLSETS`) writes the file's design tokens for every theme combination, together with the local library colors and typographies, as `css`, `scss`, `tailwind`, `typescript`, `dtcg`, `kotlin` or `swiftui` files. Token values are computed on the server the way Penpot computes them. The file must be open in the editor.

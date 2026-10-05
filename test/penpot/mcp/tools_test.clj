@@ -11,7 +11,7 @@
   #{"get_profile" "list_teams" "list_projects" "list_files" "search_files" "get_file" "get_file_libraries"
     "list_snapshots" "compare_snapshots" "list_shapes" "get_shape_tree" "get_shape" "search_shapes"
     "get_shape_css" "get_shape_svg" "list_components" "get_component_instances"
-    "get_colors" "get_typographies" "get_design_tokens" "list_comments" "list_media" "list_fonts"
+    "get_colors" "get_typographies" "get_design_tokens" "token_usage" "list_comments" "list_media" "list_fonts"
     "list_webhooks" "get_active_users"
     "create_project" "rename_project" "create_file" "rename_file" "duplicate_file" "delete_file"
     "create_snapshot" "create_page" "rename_page" "delete_page" "create_comment" "reply_comment"
@@ -57,7 +57,7 @@
   #{"get_profile" "list_teams" "list_projects" "list_files" "search_files" "get_file" "get_file_libraries"
     "list_snapshots" "compare_snapshots" "list_shapes" "get_shape_tree" "get_shape" "search_shapes"
     "get_shape_css" "get_shape_svg" "list_components" "get_component_instances"
-    "get_colors" "get_typographies" "get_design_tokens" "list_comments" "list_media" "list_fonts"
+    "get_colors" "get_typographies" "get_design_tokens" "token_usage" "list_comments" "list_media" "list_fonts"
     "list_webhooks" "get_active_users" "export_shape" "export_design_system" "get_import_status"})
 
 (def destructive-tools
