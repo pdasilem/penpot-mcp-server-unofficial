@@ -1,0 +1,148 @@
+{
+  "space": {
+    "base": {
+      "$type": "dimension",
+      "$value": {
+        "value": 4,
+        "unit": "px"
+      },
+      "$description": "Base step"
+    }
+  },
+  "radius": {
+    "card": {
+      "$type": "dimension",
+      "$value": {
+        "value": 8,
+        "unit": "px"
+      }
+    }
+  },
+  "font": {
+    "weight": {
+      "strong": {
+        "$type": "fontWeight",
+        "$value": 700
+      }
+    }
+  },
+  "type": {
+    "body": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": [
+          "Inter",
+          "Segoe UI"
+        ],
+        "fontSize": {
+          "value": 16,
+          "unit": "px"
+        },
+        "fontWeight": 400,
+        "lineHeight": 1.5
+      }
+    }
+  },
+  "shadow": {
+    "lift": {
+      "$type": "shadow",
+      "$value": [
+        {
+          "color": {
+            "colorSpace": "srgb",
+            "components": [
+              0,
+              0,
+              0
+            ],
+            "alpha": 0.25,
+            "hex": "#000000"
+          },
+          "offsetX": {
+            "value": 0,
+            "unit": "px"
+          },
+          "offsetY": {
+            "value": 2,
+            "unit": "px"
+          },
+          "blur": {
+            "value": 4,
+            "unit": "px"
+          },
+          "spread": {
+            "value": 0,
+            "unit": "px"
+          },
+          "inset": false
+        }
+      ]
+    }
+  },
+  "opacity": {
+    "muted": {
+      "$type": "number",
+      "$value": 0.5
+    }
+  },
+  "color": {
+    "bg": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          1,
+          1,
+          1
+        ],
+        "alpha": 1,
+        "hex": "#ffffff"
+      }
+    },
+    "text": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.06666666666666667,
+          0.06666666666666667,
+          0.06666666666666667
+        ],
+        "alpha": 1,
+        "hex": "#111111"
+      }
+    },
+    "accent": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          0.2,
+          0.4,
+          1
+        ],
+        "alpha": 1,
+        "hex": "#3366ff"
+      }
+    }
+  },
+  "library": {
+    "color": {
+      "Brand": {
+        "Primary": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.2,
+              0.4,
+              1
+            ],
+            "alpha": 1,
+            "hex": "#3366ff"
+          }
+        }
+      }
+    }
+  }
+}

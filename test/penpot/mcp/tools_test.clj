@@ -30,7 +30,7 @@
     "set_position" "resize" "rotate" "rename_shape" "set_fills" "set_strokes" "set_opacity" "set_radius"
     "set_visible" "set_blocked" "set_parent_index" "move_to_parent" "delete_shapes"
     "set_flex_layout" "set_grid_layout" "remove_layout" "set_text_content" "set_text_style"
-    "set_token" "remove_token" "export_shape"})
+    "set_token" "remove_token" "export_shape" "export_design_system"})
 
 (deftest registers-tools
   (is (= expected-tools (set (map :name tools/all)))))
@@ -58,7 +58,7 @@
     "list_snapshots" "compare_snapshots" "list_shapes" "get_shape_tree" "get_shape" "search_shapes"
     "get_shape_css" "get_shape_svg" "list_components" "get_component_instances"
     "get_colors" "get_typographies" "get_design_tokens" "list_comments" "list_media" "list_fonts"
-    "list_webhooks" "get_active_users" "export_shape" "get_import_status"})
+    "list_webhooks" "get_active_users" "export_shape" "export_design_system" "get_import_status"})
 
 (def destructive-tools
   #{"rename_project" "rename_file" "delete_file" "rename_page" "delete_page" "resolve_comment"

@@ -28,9 +28,17 @@
 (defn query-token [^String query]
   (query-param query "userToken"))
 
+(defn bearer-token [^String header]
+  (when header
+    (second (re-matches #"(?i)Bearer +(\S+)" header))))
+
+(defn request-token [^HttpServletRequest req]
+  (or (bearer-token (.getHeader req "Authorization"))
+      (query-token (.getQueryString req))))
+
 (defn user-token-filter [expected]
   (reify Filter
     (doFilter [_ req res chain]
-      (if (valid-token? expected (query-token (.getQueryString ^HttpServletRequest req)))
+      (if (valid-token? expected (request-token req))
         (.doFilter chain req res)
         (.sendError ^HttpServletResponse res 401)))))

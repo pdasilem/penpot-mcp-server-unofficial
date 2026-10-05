@@ -1,10 +1,10 @@
 (ns penpot.mcp.tools.library
   (:require
    [clojure.string :as str]
-   [app.common.types.token :as cto]
    [app.common.types.tokens-lib :as ctob]
    [penpot.mcp.penpot.file :as file]
    [penpot.mcp.plugin.read :as read]
+   [penpot.mcp.plugin.tokens :as plugin-tokens]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.common :as common]))
 
@@ -84,28 +84,13 @@
              (mapv #(token-theme lib %) (remove ctob/hidden-theme? (ctob/get-themes lib)))
              [])})
 
-(defn- token-type-name [plugin-type]
-  (or (some-> (cto/dtcg-token-type->token-type plugin-type) name) plugin-type))
+(defn- display-token [token]
+  (update token :type #(if (keyword? %) (name %) %)))
 
-(defn- token-value [value]
-  (cond
-    (map? value) (into {} (map (fn [[k v]] [(or (cto/composite-dtcg-token-type->token-type (name k)) (read/file-key k)) v]))
-                       value)
-    (sequential? value) (mapv #(if (map? %) (read/file-keys %) %) value)
-    :else value))
-
-(defn- editor-token [token]
-  (-> (select-keys token [:id :name :type :value :description])
-      (update :type token-type-name)
-      (update :value token-value)))
-
-(defn- hidden-theme? [{:keys [group name]}]
-  (and (= ctob/hidden-theme-group group) (= ctob/hidden-theme-name name)))
-
-(defn- editor-tokens [{:keys [sets themes]}]
-  {:sets (mapv (fn [s] (assoc (select-keys s [:id :name :active]) :tokens (mapv editor-token (:tokens s)))) sets)
-   :themes (mapv (fn [t] (update (select-keys t [:id :group :name :active :sets]) :sets #(vec (sort %))))
-                 (remove hidden-theme? themes))})
+(defn- editor-tokens [raw]
+  (-> (plugin-tokens/editor-catalog raw)
+      (update :sets (fn [sets] (mapv (fn [s] (update s :tokens #(mapv display-token %))) sets)))
+      (update :themes (fn [themes] (mapv (fn [t] (update t :sets #(vec (sort %)))) themes)))))
 
 (defn- design-tokens [ctx {:keys [file_id]}]
   (tool/json-result

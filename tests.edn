@@ -1,7 +1,10 @@
 #kaocha/v1
 {:tests [{:id :unit
           :test-paths ["test"]
-          :skip-meta [:integration]}
+          :skip-meta [:integration :reference]}
          {:id :integration
           :test-paths ["test"]
-          :focus-meta [:integration]}]}
+          :focus-meta [:integration]}
+         {:id :reference
+          :test-paths ["test"]
+          :focus-meta [:reference]}]}
