@@ -1,6 +1,7 @@
 (ns penpot.mcp.server
   (:require
    [penpot.mcp.auth :as auth]
+   [penpot.mcp.exports.endpoint :as exports-endpoint]
    [penpot.mcp.html.upload-endpoint :as upload-endpoint]
    [penpot.mcp.penpot.version :as version]
    [penpot.mcp.tool :as tool])
@@ -111,6 +112,9 @@
         mcp       (build-mcp transport opts ctx)
         handler   (doto (ServletContextHandler.)
                     (.setContextPath "/")
+                    (cond-> (:exports ctx)
+                      (.addFilter (FilterHolder. ^Filter (exports-endpoint/export-filter (:exports ctx)))
+                                  "/mcp" (EnumSet/of DispatcherType/REQUEST)))
                     (.addFilter (FilterHolder. ^Filter (auth/user-token-filter mcp-key)) "/*" (EnumSet/of DispatcherType/REQUEST))
                     (cond-> (:uploads ctx)
                       (.addFilter (FilterHolder. ^Filter (upload-endpoint/upload-filter (:uploads ctx) (or upload-limit upload-endpoint/default-limit)))

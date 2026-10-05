@@ -12,7 +12,7 @@ A release `X.Y.Z.N` is built for Penpot `X.Y.Z` and works only with that Penpot 
 |---|---|
 | Penpot RPC API | Reading files, shapes, libraries, design tokens, comments, versions; projects, files, pages, comments, snapshots, media |
 | Penpot notifications WebSocket | Users currently in a file |
-| Penpot's bundled MCP plugin | Every change in the editor: shapes, layout, text, styles, components and variants, library colors and typographies, design tokens, token sets and themes; image export |
+| Penpot's bundled MCP plugin | Every change in the editor: shapes, layout, text, styles, components and variants, library colors and typographies, design tokens, token sets and themes; image export; reading the design system for code export |
 
 - Penpot's nginx proxies `/mcp/stream` (MCP clients) and `/mcp/ws` (the bundled plugin) to the server, so TLS and the public address come from Penpot.
 - Canvas tools run in the Penpot editor. The file must be open in a browser tab with MCP enabled; when a shape is on another page the editor switches to it.
@@ -143,7 +143,7 @@ claude plugin install penpot@penpot-mcp
 
 Other clients: configure a Streamable HTTP MCP server with the same URL.
 
-Tools are grouped into `read`, `edit`, `manage` (projects, files, versions, webhooks), `export` and `import` (HTML designs). `PENPOT_MCP_TOOLSETS` sets the groups enabled at start; agents switch groups with `list_toolsets` and `set_toolset`. A switch applies to every session of the server until it restarts.
+Tools are grouped into `read`, `edit`, `manage` (projects, files, versions, webhooks), `export` (images and the design system as code) and `import` (HTML designs). `PENPOT_MCP_TOOLSETS` sets the groups enabled at start; agents switch groups with `list_toolsets` and `set_toolset`. A switch applies to every session of the server until it restarts.
 
 ## Importing HTML designs
 
@@ -160,6 +160,20 @@ The `import` group turns a static HTML design, such as a Claude Design export, i
 3. `get_import_status` reports progress; `cancel_import` stops after the current frame; `resume_import` continues a failed or cancelled job.
 
 Scripts are ignored. The file must be open in the editor during the import. At most two imports run at once. The assets packed into a Claude Design bundle may unpack to at most `PENPOT_MCP_IMPORT_MAX_ASSET_MB`; raise it together with the server memory for designs with large images. Images on loopback, private, link-local or single-label hosts are skipped and reported as unsupported.
+
+## Exporting the design system
+
+`export_design_system` in the `export` group (enable it with `set_toolset` or `PENPOT_MCP_TOOLSETS`) writes the file's design tokens for every theme combination, together with the local library colors and typographies, as `css`, `scss`, `tailwind`, `typescript`, `dtcg`, `kotlin` or `swiftui` files. Token values are computed on the server the way Penpot computes them. The file must be open in the editor.
+
+The answer holds a one-time download that the server keeps for an hour, as a curl command for the MCP endpoint without the MCP key:
+
+```bash
+curl -o design-system.zip "https://penpot.example.com/mcp/stream?export=<id>"
+```
+
+The archive holds the generated files and `problems.json`. Each entry of `problems.json` has `code`, `severity` (`error` when something was left out of the files, `warning` otherwise), `subject` (`kind` and `name`), the theme `combinations` it applies to and `details`.
+
+After the data is read from the editor, computing and writing an export takes at most 30 seconds; two exports run at once and four more wait up to 30 seconds. One export may be at most 20 MB. Exports live in the memory of the server instance that made them: a restart drops them, and with several instances the download must reach the same one. The download id is in the request URL, so Penpot's nginx log holds it until the download; restrict access to that log.
 
 ## Reverse proxy in front of Penpot
 

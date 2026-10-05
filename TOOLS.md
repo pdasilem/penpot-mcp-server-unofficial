@@ -1523,6 +1523,23 @@ Group: `export`. Hints: read-only, idempotent
 | `mode` | `shape`, `fill` | no | shape (default) or fill |
 | `max_size` | integer | no | Longest side of a png in pixels, default 1568; smaller shapes keep their size |
 
+### `export_design_system`
+
+Export the file's design tokens for every theme combination, with the local library colors and typographies, as css, scss, tailwind, typescript, dtcg, kotlin or swiftui files. Values are computed like Penpot computes them. The result is a one-time download kept for an hour: give the user the curl command with the MCP server URL without its query string in place of <MCP address>. problems.json in the archive lists tokens left out and why. [editor]
+
+Group: `export`. Hints: read-only
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `file_id` | uuid | yes | Penpot file id |
+| `platform` | `css`, `scss`, `tailwind`, `typescript`, `dtcg`, `kotlin`, `swiftui` | yes | Output format |
+| `options` | object | no | Format options: prefix, color_scheme_group, version, package, type_name |
+| `options.prefix` | string | no | CSS, SCSS and Tailwind variable prefix |
+| `options.color_scheme_group` | string | no | Theme group whose light and dark themes follow the system color scheme |
+| `options.version` | `3`, `4` | no | Tailwind version, 4 by default |
+| `options.package` | string | no | Kotlin package, required for kotlin |
+| `options.type_name` | string | no | Kotlin or Swift type name, from the file name by default |
+
 ## Import of HTML designs (editor)
 
 ### `import_html`

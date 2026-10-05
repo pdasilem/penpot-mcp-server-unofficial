@@ -1,0 +1,42 @@
+:root {
+  --sv-space-base: 4px;
+  --sv-radius-card: 8px;
+  --sv-font-weight-strong: 700;
+  --sv-font-weight-strong-style: italic;
+  --sv-type-body-font-family: Inter, "Segoe UI";
+  --sv-type-body-font-size: 16px;
+  --sv-type-body-font-weight: 400;
+  --sv-type-body-line-height: 1.5;
+  --sv-shadow-lift: 0px 2px 4px 0px rgba(0, 0, 0, 0.25);
+  --sv-opacity-muted: 0.5;
+  --sv-color-bg: #ffffff;
+  --sv-color-text: #111111;
+  --sv-color-accent: #3366ff;
+  --sv-library-color-brand-primary: #3366ff;
+}
+
+:root:is([data-brand="a"], :not([data-brand]))[data-mode="dark"] {
+  --sv-color-bg: #111111;
+}
+
+:root[data-brand="b"]:is([data-mode="light"], :not([data-mode])) {
+  --sv-color-accent: #ff3366;
+}
+
+:root[data-brand="b"][data-mode="dark"] {
+  --sv-color-bg: #111111;
+  --sv-color-accent: #ff3366;
+}
+
+@media (prefers-color-scheme: dark) {
+:root:not([data-mode]):is([data-brand="a"], :not([data-brand])) {
+  --sv-color-bg: #111111;
+}
+}
+
+@media (prefers-color-scheme: dark) {
+:root:not([data-mode])[data-brand="b"] {
+  --sv-color-bg: #111111;
+  --sv-color-accent: #ff3366;
+}
+}

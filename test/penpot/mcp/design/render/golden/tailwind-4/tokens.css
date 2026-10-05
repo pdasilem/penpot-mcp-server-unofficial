@@ -1,0 +1,33 @@
+@theme {
+  --spacing-sv-base: 4px;
+  --radius-sv-card: 8px;
+  --font-weight-sv-strong: 700;
+  --text-sv-type-body: 16px;
+  --text-sv-type-body--line-height: 1.5;
+  --text-sv-type-body--font-weight: 400;
+  --font-sv-type-body: Inter, "Segoe UI";
+  --shadow-sv-lift: 0px 2px 4px 0px rgba(0, 0, 0, 0.25);
+  --color-sv-bg: #ffffff;
+  --color-sv-text: #111111;
+  --color-sv-accent: #3366ff;
+  --color-sv-brand-primary: #3366ff;
+}
+
+:root {
+  --sv-opacity-muted: 0.5;
+}
+
+:root:is([data-brand="a"], :not([data-brand]))[data-mode="dark"] {
+  --color-sv-bg: #111111;
+}
+
+:root[data-brand="b"]:is([data-mode="light"], :not([data-mode])) {
+  --color-sv-accent: #ff3366;
+}
+
+:root[data-brand="b"][data-mode="dark"] {
+  --color-sv-bg: #111111;
+  --color-sv-accent: #ff3366;
+}
+
+@custom-variant dark (&:where([data-mode=dark], [data-mode=dark] *));

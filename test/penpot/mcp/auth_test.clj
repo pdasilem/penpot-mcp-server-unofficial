@@ -25,3 +25,20 @@
 
 (deftest malformed-token-encoding-is-rejected
   (is (nil? (auth/query-token "userToken=%zz"))))
+
+(defn- request [authorization query]
+  (reify jakarta.servlet.http.HttpServletRequest
+    (getHeader [_ name] (when (= "Authorization" name) authorization))
+    (getQueryString [_] query)))
+
+(deftest reads-a-bearer-token-from-the-authorization-header
+  (is (= "abc" (auth/bearer-token "Bearer abc")))
+  (is (= "abc" (auth/bearer-token "bearer  abc")))
+  (is (nil? (auth/bearer-token "Basic abc")))
+  (is (nil? (auth/bearer-token "Bearer")))
+  (is (nil? (auth/bearer-token nil))))
+
+(deftest the-header-token-wins-and-the-query-token-still-works
+  (is (= "header" (auth/request-token (request "Bearer header" "userToken=query"))))
+  (is (= "query" (auth/request-token (request nil "userToken=query"))))
+  (is (nil? (auth/request-token (request nil nil)))))

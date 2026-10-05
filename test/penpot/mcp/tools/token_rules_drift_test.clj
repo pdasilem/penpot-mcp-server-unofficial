@@ -1,21 +1,15 @@
 (ns penpot.mcp.tools.token-rules-drift-test
   (:require
-   [clojure.edn :as edn]
-   [clojure.java.io :as io]
    [clojure.set :as set]
    [clojure.test :refer [deftest is]]
+   [penpot.mcp.penpot-source :as penpot-source]
    [penpot.mcp.tools.token-rules :as rules]))
 
 (def ^:private application-path
   "frontend/src/app/main/data/workspace/tokens/application.cljs")
 
-(defn- penpot-checkout []
-  (let [sha  (get-in (edn/read-string (slurp "deps.edn")) [:deps 'penpot/common :git/sha])
-        root (or (System/getenv "GITLIBS") (str (System/getProperty "user.home") "/.gitlibs"))]
-    (io/file root "libs" "penpot" "common" sha)))
-
 (defn- token-properties-form []
-  (let [source (slurp (io/file (penpot-checkout) application-path))
+  (let [source (penpot-source/read-file application-path)
         start  (.indexOf source "(def token-properties")
         end    (.indexOf source "\n(defn" start)]
     (binding [*default-data-reader-fn* (fn [_ v] v)]

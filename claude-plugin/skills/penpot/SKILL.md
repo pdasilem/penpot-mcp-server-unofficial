@@ -14,7 +14,7 @@ The server starts with the `read` and `edit` groups. Enable another group with `
 | `read` | Finding files, pages and shapes; CSS and SVG of shapes; library; design tokens; comments |
 | `edit` | Every change on the canvas, components, variants, design tokens, pages, comments, media upload |
 | `manage` | Creating, renaming, duplicating and deleting projects and files; versions (snapshots); webhooks |
-| `export` | `export_shape`: a board or shape as PNG or SVG |
+| `export` | `export_shape`: a board or shape as PNG or SVG; `export_design_system`: design tokens, library colors and typographies as code |
 | `import` | Importing a static HTML design as native boards: [references/import.md](references/import.md) |
 
 ## Finding things

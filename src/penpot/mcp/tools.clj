@@ -5,6 +5,7 @@
    [penpot.mcp.tools.comments :as comments]
    [penpot.mcp.tools.components :as components]
    [penpot.mcp.tools.create :as create]
+   [penpot.mcp.tools.design-system :as design-system]
    [penpot.mcp.tools.export :as export]
    [penpot.mcp.tools.html-import :as html-import]
    [penpot.mcp.tools.files :as files]
@@ -34,7 +35,7 @@
     "list_snapshots" "compare_snapshots" "list_comments" "list_media" "list_fonts" "get_active_users"})
 
 (def ^:private export-tools
-  #{"export_shape"})
+  #{"export_shape" "export_design_system"})
 
 (def ^:private import-tools
   (set (map :name html-import/tools)))
@@ -51,7 +52,7 @@
   {"read" "read files, pages, shapes, CSS and SVG, library, design tokens, comments, media and who is online"
    "edit" "create and change shapes, layout, text, styles, components, variants, design tokens, pages, comments and media"
    "manage" "projects, files, versions and webhooks"
-   "export" "render shapes as images or SVG"
+   "export" "render shapes as images or SVG and export the design system as code"
    "import" "import static HTML designs as native Penpot boards"})
 
 (def all
@@ -77,6 +78,7 @@
                            tokens/tools
                            token-catalog/tools
                            export/tools
+                           design-system/tools
                            html-import/tools))
         reads (set (map :name (concat shapes/tools library/tools)))]
     (mapv #(assoc % :toolset (if (reads (:name %)) "read" (toolset-of %))) tools)))

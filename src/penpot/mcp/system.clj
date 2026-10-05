@@ -1,6 +1,7 @@
 (ns penpot.mcp.system
   (:require
    [clojure.tools.logging :as log]
+   [penpot.mcp.exports :as exports]
    [penpot.mcp.html.uploads :as uploads]
    [penpot.mcp.penpot.notifications :as notifications]
    [penpot.mcp.penpot.rpc :as rpc]
@@ -62,8 +63,11 @@
                                                  :mcp-key (:penpot-mcp-key cfg)
                                                  :task-timeout-ms plugin-task-timeout-ms}))
                          bridge/stop!]
+                        [:exports
+                         (fn [_] (exports/start! {:now #(System/currentTimeMillis)}))
+                         exports/stop!]
                         [:mcp
-                         (fn [{:keys [bridge]}]
+                         (fn [{:keys [bridge exports]}]
                            (server/start! {:host (:mcp-host cfg)
                                            :port (:mcp-port cfg)
                                            :mcp-key (:penpot-mcp-key cfg)
@@ -83,6 +87,7 @@
                                                  :file-cache (atom nil)
                                                  :plugin-lock {:lock (ReentrantLock.) :wait-ms plugin-lock-wait-ms}
                                                  :uploads (uploads/store {:now #(System/currentTimeMillis)})
+                                                 :exports exports
                                                  :import-jobs (atom {})
                                                  :version-error #(version/check-error @version-state)}}))
                          server/stop!]])]

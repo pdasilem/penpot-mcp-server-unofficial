@@ -1,6 +1,6 @@
 services:
   penpot-mcp:
-    image: ghcr.io/pdasilem/penpot-mcp-server-unofficial:2.18.1.5
+    image: ghcr.io/pdasilem/penpot-mcp-server-unofficial:2.18.1.6
     restart: unless-stopped
     depends_on:
       - penpot-frontend

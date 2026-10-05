@@ -26,3 +26,10 @@
 - `attr` binds one attribute, e.g. `strokeColor` for a color token. A wrong attribute is rejected with the list of allowed ones.
 - `remove_token` takes `token_id` to unbind a token everywhere on the shape, or `attr` to unbind one attribute.
 - Groups take no tokens; bind tokens to the shapes inside.
+
+## Export as code
+
+- `export_design_system` (group `export`, file open in the editor) writes the tokens of every theme combination with the library colors and typographies as `css`, `scss`, `tailwind`, `typescript`, `dtcg`, `kotlin` or `swiftui`.
+- `kotlin` needs `options.package`; `kotlin` and `swiftui` take `options.type_name`, from the file name by default. `css`, `scss` and `tailwind` take `options.prefix`; `options.color_scheme_group` makes the light and dark themes of that group follow the system color scheme.
+- Give the user the `download` curl command with the MCP server URL without its query string in place of `<MCP address>`. The download works once and for an hour.
+- `problems.json` in the archive lists what was left out (`severity` `error`) and what to know (`warning`), each with `code`, `subject` and the theme `combinations` it applies to.

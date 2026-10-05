@@ -2,6 +2,9 @@
   (:require
    [clojure.data.json]
    [clojure.test :refer [deftest is use-fixtures]]
+   [penpot.mcp.exports]
+   [penpot.mcp.fixtures]
+   [penpot.mcp.tools.design-system]
    [penpot.mcp.html.upload-endpoint]
    [penpot.mcp.html.uploads]
    [penpot.mcp.penpot.version :as version]
@@ -35,6 +38,8 @@
 
 (def uploads (penpot.mcp.html.uploads/store {:now #(System/currentTimeMillis)}))
 
+(def exports (penpot.mcp.exports/store {:now #(System/currentTimeMillis)}))
+
 (use-fixtures :once
   (fn [run]
     (let [s (server/start! {:host "127.0.0.1"
@@ -43,7 +48,7 @@
                             :tools [echo-tool image-tool nested-tool]
                             :instructions "Shared rules"
                             :upload-limit 2048
-                            :ctx {:version-error (fn [] @version-error) :uploads uploads}})]
+                            :ctx {:version-error (fn [] @version-error) :uploads uploads :exports exports}})]
       (try
         (binding [*server* s] (run))
         (finally (server/stop! s))))))
@@ -166,3 +171,51 @@
                (getWriter [_] (java.io.PrintWriter. out)))]
     (.doFilter f req res nil)
     (is (= 507 @status))))
+
+(defn- raw-get [path]
+  (let [client (java.net.http.HttpClient/newHttpClient)
+        req    (-> (java.net.http.HttpRequest/newBuilder (java.net.URI/create (str "http://127.0.0.1:" (:port *server*) path)))
+                   (.GET)
+                   (.build))
+        resp   (.send client req (java.net.http.HttpResponse$BodyHandlers/ofByteArray))]
+    {:status (.statusCode resp) :body (.body resp) :type (.orElse (.firstValue (.headers resp) "Content-Type") nil)}))
+
+(deftest an-export-downloads-once-without-the-mcp-key
+  (let [data (penpot.mcp.exports/zip [{:path "tokens.css" :content ":root {}"}])
+        id   (:id (penpot.mcp.exports/put! exports data))
+        first-get (raw-get (str "/mcp?export=" id))]
+    (is (= 200 (:status first-get)))
+    (is (= "application/zip" (:type first-get)))
+    (is (= (seq data) (seq (:body first-get))))
+    (is (= 404 (:status (raw-get (str "/mcp?export=" id)))))))
+
+(deftest unknown-or-malformed-export-ids-are-not-found
+  (is (= 404 (:status (raw-get "/mcp?export=0123456789abcdef0123456789abcdef"))))
+  (is (= 404 (:status (raw-get "/mcp?export=not-an-id")))))
+
+(deftest a-repeated-export-parameter-still-needs-the-mcp-key
+  (is (= 401 (:status (raw-get "/mcp?export=0123456789abcdef0123456789abcdef&export=0123456789abcdef0123456789abcdef")))))
+
+(deftest other-paths-still-need-the-mcp-key
+  (is (= 401 (:status (raw-get "/mcp")))))
+
+(deftest an-exported-design-system-downloads-through-the-mcp-address
+  (let [store  (penpot.mcp.exports/store {:now #(System/currentTimeMillis)})
+        editor {:tokens {:sets [{:id "s" :name "core" :active true :tokens [{:id "t" :name "space.base" :type "spacing" :value "4"}]}]
+                         :themes []}
+                :colors [] :typographies [] :fileName "Kit"}
+        ctx    (assoc (penpot.mcp.fixtures/plugin-ctx editor) :version-error (constantly nil) :exports store)
+        s      (server/start! {:host "127.0.0.1" :port 0 :mcp-key mcp-key :tools penpot.mcp.tools.design-system/tools :ctx ctx})]
+    (try
+      (let [c      (client/connect (str "http://127.0.0.1:" (:port s) "/mcp?userToken=" mcp-key))
+            result (clojure.data.json/read-str (get-in (client/call-tool c "export_design_system" {:file_id (str penpot.mcp.fixtures/file-id) :platform "css"})
+                                                       [:content 0 :text]))
+            id     (get result "export_id")
+            get-zip (fn [] (let [http (java.net.http.HttpClient/newHttpClient)
+                                 req  (-> (java.net.http.HttpRequest/newBuilder (java.net.URI/create (str "http://127.0.0.1:" (:port s) "/mcp?export=" id)))
+                                          (.GET) (.build))]
+                             (.statusCode (.send http req (java.net.http.HttpResponse$BodyHandlers/ofByteArray)))))]
+        (is (re-matches #"[0-9a-f]{32}" id))
+        (is (= 200 (get-zip)))
+        (is (= 404 (get-zip))))
+      (finally (server/stop! s)))))
