@@ -27,6 +27,13 @@
 - `remove_token` takes `token_id` to unbind a token everywhere on the shape, or `attr` to unbind one attribute.
 - Groups take no tokens; bind tokens to the shapes inside.
 
+## Auditing token usage
+
+- `token_usage` (group `read`) reads every page of the file once and returns `unused` tokens, `missing` token names that shapes still apply, `referenced_only` tokens, `references` between tokens, `usage` per token, and `raw_values`: plain numbers and colors grouped by top-level board and shape.
+- A raw value with `matches` has the same value as those tokens of the default theme combination; one with `off_scale` matches no token. `summary.unresolved_tokens` lists tokens whose value could not be computed, so they are absent from `matches`.
+- Component copies are not checked; values overridden on a copy are not reported.
+- `sections` returns only the named parts besides the summary. `page_id` narrows `raw_values` to one page; page through `raw_values` with `limit` and `cursor`.
+
 ## Export as code
 
 - `export_design_system` (group `export`, file open in the editor) writes the tokens of every theme combination with the library colors and typographies as `css`, `scss`, `tailwind`, `typescript`, `dtcg`, `kotlin` or `swiftui`.

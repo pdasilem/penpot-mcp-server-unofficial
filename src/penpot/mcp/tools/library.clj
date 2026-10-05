@@ -1,12 +1,11 @@
 (ns penpot.mcp.tools.library
   (:require
    [clojure.string :as str]
-   [app.common.types.tokens-lib :as ctob]
    [penpot.mcp.penpot.file :as file]
    [penpot.mcp.plugin.read :as read]
-   [penpot.mcp.plugin.tokens :as plugin-tokens]
    [penpot.mcp.tool :as tool]
-   [penpot.mcp.tools.common :as common]))
+   [penpot.mcp.tools.common :as common]
+   [penpot.mcp.tools.token-source :as token-source]))
 
 (defn- from-editor [ctx file-id body]
   (some-> (read/in-editor ctx file-id body {}) :value))
@@ -64,39 +63,16 @@
                                     (sort-by (juxt :path :name))
                                     (mapv #(select-keys % typography-keys))) args)))
 
-(defn- token-set [lib token-set]
-  {:id (ctob/get-id token-set)
-   :name (ctob/get-name token-set)
-   :active (boolean (ctob/token-set-active? lib (ctob/get-name token-set)))
-   :tokens (mapv #(select-keys % [:id :name :type :value :description])
-                 (vals (ctob/get-tokens lib (ctob/get-id token-set))))})
-
-(defn- token-theme [lib theme]
-  {:id (:id theme)
-   :group (:group theme)
-   :name (:name theme)
-   :active (boolean (ctob/theme-active? lib (:id theme)))
-   :sets (vec (sort (:sets theme)))})
-
-(defn- file-tokens [lib]
-  {:sets (if lib (mapv #(token-set lib %) (ctob/get-sets lib)) [])
-   :themes (if lib
-             (mapv #(token-theme lib %) (remove ctob/hidden-theme? (ctob/get-themes lib)))
-             [])})
-
 (defn- display-token [token]
   (update token :type #(if (keyword? %) (name %) %)))
 
-(defn- editor-tokens [raw]
-  (-> (plugin-tokens/editor-catalog raw)
+(defn- displayed [catalog]
+  (-> catalog
       (update :sets (fn [sets] (mapv (fn [s] (update s :tokens #(mapv display-token %))) sets)))
       (update :themes (fn [themes] (mapv (fn [t] (update t :sets #(vec (sort %)))) themes)))))
 
 (defn- design-tokens [ctx {:keys [file_id]}]
-  (tool/json-result
-   (if-let [catalog (from-editor ctx file_id read/tokens-body)]
-     (editor-tokens catalog)
-     (file-tokens (:tokens-lib (whole-data ctx file_id))))))
+  (tool/json-result (displayed (token-source/catalog ctx file_id))))
 
 (def ^:private file-only
   [:map {:closed true} common/file-id-param])

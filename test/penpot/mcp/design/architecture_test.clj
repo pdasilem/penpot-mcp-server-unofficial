@@ -16,13 +16,15 @@
    "sd" #{"sd" "js" "expr" "calc" "color" "budget"}
    "tokens" #{"tokens" "sd" "color" "js" "budget"}
    "export" #{"export" "color" "js"}
-   "render" #{"render" "js"}})
+   "render" #{"render" "js"}
+   "usage" #{"usage" "color"}})
 
 (def ^:private allowed-outside
   {:all #{"clojure.string" "clojure.tools.logging" "java.math" "java.util" "java.util.concurrent" "java.util.concurrent.atomic"}
    "tokens" #{"app.common.data" "app.common.files.tokens" "app.common.path-names" "app.common.types.token" "cuerdas.core"}
    "export" #{"app.common.types.token"}
-   "render" #{"clojure.data.json"}})
+   "render" #{"clojure.data.json"}
+   "usage" #{"app.common.types.token"}})
 
 (defn- read-forms [file]
   (with-open [r (java.io.PushbackReader. (io/reader file))]
