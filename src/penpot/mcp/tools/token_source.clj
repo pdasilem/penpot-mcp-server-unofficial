@@ -1,9 +1,9 @@
 (ns penpot.mcp.tools.token-source
   (:require
-   [app.common.types.token :as cto]
-   [app.common.types.tokens-lib :as ctob]
    [clojure.string :as str]
    [penpot.mcp.penpot.file :as file]
+   [penpot.mcp.penpot.token :as cto]
+   [penpot.mcp.penpot.tokens-lib :as ctob]
    [penpot.mcp.plugin.read :as read]
    [penpot.mcp.plugin.tokens :as plugin-tokens]))
 

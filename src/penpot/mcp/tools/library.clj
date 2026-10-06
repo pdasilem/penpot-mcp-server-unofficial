@@ -1,8 +1,8 @@
 (ns penpot.mcp.tools.library
   (:require
-   [app.common.types.token :as cto]
    [clojure.string :as str]
    [penpot.mcp.penpot.file :as file]
+   [penpot.mcp.penpot.token :as cto]
    [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.common :as common]

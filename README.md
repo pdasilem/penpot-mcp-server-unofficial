@@ -256,11 +256,12 @@ Releases are tagged `v<version>`; the image `ghcr.io/pdasilem/penpot-mcp-server-
 
 The server is built against one Penpot version. After upgrading Penpot, update the server:
 
-1. Change the tag and sha of `penpot/common` in `deps.edn`, and in `src/penpot/mcp/penpot/version.clj` set `supported` to the new Penpot version and `fix-release` to 0.
-2. Set the new server version as the image tag in `docker-compose.penpot.yml` and as `version` in `claude-plugin/.claude-plugin/plugin.json`; the unit tests check both.
-3. Run the unit tests. The token table test compares `src/penpot/mcp/tools/token_rules.clj` with the token properties of the new Penpot frontend; update the table when it fails.
-4. Run the integration tests against the new Penpot version.
-5. Compare the bundled plugin protocol (`mcp/packages/common/src/types.ts` in the Penpot repository) and the Plugin API methods the tools use with the new version.
+1. Change the tag and sha of `penpot/common` in the `:test` alias of `deps.edn`, and in `src/penpot/mcp/penpot/version.clj` set `supported` to the new Penpot version and `fix-release` to 0. The server does not load `penpot/common`; the tests compare the server's reading and writing of Penpot data with it.
+2. Regenerate `resources/penpot/contract.edn` with `(penpot.mcp.penpot.contract-test/write-contract!)` from the test classpath; the unit tests check it against `penpot/common`.
+3. Set the new server version as the image tag in `docker-compose.penpot.yml` and as `version` in `claude-plugin/.claude-plugin/plugin.json`; the unit tests check both.
+4. Run the unit tests. The token table test compares `src/penpot/mcp/tools/token_rules.clj` with the token properties of the new Penpot frontend; update the table when it fails.
+5. Run the integration tests against the new Penpot version.
+6. Compare the bundled plugin protocol (`mcp/packages/common/src/types.ts` in the Penpot repository) and the Plugin API methods the tools use with the new version.
 
 ## Development
 

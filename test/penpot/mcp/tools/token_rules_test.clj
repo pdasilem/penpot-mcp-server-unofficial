@@ -1,7 +1,7 @@
 (ns penpot.mcp.tools.token-rules-test
   (:require
    [app.common.types.token :as ctt]
-   [app.common.types.tokens-lib :as ctob]
+   [penpot.mcp.penpot.tokens-lib :as ctob]
    [clojure.test :refer [deftest is testing]]
    [penpot.mcp.real-file :as real]
    [penpot.mcp.tools.token-rules :as rules]))

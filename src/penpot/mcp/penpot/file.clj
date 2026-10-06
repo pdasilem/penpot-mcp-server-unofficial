@@ -1,6 +1,6 @@
 (ns penpot.mcp.penpot.file
   (:require
-   [app.common.features :as cfeat]
+   [penpot.mcp.penpot.contract :as cfeat]
    [penpot.mcp.penpot.heavy :as heavy]
    [penpot.mcp.penpot.revision :as revision]
    [penpot.mcp.penpot.rpc :as rpc]

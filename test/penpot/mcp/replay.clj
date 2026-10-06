@@ -1,6 +1,6 @@
 (ns penpot.mcp.replay
   (:require
-   [app.common.uuid :as uuid]
+   [penpot.mcp.penpot.uuid :as uuid]
    [clojure.data.json :as json]
    [clojure.edn :as edn]
    [clojure.java.io :as io]

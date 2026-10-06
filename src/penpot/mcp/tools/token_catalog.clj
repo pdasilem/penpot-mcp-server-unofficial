@@ -1,8 +1,8 @@
 (ns penpot.mcp.tools.token-catalog
   (:require
-   [app.common.types.token :as cto]
    [clojure.data.json :as json]
    [clojure.string :as str]
+   [penpot.mcp.penpot.token :as cto]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.canvas :as canvas]
    [penpot.mcp.tools.common :as common]))

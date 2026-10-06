@@ -1,6 +1,6 @@
 (ns penpot.mcp.design.usage.references
   (:require
-   [app.common.types.token :as cto]))
+   [penpot.mcp.penpot.token :as cto]))
 
 (defn- referenced [value]
   (into #{} (comp (filter string?) (mapcat cto/find-token-value-references)) (tree-seq coll? seq value)))

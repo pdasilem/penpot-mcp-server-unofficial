@@ -1,7 +1,7 @@
 (ns penpot.mcp.design.usage.shapes
   (:require
-   [app.common.types.token :as cto]
-   [clojure.string :as str]))
+   [clojure.string :as str]
+   [penpot.mcp.penpot.token :as cto]))
 
 (def ^:private root-id #uuid "00000000-0000-0000-0000-000000000000")
 

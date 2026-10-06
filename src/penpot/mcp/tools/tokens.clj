@@ -1,9 +1,9 @@
 (ns penpot.mcp.tools.tokens
   (:require
-   [app.common.types.token :as cto]
    [clojure.set :as set]
    [clojure.string :as str]
    [penpot.mcp.penpot.revision :as revision]
+   [penpot.mcp.penpot.token :as cto]
    [penpot.mcp.plugin.read :as read]
    [penpot.mcp.plugin.scripts :as scripts]
    [penpot.mcp.tool :as tool]

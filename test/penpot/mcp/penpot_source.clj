@@ -5,7 +5,7 @@
    [clojure.walk :as walk]))
 
 (defn checkout []
-  (let [sha  (get-in (edn/read-string (slurp "deps.edn")) [:deps 'penpot/common :git/sha])
+  (let [sha  (get-in (edn/read-string (slurp "deps.edn")) [:aliases :test :extra-deps 'penpot/common :git/sha])
         root (or (System/getenv "GITLIBS") (str (System/getProperty "user.home") "/.gitlibs"))]
     (io/file root "libs" "penpot" "common" sha)))
 

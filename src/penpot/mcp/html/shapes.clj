@@ -1,8 +1,8 @@
 (ns penpot.mcp.html.shapes
   (:require
-   [app.common.types.shape :as cts]
-   [app.common.uuid :as uuid]
-   [clojure.string :as str]))
+   [clojure.string :as str]
+   [penpot.mcp.penpot.shape :as cts]
+   [penpot.mcp.penpot.uuid :as uuid]))
 
 (def ^:private generic-families
   #{"serif" "sans-serif" "monospace" "cursive" "fantasy" "system-ui" "ui-sans-serif" "ui-serif" "ui-monospace"

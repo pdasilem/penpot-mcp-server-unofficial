@@ -1,15 +1,17 @@
 (ns penpot.mcp.html.shapes-test
   (:require
    [app.common.files.changes :as cpc]
-   [app.common.files.changes-builder :as pcb]
    [app.common.schema :as sm]
-   [app.common.types.shape :as cts]
+   [app.common.transit :as ct]
+   [app.common.types.shape]
    [app.common.uuid :as uuid]
    [clojure.test :refer [deftest is]]
    [penpot.mcp.html.jobs :as jobs]
    [penpot.mcp.html.sample :as sample]
    [penpot.mcp.html.shapes :as shapes]
    [penpot.mcp.html.tree :as tree]
+   [penpot.mcp.penpot.shape :as shape]
+   [penpot.mcp.penpot.transit :as transit]
    [penpot.mcp.replay :as replay]))
 
 (def ^:private fallback
@@ -27,13 +29,8 @@
   (filter #(= (:id parent) (:parent-id %)) objects))
 
 (defn- valid-changes? [objects]
-  (let [page-root (cts/setup-shape {:id uuid/zero :type :frame :name "Root Frame" :x 0 :y 0 :width 0.01 :height 0.01
-                                    :frame-id uuid/zero :parent-id uuid/zero})
-        changes   (-> (pcb/empty-changes)
-                      (pcb/with-page {:id (uuid/next) :objects {uuid/zero page-root}})
-                      (pcb/with-objects {uuid/zero page-root})
-                      (pcb/add-objects objects))]
-    ((sm/validator [:vector cpc/schema:change]) (:redo-changes changes))))
+  (let [as-penpot-reads-them (ct/decode-str (transit/encode (shape/add-objects (uuid/next) objects)))]
+    ((sm/validator [:vector cpc/schema:change]) as-penpot-reads-them)))
 
 (deftest the-root-is-placed-at-the-given-point-with-the-frame-size
   (let [{:keys [objects root-id]} (build 0)

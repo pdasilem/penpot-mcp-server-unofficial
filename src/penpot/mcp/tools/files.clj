@@ -1,8 +1,8 @@
 (ns penpot.mcp.tools.files
   (:require
-   [app.common.types.tokens-lib :as ctob]
    [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.rpc :as rpc]
+   [penpot.mcp.penpot.tokens-lib :as ctob]
    [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.common :as common]))

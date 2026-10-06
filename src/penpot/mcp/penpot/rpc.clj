@@ -1,8 +1,8 @@
 (ns penpot.mcp.penpot.rpc
   (:require
-   [app.common.uuid :as uuid]
    [clojure.string :as str]
-   [penpot.mcp.penpot.transit :as transit])
+   [penpot.mcp.penpot.transit :as transit]
+   [penpot.mcp.penpot.uuid :as uuid])
   (:import
    (java.net CookieManager CookiePolicy URI)
    (java.net.http HttpClient HttpRequest HttpRequest$BodyPublishers HttpResponse HttpResponse$BodyHandlers)

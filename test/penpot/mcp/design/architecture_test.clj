@@ -21,10 +21,10 @@
 
 (def ^:private allowed-outside
   {:all #{"clojure.string" "clojure.tools.logging" "java.math" "java.util" "java.util.concurrent" "java.util.concurrent.atomic"}
-   "tokens" #{"app.common.data" "app.common.files.tokens" "app.common.path-names" "app.common.types.token" "cuerdas.core"}
-   "export" #{"app.common.types.token"}
+   "tokens" #{"linked.core" "penpot.mcp.penpot.names" "penpot.mcp.penpot.token"}
+   "export" #{"penpot.mcp.penpot.token"}
    "render" #{"clojure.data.json"}
-   "usage" #{"app.common.types.token"}})
+   "usage" #{"penpot.mcp.penpot.token"}})
 
 (defn- read-forms [file]
   (with-open [r (java.io.PushbackReader. (io/reader file))]

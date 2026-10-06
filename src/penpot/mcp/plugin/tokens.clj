@@ -1,7 +1,7 @@
 (ns penpot.mcp.plugin.tokens
   (:require
-   [app.common.types.token :as cto]
-   [app.common.types.tokens-lib :as ctob]
+   [penpot.mcp.penpot.token :as cto]
+   [penpot.mcp.penpot.tokens-lib :as ctob]
    [penpot.mcp.plugin.read :as read]))
 
 (defn- token-type [plugin-type]

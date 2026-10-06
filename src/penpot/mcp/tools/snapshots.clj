@@ -1,7 +1,7 @@
 (ns penpot.mcp.tools.snapshots
   (:require
-   [app.common.features :as cfeat]
    [clojure.set :as set]
+   [penpot.mcp.penpot.contract :as cfeat]
    [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.heavy :as heavy]
    [penpot.mcp.penpot.revision :as revision]

@@ -1,6 +1,6 @@
 (ns penpot.mcp.design.tokens.themes
   (:require
-   [app.common.data :as d]))
+   [linked.core :as linked]))
 
 (defn- groups [themes]
   (reduce (fn [acc {:keys [group] :as theme}]
@@ -21,7 +21,7 @@
             (if (contains? active-names name)
               (into acc (map (juxt :name identity)) tokens)
               acc))
-          (d/ordered-map)
+          (linked/map)
           sets))
 
 (def ^:private max-combinations 64)

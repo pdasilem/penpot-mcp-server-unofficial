@@ -1,7 +1,7 @@
 (ns penpot.mcp.design.export.values
   (:require
-   [app.common.types.token :as cto]
-   [penpot.mcp.design.color :as color]))
+   [penpot.mcp.design.color :as color]
+   [penpot.mcp.penpot.token :as cto]))
 
 (def ^:private dimension-types
   #{:dimensions :spacing :sizing :border-radius :stroke-width :font-size :letter-spacing})

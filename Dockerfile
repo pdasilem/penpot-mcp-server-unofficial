@@ -1,15 +1,12 @@
 FROM clojure:temurin-25-tools-deps-1.12.6.1673-trixie-slim@sha256:c36d56a5ae0bfda66847f3d0a0641f7b79ce2b90c9b745009a9a0bb57fafe384 AS build
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends git \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /build
 
 COPY deps.edn build.clj ./
-RUN clojure -P && clojure -T:build compile-common
+RUN clojure -P && clojure -P -T:build
 
 COPY src/penpot src/penpot
+COPY resources resources
 RUN clojure -T:build uber
 
 FROM eclipse-temurin:25-jre@sha256:15090d159279e5c158473eccb48cd87f57b3e3a47511a797eb5a7a7ea6f86b0f

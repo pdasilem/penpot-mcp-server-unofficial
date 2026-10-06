@@ -1,0 +1,482 @@
+{:tokens
+ {:border-radius-keys #{:r2 :r3 :r1 :r4},
+  :font-family-keys #{:font-family},
+  :rotation-keys #{:rotation},
+  :text-decoration-keys #{:text-decoration},
+  :typography-token-keys #{:typography},
+  :spacing-keys
+  #{:p2 :p4 :m3 :p3 :p1 :column-gap :m4 :m2 :m1 :row-gap},
+  :font-weight-map
+  {"light" "300",
+   "book" "400",
+   "kräftig" "500",
+   "extrabold" "800",
+   "ultra light" "200",
+   "heavy" "900",
+   "fett" "800",
+   "extra-black" "950",
+   "leicht" "300",
+   "demi-bold" "600",
+   "extralight" "200",
+   "halbfett" "600",
+   "medium" "500",
+   "demibold" "600",
+   "normal" "400",
+   "extra-bold" "800",
+   "extra black" "950",
+   "thin" "100",
+   "extraleicht" "200",
+   "demi bold" "600",
+   "buch" "400",
+   "ultra-black" "950",
+   "black" "900",
+   "regular" "400",
+   "extra-light" "200",
+   "extrafett" "900",
+   "ultrabold" "800",
+   "ultra black" "950",
+   "semibold" "600",
+   "hairline" "100",
+   "ultra-light" "200",
+   "semi bold" "600",
+   "ultra-bold" "800",
+   "ultralight" "200",
+   "extra bold" "800",
+   "dreiviertelfett" "700",
+   "bold" "700",
+   "ultra bold" "800",
+   "kraeftig" "500",
+   "semi-bold" "600",
+   "extra light" "200"},
+  :color-keys #{:stroke-color :fill},
+  :token-type->dtcg-token-type
+  {:sizing "sizing",
+   :rotation "rotation",
+   :color "color",
+   :number "number",
+   :font-size "fontSizes",
+   :font-weight "fontWeights",
+   :text-case "textCase",
+   :other "other",
+   :string "string",
+   :dimensions "dimension",
+   :stroke-width "borderWidth",
+   :opacity "opacity",
+   :typography "typography",
+   :text-decoration "textDecoration",
+   :letter-spacing "letterSpacing",
+   :shadow "shadow",
+   :border-radius "borderRadius",
+   :boolean "boolean",
+   :font-family "fontFamilies",
+   :spacing "spacing"},
+  :font-weight-keys #{:font-weight},
+  :number-keys #{:line-height :rotation},
+  :shape-type-attributes
+  {[:bool false]
+   #{:y
+     :rotation
+     :stroke-color
+     :fill
+     :width
+     :layout-item-max-w
+     :stroke-width
+     :opacity
+     :layout-item-min-w
+     :x
+     :shadow
+     :layout-item-min-h
+     :layout-item-max-h
+     :height},
+   [:bool true]
+   #{:y
+     :rotation
+     :stroke-color
+     :fill
+     :width
+     :layout-item-max-w
+     :stroke-width
+     :opacity
+     :layout-item-min-w
+     :x
+     :shadow
+     :layout-item-min-h
+     :layout-item-max-h
+     :height},
+   [:circle false]
+   #{:y
+     :rotation
+     :stroke-color
+     :fill
+     :width
+     :layout-item-max-w
+     :stroke-width
+     :opacity
+     :layout-item-min-w
+     :x
+     :shadow
+     :layout-item-min-h
+     :layout-item-max-h
+     :height},
+   [:circle true]
+   #{:y
+     :rotation
+     :stroke-color
+     :fill
+     :width
+     :layout-item-max-w
+     :stroke-width
+     :opacity
+     :layout-item-min-w
+     :x
+     :shadow
+     :layout-item-min-h
+     :layout-item-max-h
+     :height},
+   [:frame false]
+   #{:y
+     :rotation
+     :stroke-color
+     :fill
+     :width
+     :r2
+     :layout-item-max-w
+     :r3
+     :stroke-width
+     :r1
+     :opacity
+     :layout-item-min-w
+     :x
+     :shadow
+     :r4
+     :layout-item-min-h
+     :layout-item-max-h
+     :height},
+   [:frame true]
+   #{:y
+     :p2
+     :p4
+     :p3
+     :rotation
+     :stroke-color
+     :fill
+     :width
+     :r2
+     :p1
+     :layout-item-max-w
+     :column-gap
+     :r3
+     :stroke-width
+     :r1
+     :opacity
+     :layout-item-min-w
+     :x
+     :shadow
+     :r4
+     :layout-item-min-h
+     :layout-item-max-h
+     :height
+     :row-gap},
+   [:group false] nil,
+   [:group true] nil,
+   [:image false]
+   #{:y
+     :rotation
+     :stroke-color
+     :fill
+     :width
+     :r2
+     :layout-item-max-w
+     :r3
+     :stroke-width
+     :r1
+     :opacity
+     :layout-item-min-w
+     :x
+     :shadow
+     :r4
+     :layout-item-min-h
+     :layout-item-max-h
+     :height},
+   [:image true]
+   #{:y
+     :rotation
+     :stroke-color
+     :fill
+     :width
+     :r2
+     :layout-item-max-w
+     :r3
+     :stroke-width
+     :r1
+     :opacity
+     :layout-item-min-w
+     :x
+     :shadow
+     :r4
+     :layout-item-min-h
+     :layout-item-max-h
+     :height},
+   [:path false]
+   #{:y
+     :rotation
+     :stroke-color
+     :fill
+     :width
+     :layout-item-max-w
+     :stroke-width
+     :opacity
+     :layout-item-min-w
+     :x
+     :shadow
+     :layout-item-min-h
+     :layout-item-max-h
+     :height},
+   [:path true]
+   #{:y
+     :rotation
+     :stroke-color
+     :fill
+     :width
+     :layout-item-max-w
+     :stroke-width
+     :opacity
+     :layout-item-min-w
+     :x
+     :shadow
+     :layout-item-min-h
+     :layout-item-max-h
+     :height},
+   [:rect false]
+   #{:y
+     :rotation
+     :stroke-color
+     :fill
+     :width
+     :r2
+     :layout-item-max-w
+     :r3
+     :stroke-width
+     :r1
+     :opacity
+     :layout-item-min-w
+     :x
+     :shadow
+     :r4
+     :layout-item-min-h
+     :layout-item-max-h
+     :height},
+   [:rect true]
+   #{:y
+     :rotation
+     :stroke-color
+     :fill
+     :width
+     :r2
+     :layout-item-max-w
+     :r3
+     :stroke-width
+     :r1
+     :opacity
+     :layout-item-min-w
+     :x
+     :shadow
+     :r4
+     :layout-item-min-h
+     :layout-item-max-h
+     :height},
+   [:svg-raw false]
+   #{:y
+     :rotation
+     :stroke-color
+     :fill
+     :width
+     :layout-item-max-w
+     :stroke-width
+     :opacity
+     :layout-item-min-w
+     :x
+     :shadow
+     :layout-item-min-h
+     :layout-item-max-h
+     :height},
+   [:svg-raw true]
+   #{:y
+     :rotation
+     :stroke-color
+     :fill
+     :width
+     :layout-item-max-w
+     :stroke-width
+     :opacity
+     :layout-item-min-w
+     :x
+     :shadow
+     :layout-item-min-h
+     :layout-item-max-h
+     :height},
+   [:text false]
+   #{:y
+     :line-height
+     :rotation
+     :font-size
+     :stroke-color
+     :font-weight
+     :text-case
+     :fill
+     :width
+     :layout-item-max-w
+     :stroke-width
+     :opacity
+     :layout-item-min-w
+     :typography
+     :text-decoration
+     :letter-spacing
+     :x
+     :shadow
+     :layout-item-min-h
+     :layout-item-max-h
+     :font-family
+     :height},
+   [:text true]
+   #{:y
+     :line-height
+     :rotation
+     :font-size
+     :stroke-color
+     :font-weight
+     :text-case
+     :fill
+     :width
+     :layout-item-max-w
+     :stroke-width
+     :opacity
+     :layout-item-min-w
+     :typography
+     :text-decoration
+     :letter-spacing
+     :x
+     :shadow
+     :layout-item-min-h
+     :layout-item-max-h
+     :font-family
+     :height}},
+  :text-decoration-values #{"none" "strike-through" "underline"},
+  :sizing-keys
+  #{:width
+    :layout-item-max-w
+    :layout-item-min-w
+    :layout-item-min-h
+    :layout-item-max-h
+    :height},
+  :opacity-keys #{:opacity},
+  :font-size-keys #{:font-size},
+  :dtcg-token-type->token-type
+  {"boolean" :boolean,
+   "fontWeights" :font-weight,
+   "textDecoration" :text-decoration,
+   "spacing" :spacing,
+   "string" :string,
+   "fontFamily" :font-family,
+   "fontWeight" :font-weight,
+   "letterSpacing" :letter-spacing,
+   "fontFamilies" :font-family,
+   "shadow" :shadow,
+   "borderWidth" :stroke-width,
+   "fontSizes" :font-size,
+   "textCase" :text-case,
+   "fontSize" :font-size,
+   "borderRadius" :border-radius,
+   "number" :number,
+   "rotation" :rotation,
+   "typography" :typography,
+   "boxShadow" :shadow,
+   "other" :other,
+   "sizing" :sizing,
+   "dimension" :dimensions,
+   "color" :color,
+   "opacity" :opacity},
+  :axis-keys #{:y :x},
+  :composite-token-type->dtcg-token-type
+  {:line-height "lineHeights",
+   :sizing "sizing",
+   :rotation "rotation",
+   :color "color",
+   :number "number",
+   :font-size "fontSizes",
+   :font-weight "fontWeights",
+   :text-case "textCase",
+   :other "other",
+   :string "string",
+   :dimensions "dimension",
+   :stroke-width "borderWidth",
+   :opacity "opacity",
+   :typography "typography",
+   :text-decoration "textDecoration",
+   :letter-spacing "letterSpacing",
+   :shadow "shadow",
+   :border-radius "borderRadius",
+   :boolean "boolean",
+   :font-family "fontFamilies",
+   :spacing "spacing"},
+  :shadow-keys #{:shadow},
+  :text-case-keys #{:text-case},
+  :typography-keys
+  #{:line-height
+    :font-size
+    :font-weight
+    :text-case
+    :typography
+    :text-decoration
+    :letter-spacing
+    :font-family},
+  :composite-dtcg-token-type->token-type
+  {"boolean" :boolean,
+   "fontWeights" :font-weight,
+   "textDecoration" :text-decoration,
+   "spacing" :spacing,
+   "string" :string,
+   "fontFamily" :font-family,
+   "fontWeight" :font-weight,
+   "lineHeight" :line-height,
+   "letterSpacing" :letter-spacing,
+   "fontFamilies" :font-family,
+   "shadow" :shadow,
+   "borderWidth" :stroke-width,
+   "fontSizes" :font-size,
+   "textCase" :text-case,
+   "lineHeights" :line-height,
+   "fontSize" :font-size,
+   "borderRadius" :border-radius,
+   "number" :number,
+   "rotation" :rotation,
+   "typography" :typography,
+   "boxShadow" :shadow,
+   "other" :other,
+   "sizing" :sizing,
+   "dimension" :dimensions,
+   "color" :color,
+   "opacity" :opacity},
+  :letter-spacing-keys #{:letter-spacing},
+  :font-weight-values
+  #{"600" "300" "700" "400" "100" "200" "500" "900" "800" "950"},
+  :stroke-width-keys #{:stroke-width},
+  :spacing-margin-keys #{:m3 :m4 :m2 :m1}},
+ :supported-features
+ #{"fdata/path-data"
+   "plugins/runtime"
+   "design-tokens/v1"
+   "variants/v1"
+   "layout/grid"
+   "styles/v2"
+   "fdata/pointer-map"
+   "text-editor/v2-html-paste"
+   "fdata/objects-map"
+   "text-editor/v2"
+   "tokens/numeric-input"
+   "render-wasm/v1"
+   "text-editor-wasm/v1"
+   "components/v2"
+   "fdata/shape-data-type"},
+ :max-fills 8,
+ :max-gradient-stops 16}

@@ -1,24 +1,8 @@
-{:paths ["src" "resources" "target/classes"]
+{:paths ["src" "resources"]
  :deps
  {org.clojure/clojure {:mvn/version "1.12.6"}
-  penpot/common {:git/url "https://github.com/penpot/penpot"
-                 :git/tag "2.18.1"
-                 :git/sha "423cb411324d8c0de39032b2244e1a3c96c23dba"
-                 :deps/root "common"
-                 :exclusions [org.apache.logging.log4j/log4j-api
-                              org.apache.logging.log4j/log4j-core
-                              org.apache.logging.log4j/log4j-web
-                              org.apache.logging.log4j/log4j-jul
-                              org.apache.logging.log4j/log4j-slf4j2-impl
-                              pl.tkowalcz.tjahzi/log4j2-appender
-                              com.sun.mail/jakarta.mail
-                              selmer/selmer
-                              org.la4j/la4j
-                              java-http-clj/java-http-clj
-                              io.aviso/pretty
-                              org.clojure/tools.cli
-                              metosin/jsonista
-                              criterium/criterium]}
+  com.cognitect/transit-clj {:mvn/version "1.1.363"}
+  frankiesardo/linked {:mvn/version "1.3.0"}
   org.clojure/tools.logging {:mvn/version "1.3.0"}
   org.clojure/data.json {:mvn/version "2.5.2"}
   metosin/malli {:mvn/version "0.20.1"}
@@ -33,8 +17,26 @@
   com.helger/ph-css {:mvn/version "8.2.2"}
   com.twelvemonkeys.imageio/imageio-webp {:mvn/version "3.13.0"}}
  :aliases
- {:test {:extra-paths ["test" "test/resources"]
-         :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
+ {:test {:extra-paths ["test" "test/resources" "target/common-classes"]
+         :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}
+                      penpot/common {:git/url "https://github.com/penpot/penpot"
+                                     :git/tag "2.18.1"
+                                     :git/sha "423cb411324d8c0de39032b2244e1a3c96c23dba"
+                                     :deps/root "common"
+                                     :exclusions [org.apache.logging.log4j/log4j-api
+                                                  org.apache.logging.log4j/log4j-core
+                                                  org.apache.logging.log4j/log4j-web
+                                                  org.apache.logging.log4j/log4j-jul
+                                                  org.apache.logging.log4j/log4j-slf4j2-impl
+                                                  pl.tkowalcz.tjahzi/log4j2-appender
+                                                  com.sun.mail/jakarta.mail
+                                                  selmer/selmer
+                                                  org.la4j/la4j
+                                                  java-http-clj/java-http-clj
+                                                  io.aviso/pretty
+                                                  org.clojure/tools.cli
+                                                  metosin/jsonista
+                                                  criterium/criterium]}}
          :main-opts ["-m" "kaocha.runner"]}
   :build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.14"}}
           :ns-default build}

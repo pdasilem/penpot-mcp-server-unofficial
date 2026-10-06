@@ -1,10 +1,9 @@
 (ns penpot.mcp.design.tokens.parse
   (:require
-   [app.common.files.tokens :as cfo]
-   [app.common.types.token :as cto]
-   [cuerdas.core :as cstr]
    [penpot.mcp.design.color :as color]
-   [penpot.mcp.design.js.string :as jsstr]))
+   [penpot.mcp.design.js.string :as jsstr]
+   [penpot.mcp.penpot.names :as names]
+   [penpot.mcp.penpot.token :as cto]))
 
 (def ^:private max-safe-int 9007199254740991)
 
@@ -40,7 +39,7 @@
   (and (string? s) (re-matches #"^-?\d+(\.\d+)?(px|rem)$" s)))
 
 (defn- parse-number [value]
-  (let [parsed (cfo/parse-token-value value)]
+  (let [parsed (cto/parse-token-value value)]
     (cond
       (and parsed (not (out-of-bounds? parsed)) (or (number? value) (numeric-string? value))) parsed
       (out-of-bounds? parsed) (error :number-too-large value)
@@ -49,7 +48,7 @@
       :else (error :invalid-token-value value))))
 
 (defn- parse-general [value]
-  (let [parsed (cfo/parse-token-value value)]
+  (let [parsed (cto/parse-token-value value)]
     (cond
       (and parsed (not (out-of-bounds? parsed))) parsed
       (out-of-bounds? parsed) (error :number-too-large value)
@@ -57,7 +56,7 @@
       :else (error :invalid-token-value value))))
 
 (defn- parse-opacity [value]
-  (let [parsed (cfo/parse-token-value value)
+  (let [parsed (cto/parse-token-value value)
         refs   (references value)
         out    (not (js<= 0 (:value parsed) 1))]
     (cond
@@ -67,7 +66,7 @@
       :else (error :invalid-token-value value))))
 
 (defn- parse-stroke-width [value]
-  (let [parsed (cfo/parse-token-value value)
+  (let [parsed (cto/parse-token-value value)
         refs   (references value)
         out    (< (num0 (:value parsed)) 0)]
     (cond
@@ -81,7 +80,7 @@
     (if (= "%" (:unit parsed)) (error :value-with-percent value) parsed)))
 
 (defn- parse-text-case [value]
-  (let [normalized (when (string? value) (jsstr/lower-case (cstr/trim value)))]
+  (let [normalized (when (string? value) (jsstr/lower-case (names/trim value)))]
     (cond
       (contains? #{"none" "uppercase" "lowercase" "capitalize"} normalized) {:value normalized}
       (references value) (missing-reference (references value))
@@ -124,7 +123,7 @@
     (cond
       refs (missing-reference refs)
       (or (not font-size) (seq font-size-errors)) (error :composite-line-height-needs-font-size font-size)
-      :else (or (when-let [{:keys [unit value]} (cfo/parse-token-value line-height)]
+      :else (or (when-let [{:keys [unit value]} (cto/parse-token-value line-height)]
                   (case unit
                     "%" (/ value 100)
                     "px" (when (number? font-size) (/ value font-size))

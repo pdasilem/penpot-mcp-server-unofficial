@@ -8,17 +8,18 @@
 (defn- basis []
   (b/create-basis {:project "deps.edn"}))
 
+(def common-class-dir "target/common-classes")
+
 (defn compile-common [_]
-  (let [basis (basis)
+  (let [basis (b/create-basis {:project "deps.edn" :aliases [:test]})
         root  (get-in basis [:libs 'penpot/common :deps/root])]
     (b/javac {:src-dirs [(str root "/src")]
-              :class-dir class-dir
+              :class-dir common-class-dir
               :basis basis
               :javac-opts ["--release" "21"]})))
 
 (defn uber [_]
-  (b/delete {:path "target"})
-  (compile-common nil)
+  (b/delete {:path class-dir})
   (let [basis (basis)]
     (b/copy-dir {:src-dirs ["src" "resources"] :target-dir class-dir})
     (b/compile-clj {:basis basis

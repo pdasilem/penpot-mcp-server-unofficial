@@ -1,17 +1,15 @@
 (ns penpot.mcp.html.jobs
   (:refer-clojure :exclude [run!])
   (:require
-   [app.common.features :as cfeat]
-   [app.common.files.changes-builder :as pcb]
-   [app.common.types.shape :as cts]
-   [app.common.uuid :as uuid]
    [clojure.string :as str]
    [clojure.tools.logging :as log]
    [penpot.mcp.html.script :as script]
    [penpot.mcp.html.shapes :as shapes]
    [penpot.mcp.html.tree :as tree]
+   [penpot.mcp.penpot.contract :as cfeat]
    [penpot.mcp.penpot.revision :as revision]
    [penpot.mcp.penpot.rpc :as rpc]
+   [penpot.mcp.penpot.shape :as cts]
    [penpot.mcp.tool :as tool])
   (:import
    (java.util UUID)))
@@ -86,17 +84,10 @@
         fonts   (into {} (map (fn [f] [f (some-> (get-in res [:fonts (keyword f)]) font-entry)])) missing)]
     (update-job! ctx id (fn [j] (cond-> (update j :font-map merge fonts)
                                   (:fallback res) (assoc :fallback (font-entry (:fallback res))))))
-    (assoc res :pageId (uuid/uuid (str (:pageId res))))))
-
-(def ^:private page-root
-  (cts/setup-shape {:id uuid/zero :type :frame :name "Root Frame" :x 0 :y 0 :width 0.01 :height 0.01
-                    :frame-id uuid/zero :parent-id uuid/zero}))
+    (assoc res :pageId (parse-uuid (str (:pageId res))))))
 
 (defn- frame-changes [page-id objects]
-  (:redo-changes (-> (pcb/empty-changes)
-                     (pcb/with-page {:id page-id :objects {uuid/zero page-root}})
-                     (pcb/with-objects {uuid/zero page-root})
-                     (pcb/add-objects objects))))
+  (cts/add-objects page-id objects))
 
 (defn- submit! [{:keys [rpc]} file-id revn vern changes]
   (rpc/call rpc :update-file {:id file-id :session-id (:session-id rpc) :revn revn :vern vern

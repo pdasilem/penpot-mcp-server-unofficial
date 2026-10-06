@@ -1,6 +1,6 @@
 (ns penpot.mcp.tools.library-test
   (:require
-   [app.common.types.tokens-lib :as ctob]
+   [penpot.mcp.penpot.tokens-lib :as ctob]
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]
    [penpot.mcp.replay :as replay]

@@ -1,9 +1,9 @@
 (ns penpot.mcp.tools.shapes
   (:require
-   [app.common.uuid :as uuid]
    [clojure.string :as str]
    [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.revision :as revision]
+   [penpot.mcp.penpot.uuid :as uuid]
    [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.common :as common]

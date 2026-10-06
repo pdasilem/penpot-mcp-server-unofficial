@@ -1,6 +1,6 @@
 (ns penpot.mcp.recording.server
   (:require
-   [app.common.uuid :as uuid]
+   [penpot.mcp.penpot.uuid :as uuid]
    [clojure.data.json :as json]
    [clojure.java.io :as io]
    [penpot.mcp.app :as app]

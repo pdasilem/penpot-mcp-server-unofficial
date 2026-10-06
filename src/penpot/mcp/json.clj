@@ -1,18 +1,13 @@
 (ns penpot.mcp.json
   (:require
-   [app.common.geom.matrix]
-   [app.common.geom.point]
-   [app.common.types.path.impl]
-   [app.common.types.tokens-lib :as ctob]
    [clojure.data.json :as data.json]
-   [clojure.string :as str])
+   [clojure.string :as str]
+   [penpot.mcp.penpot.tokens-lib :as ctob]
+   [penpot.mcp.penpot.types :as types])
   (:import
-   (app.common.geom.matrix Matrix)
-   (app.common.geom.point Point)
-   (app.common.types.path.impl PathData)
-   (app.common.types.tokens_lib TokensLib)
    (java.time Instant)
-   (java.util Date)))
+   (java.util Date)
+   (penpot.mcp.penpot.types Matrix Point)))
 
 (defn- key-name [k]
   (cond
@@ -34,8 +29,8 @@
     (instance? Date x) (str (.toInstant ^Date x))
     (instance? Matrix x) (record-fields x [:a :b :c :d :e :f])
     (instance? Point x) (record-fields x [:x :y])
-    (instance? PathData x) (str x)
-    (instance? TokensLib x) (ctob/export-dtcg-json x)
+    (types/path-data? x) (str x)
+    (ctob/tokens-lib? x) (ctob/export-dtcg-json x)
     (map? x) (into {} (map (fn [[k v]] [(key-name k) (plain v)])) x)
     (or (sequential? x) (set? x)) (mapv plain x)
     :else (str x)))
