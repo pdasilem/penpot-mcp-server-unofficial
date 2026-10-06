@@ -1,7 +1,7 @@
 (ns penpot.mcp.penpot.revision
   (:require
    [clojure.string :as str]
-   [clojure.tools.logging :as log]
+   [penpot.mcp.log :as log]
    [penpot.mcp.plugin.scripts :as scripts]))
 
 (def ^:private wait-body

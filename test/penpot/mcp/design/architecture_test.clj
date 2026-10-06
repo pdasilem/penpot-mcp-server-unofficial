@@ -20,7 +20,7 @@
    "usage" #{"usage" "color"}})
 
 (def ^:private allowed-outside
-  {:all #{"clojure.string" "clojure.tools.logging" "java.math" "java.util" "java.util.concurrent" "java.util.concurrent.atomic"}
+  {:all #{"clojure.string" "penpot.mcp.log" "java.math" "java.util" "java.util.concurrent" "java.util.concurrent.atomic"}
    "tokens" #{"linked.core" "penpot.mcp.penpot.names" "penpot.mcp.penpot.token"}
    "export" #{"penpot.mcp.penpot.token"}
    "render" #{"clojure.data.json"}

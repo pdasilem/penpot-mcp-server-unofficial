@@ -2,13 +2,13 @@
   (:require
    [clojure.data.json :as json]
    [clojure.string :as str]
-   [clojure.tools.logging :as log]
    [penpot.mcp.design.budget :as budget]
    [penpot.mcp.design.export :as export]
    [penpot.mcp.design.render :as render]
    [penpot.mcp.design.tokens :as tokens]
    [penpot.mcp.exports :as exports]
    [penpot.mcp.json :as mcp-json]
+   [penpot.mcp.log :as log]
    [penpot.mcp.plugin.design-system :as design-system]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.common :as common]))

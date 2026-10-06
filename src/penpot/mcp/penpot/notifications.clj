@@ -1,7 +1,7 @@
 (ns penpot.mcp.penpot.notifications
   (:require
    [clojure.string :as str]
-   [clojure.tools.logging :as log]
+   [penpot.mcp.log :as log]
    [penpot.mcp.penpot.rpc :as rpc]
    [penpot.mcp.penpot.transit :as transit]
    [penpot.mcp.penpot.uuid :as uuid])

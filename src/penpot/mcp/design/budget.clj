@@ -1,7 +1,7 @@
 (ns penpot.mcp.design.budget
   (:require
    [clojure.string :as str]
-   [clojure.tools.logging :as log])
+   [penpot.mcp.log :as log])
   (:import
    (java.util.concurrent ArrayBlockingQueue RejectedExecutionException ThreadFactory
                          ThreadPoolExecutor ThreadPoolExecutor$AbortPolicy TimeUnit TimeoutException)

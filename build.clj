@@ -22,10 +22,17 @@
   (b/delete {:path class-dir})
   (let [basis (basis)]
     (b/copy-dir {:src-dirs ["src" "resources"] :target-dir class-dir})
+    (b/javac {:src-dirs ["build/stub"]
+              :class-dir class-dir
+              :basis basis
+              :javac-opts ["--release" "21"]})
     (b/compile-clj {:basis basis
-                    :ns-compile ['penpot.mcp.main]
-                    :class-dir class-dir})
+                    :ns-compile ['penpot.mcp.main 'penpot.mcp.app]
+                    :class-dir class-dir
+                    :compile-opts {:direct-linking true
+                                   :elide-meta [:doc :file :line :added]}})
     (b/uber {:class-dir class-dir
              :uber-file uber-file
              :basis basis
+             :exclude ["clojure/core/server\\$.*" "clojure/core/server\\.clj"]
              :main 'penpot.mcp.main})))

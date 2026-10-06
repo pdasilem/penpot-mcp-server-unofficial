@@ -1,12 +1,12 @@
 (ns penpot.mcp.design.tokens.catalog
   (:require
    [linked.core :as linked]
-   [clojure.tools.logging :as log]
    [penpot.mcp.design.budget :as budget]
    [penpot.mcp.design.sd :as sd]
    [penpot.mcp.design.tokens.admission :as admission]
    [penpot.mcp.design.tokens.result :as result]
-   [penpot.mcp.design.tokens.sd-input :as sd-input]))
+   [penpot.mcp.design.tokens.sd-input :as sd-input]
+   [penpot.mcp.log :as log]))
 
 (defn- resolve-set [tokens]
   (admission/check-count! tokens)

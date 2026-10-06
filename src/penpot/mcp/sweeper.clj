@@ -1,6 +1,6 @@
 (ns penpot.mcp.sweeper
   (:require
-   [clojure.tools.logging :as log])
+   [penpot.mcp.log :as log])
   (:import
    (java.util.concurrent Executors ScheduledExecutorService ThreadFactory TimeUnit)))
 

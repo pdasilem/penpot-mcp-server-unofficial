@@ -1,8 +1,8 @@
 (ns penpot.mcp.system
   (:require
-   [clojure.tools.logging :as log]
    [penpot.mcp.exports :as exports]
    [penpot.mcp.html.uploads :as uploads]
+   [penpot.mcp.log :as log]
    [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.notifications :as notifications]
    [penpot.mcp.penpot.rpc :as rpc]

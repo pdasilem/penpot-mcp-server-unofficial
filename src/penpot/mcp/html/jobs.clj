@@ -2,10 +2,10 @@
   (:refer-clojure :exclude [run!])
   (:require
    [clojure.string :as str]
-   [clojure.tools.logging :as log]
    [penpot.mcp.html.script :as script]
    [penpot.mcp.html.shapes :as shapes]
    [penpot.mcp.html.tree :as tree]
+   [penpot.mcp.log :as log]
    [penpot.mcp.penpot.contract :as cfeat]
    [penpot.mcp.penpot.revision :as revision]
    [penpot.mcp.penpot.rpc :as rpc]

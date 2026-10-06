@@ -2,12 +2,12 @@
   (:require
    [clojure.data.json :as data.json]
    [clojure.string :as str]
-   [clojure.tools.logging :as log]
    [malli.core :as m]
    [malli.error :as me]
    [malli.json-schema :as mjs]
    [malli.transform :as mt]
    [penpot.mcp.json :as json]
+   [penpot.mcp.log :as log]
    [penpot.mcp.penpot.heavy :as heavy]))
 
 (defn- stringify [x]
