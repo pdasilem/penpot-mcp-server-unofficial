@@ -95,7 +95,7 @@
     :input-schema (into [:map {:closed true} common/file-id-param] common/page-params)
     :handler list-snapshots}
    {:name "compare_snapshots"
-    :description "Compare a saved version with another version or with the current file. Returns added and removed pages, and for each changed page the added, removed and modified shapes with the names of the changed attributes. When the answer would be larger than 100 KB, pages carry only the counts of added, removed and modified shapes, and full_result holds a one-time download of the whole comparison."
+    :description "Compare a saved version with another version or with the current file. Returns added and removed pages, and for each changed page the added, removed and modified shapes with the names of the changed attributes. When the answer would be longer than 30,000 characters, pages carry only the counts of added, removed and modified shapes, and full_result holds a one-time download of the whole comparison."
     :annotations tool/read-only
     :input-schema [:map {:closed true}
                    common/file-id-param

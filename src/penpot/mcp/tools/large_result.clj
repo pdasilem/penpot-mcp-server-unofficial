@@ -5,7 +5,7 @@
   (:import
    (java.nio.charset StandardCharsets)))
 
-(def max-inline-bytes (* 100 1024))
+(def max-inline-chars 30000)
 
 (defn- store! [ctx data file-name]
   (let [{:keys [id error]} (exports/put! (:exports ctx) data file-name)]
@@ -27,7 +27,7 @@
 (defn result [ctx {:keys [full brief file-name] :as opts}]
   (let [text  (tool/json-text full)
         size  (alength (.getBytes ^String text StandardCharsets/UTF_8))]
-    (if (<= size max-inline-bytes)
+    (if (<= (count text) max-inline-chars)
       (tool/text-result text)
       (let [id (store! ctx (exports/zip (archive-files text opts)) file-name)]
         (tool/json-result (assoc (brief) :full_result {:download (download file-name id)

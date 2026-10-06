@@ -61,7 +61,7 @@
 
 (def tools
   [{:name "export_shape"
-    :description (str "Render a shape, for example a board, exactly as Penpot draws it and return it: png as an image the model can see, svg as markup; markup larger than 100 KB comes as svg_bytes and a one-time download in full_result. A png is scaled down so that its longer side fits max_size. Mode fill returns the image used as the shape's fill, scaled down the same way. Find board ids with list_shapes or search_shapes." canvas/editor-note)
+    :description (str "Render a shape, for example a board, exactly as Penpot draws it and return it: png as an image the model can see, svg as markup; markup longer than 30,000 characters comes as svg_bytes and a one-time download in full_result. A png is scaled down so that its longer side fits max_size. Mode fill returns the image used as the shape's fill, scaled down the same way. Find board ids with list_shapes or search_shapes." canvas/editor-note)
     :annotations tool/read-only
     :input-schema [:map {:closed true}
                    common/file-id-param

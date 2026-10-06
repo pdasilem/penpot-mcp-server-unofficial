@@ -121,7 +121,7 @@
     :input-schema (into file-only common/page-params)
     :handler typographies}
    {:name "get_design_tokens"
-    :description "List the design token sets of the file and whether each is active, with every token's id, name, type, value and description, and the token themes with their id, group, name, whether each is active and the names of their sets. Token ids are used by set_token. set, type and query narrow the tokens; sets without matching tokens are listed with no tokens. When the answer would be larger than 100 KB it lists the sets with token_count and the themes, and full_result holds a one-time download of the whole answer: Claude Code can fetch it with the curl command, other clients give it to the user."
+    :description "List the design token sets of the file and whether each is active, with every token's id, name, type, value and description, and the token themes with their id, group, name, whether each is active and the names of their sets. Token ids are used by set_token. set, type and query narrow the tokens; sets without matching tokens are listed with no tokens. When the answer would be longer than 30,000 characters it lists the sets with token_count and the themes, and full_result holds a one-time download of the whole answer: Claude Code can fetch it with the curl command, other clients give it to the user."
     :annotations tool/read-only
     :input-schema [:map {:closed true}
                    common/file-id-param
