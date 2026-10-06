@@ -1,14 +1,11 @@
 (ns ^:integration penpot.mcp.tools.plugin-it-test
   (:require
-   [app.common.files.changes-builder :as pcb]
    [app.common.types.tokens-lib :as ctob]
-   [app.common.uuid :as uuid]
    [clojure.data.json :as json]
    [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
    [penpot.mcp.it :as it]
-   [penpot.mcp.penpot.changes :as changes]
    [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.rpc :as rpc]
    [penpot.mcp.test-client :as mcp]
@@ -20,23 +17,15 @@
 
 (def mcp-url (get it/env "PENPOT_IT_MCP_URL" "http://localhost:9001/mcp/stream"))
 (def public-url (get it/env "PENPOT_IT_PUBLIC_URL" "http://localhost:9001"))
-(def token-id (uuid/next))
-(def spacing-id (uuid/next))
-(def set-name "it-brand")
-
-(defn- add-tokens [client file-id]
-  (changes/commit! client file-id
-                   (fn []
-                     (let [f      (file/fetch client file-id)
-                           set-id (uuid/next)
-                           lib    (-> (or (get-in f [:data :tokens-lib]) (ctob/make-tokens-lib))
-                                      (ctob/add-set (ctob/make-token-set :id set-id :name set-name))
-                                      (ctob/add-token set-id (ctob/make-token :id token-id :name "it.primary" :type :color :value "#3366FF"))
-                                      (ctob/add-token set-id (ctob/make-token :id spacing-id :name "it.space" :type :spacing :value "8"))
-                                      (ctob/toggle-set-in-theme ctob/hidden-theme-id set-name))]
-                       (-> (pcb/empty-changes)
-                           (pcb/with-library-data (:data f))
-                           (pcb/set-tokens-lib lib))))))
+(defn- real-token [client file-id type]
+  (let [lib    (get-in (file/fetch client file-id) [:data :tokens-lib])
+        active (set (map ctob/get-name (filter #(ctob/token-set-active? lib (ctob/get-name %)) (ctob/get-sets lib))))]
+    (or (first (sort-by :name (for [st (ctob/get-sets lib)
+                                    :when (active (ctob/get-name st))
+                                    t (vals (ctob/get-tokens lib (ctob/get-id st)))
+                                    :when (= type (:type t))]
+                                t)))
+        (throw (ex-info (str "The test data has no active " (name type) " token") {})))))
 
 (defn- open-editor [team-id file-id]
   (let [pb   (doto (ProcessBuilder. ["node" "test/e2e/open-editor.js"])
@@ -79,9 +68,13 @@
         team-id (:default-team-id (rpc/call client :get-profile {}))]
     (it/with-temp-project client
       (fn [project]
-        (let [file  (rpc/call client :create-file {:project-id (:id project) :name "it-plugin"})
+        (let [file  (rpc/call client :duplicate-file {:file-id (:id (it/test-data-file client)) :name "it-plugin"})
+              _     (rpc/call client :move-files {:ids #{(:id file)} :project-id (:id project)})
               fid   (str (:id file))
-              _     (add-tokens client (:id file))
+              color (real-token client (:id file) :color)
+              space (real-token client (:id file) :spacing)
+              token-id (:id color)
+              spacing-id (:id space)
               proc  (open-editor team-id (:id file))]
           (try
             (let [s     (mcp/connect (str mcp-url "?userToken=" (get it/env "PENPOT_MCP_KEY")))
@@ -106,14 +99,14 @@
                     (is (= "#FF0000" (str/upper-case (get-in (shape-of s fid r1) ["fills" 0 "fill_color"]))))
                     (is (= 45 (get-in (data s "rotate" {:file_id fid :shape_id r2 :angle 45}) ["shape" "changed" "rotation"])))
                     (let [changed #(get-in (data s %1 (merge {:file_id fid :shape_id r1} %2)) ["shape" "changed"])]
-                      (is (= {"fill" "it.primary"} (get (changed "set_token" {:token_id (str token-id)}) "tokens")))
+                      (is (= {"fill" (:name color)} (get (changed "set_token" {:token_id (str token-id)}) "tokens")))
                       (is (not (contains? (changed "set_token" {:token_id (str token-id)}) "tokens")))
-                      (is (= {"fill" "it.primary" "strokeColor" "it.primary"}
+                      (is (= {"fill" (:name color) "strokeColor" (:name color)}
                              (get (changed "set_token" {:token_id (str token-id) :attr "strokeColor"}) "tokens")))
-                      (is (= {"strokeColor" "it.primary"} (get (changed "remove_token" {:attr "fill"}) "tokens")))
+                      (is (= {"strokeColor" (:name color)} (get (changed "remove_token" {:attr "fill"}) "tokens")))
                       (is (not (contains? (changed "remove_token" {:attr "fill"}) "tokens")))
                       (is (= {} (get (changed "remove_token" {:token_id (str token-id)}) "tokens")))
-                      (is (= {"paddingTop" "it.space" "paddingRight" "it.space" "paddingBottom" "it.space" "paddingLeft" "it.space"}
+                      (is (= (zipmap ["paddingTop" "paddingRight" "paddingBottom" "paddingLeft"] (repeat (:name space)))
                              (get-in (data s "set_token" {:file_id fid :shape_id board :token_id (str spacing-id) :attr "padding"})
                                      ["shape" "changed" "tokens"])))
                       (is (= {} (get-in (data s "remove_token" {:file_id fid :shape_id board :attr "padding"}) ["shape" "changed" "tokens"])))))))
@@ -139,7 +132,7 @@
                     (is (= [[(get-in p2r ["shape" "id"]) page2 "rectangle"]]
                            (mapv (juxt #(get % "id") #(get % "page_id") #(get % "type"))
                                  (get (data s "search_shapes" {:file_id fid :query "onsecond"}) "shapes"))))
-                    (is (= ["Card 3"] (mapv #(get % "name") (get (data s "search_shapes" {:file_id fid :query "card" :type "board"}) "shapes"))))
+                    (is (some #{"Card 3"} (mapv #(get % "name") (get (data s "search_shapes" {:file_id fid :query "card 3" :type "board"}) "shapes"))))
                     (is (str/starts-with? (str/trim (get (data s "get_shape_svg" {:file_id fid :shape_id (get-in p2r ["shape" "id"])}) "svg")) "<svg"))
                     (is (some? (get (data s "create_comment" {:file_id fid :frame_id board :x 5 :y 5 :content "On the card"}) "thread_id")))
                     (is (str/includes? (get-in (mcp/call-tool s "create_comment" {:file_id fid :page_id page2 :frame_id board :x 5 :y 5 :content "x"})
@@ -154,7 +147,7 @@
                   (is (= [[(get-in c ["shape" "id"]) (get c "componentId") fid true]]
                          (mapv (juxt #(get % "id") #(get % "component_id") #(get % "component_file") #(get % "is_main"))
                                (get (data s "get_component_instances" {:file_id fid :component_id (get c "componentId")}) "instances"))))
-                  (is (= ["Dots"] (mapv #(get % "name") (get (data s "list_components" {:file_id fid}) "components"))))
+                  (is (some #{"Dots"} (mapv #(get % "name") (get (data s "list_components" {:file_id fid :query "dots" :limit 500}) "components"))))
                   (is (= [(get-in c ["shape" "id"])] (get (data s "delete_shapes" {:file_id fid :shape_ids [(get-in c ["shape" "id"])]}) "deleted")))))
               (testing "components and variants"
                 (let [component (fn [x nm]
@@ -261,7 +254,7 @@
                   (is (= ["world" "Work Sans"] ((juxt #(get % "characters") #(get % "fontFamily"))
                                                 (get (data s "apply_typography" {:file_id fid :shape_id txt :typography_id (get-in typo ["typography" "id"])
                                                                                  :start 6 :end 11}) "range"))))
-                  (is (= ["Brand Red"] (mapv #(get % "name") (get (data s "get_colors" {:file_id fid}) "colors"))))
+                  (is (some #{"Brand Red"} (mapv #(get % "name") (get (data s "get_colors" {:file_id fid}) "colors"))))
                   (is (some? (get-in (data s "set_image_fill" {:file_id fid :shape_id rect :url (get it/env "PENPOT_IT_MEDIA_URL" "https://raw.githubusercontent.com/penpot/penpot/2.18.1/frontend/resources/images/favicon.png")})
                                      ["shape" "changed" "fills" 0 "fillImage"])))))
               (testing "token catalog"
@@ -296,7 +289,7 @@
                   (data s "delete_token_theme" {:file_id fid :theme_id (get theme "id")})
                   (data s "delete_token_set" {:file_id fid :set_id dark})
                   (let [t (tokens)]
-                    (is (empty? (get t "themes")))
+                    (is (not-any? #(= (get theme "id") (get % "id")) (get t "themes")))
                     (is (not-any? #(= "mode/dark" (get % "name")) (get t "sets")))
                     (is (not-any? #(= "bg" (get % "name")) (mapcat #(get % "tokens") (filter #(= "mode/light" (get % "name")) (get t "sets"))))))))
               (testing "structure"
@@ -372,7 +365,7 @@
                     (is (= (get whole "pages") (get editor "pages")))
                     (is (= (dissoc (get whole "counts") "media") (get editor "counts"))))))
               (testing "file must be open in the editor"
-                (let [other  (str (:id (rpc/call client :create-file {:project-id (:id project) :name "closed"})))
+                (let [other  (str (:id (it/test-data-file client)))
                       result (mcp/call-tool s "set_opacity" {:file_id other :shape_id board :opacity 0.5})]
                   (is (true? (:isError result)))
                   (is (str/starts-with? (get-in result [:content 0 :text]) (str "Open file " other))))))

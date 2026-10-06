@@ -115,18 +115,28 @@
       (and open-top (seq collapsed) (:self (first collapsed))) (assoc-in [0 :self :margin 0] 0.0)
       (and open-bot (seq collapsed) (:self (peek collapsed))) (assoc-in [(dec (count collapsed)) :self :margin 2] 0.0))))
 
+(defn- inline-pseudo [el style ctx which]
+  (let [p (get-in (:computed ctx) [el :pseudo which])]
+    (when (and p (not (flex? style)) (not (grid? style)) (contains? #{nil "inline"} (get p "display")))
+      p)))
+
 (defn- children [^Element el style ctx parent]
   (let [item?    (if (or (flex? style) (grid? style))
                    #(instance? TextNode %)
                    #(text-content? ctx %))
-        segments (partition-by item? (.childNodes el))
-        pseudo   (fn [which] (when-let [p (get-in (:computed ctx) [el :pseudo which])]
+        segments (vec (partition-by item? (.childNodes el)))
+        last-i   (dec (count segments))
+        joined   (fn [which i] (when (and (item? (first (nth segments i))) (= i (if (= which "before") 0 last-i)))
+                                 (inline-pseudo el style ctx which)))
+        inlined  (set (keep #(when (and (seq segments) (joined % (if (= % "before") 0 last-i))) %) ["before" "after"]))
+        pseudo   (fn [which] (when-let [p (and (not (inlined which)) (get-in (:computed ctx) [el :pseudo which]))]
                                (some-> (text/pseudo p) (text-node (anonymous-self parent) parent))))
-        items    (mapcat (fn [seg]
+        items    (mapcat (fn [i seg]
                            (if (item? (first seg))
-                             (some-> (text/segment seg style (:computed ctx)) (text-node (anonymous-self parent) parent) vector)
+                             (some-> (text/segment seg style (:computed ctx) (joined "before" i) (joined "after" i))
+                                     (text-node (anonymous-self parent) parent) vector)
                              (keep #(when (instance? Element %) (element-node % ctx parent)) seg)))
-                         segments)
+                         (range) segments)
         nodes    (with-spacers (remove nil? (concat [(pseudo "before")] items [(pseudo "after")])))]
     (if (or (flex? style) (grid? style))
       nodes

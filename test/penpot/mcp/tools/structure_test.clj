@@ -21,7 +21,9 @@
     (is (seq (get shape "parentId")))))
 
 (deftest boards-are-not-combined-into-a-boolean
-  (is (= "Penpot could not create the boolean shape" (:error (e/run "edits/boolean-of-boards")))))
+  (let [boards (get (e/args "edits/boolean-of-boards") "shape_ids")]
+    (is (= (str "Boards cannot be combined into a boolean shape: " (first boards) ", " (second boards))
+           (:error (e/run "edits/boolean-of-boards"))))))
 
 (deftest flatten-mask-and-ungroup
   (is (seq (get (e/run "edits/flatten") "shapes")))

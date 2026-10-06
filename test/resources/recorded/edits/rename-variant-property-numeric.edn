@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf8aa44624ad", "component_id" "1673b4f9-5b86-8073-8008-b4ec5ad31f59", "property" "weight", "new_name" "1"}, :unsaved [], :entries [{:blob "ea04f22f7070d0d975b3e77cd36483c66e171e8a2c4dac80f7f2a2b51b2b2618"}], :tool "rename_variant_property", :scenario "edits/rename-variant-property-numeric"}

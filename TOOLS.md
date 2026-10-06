@@ -1087,7 +1087,7 @@ Group: `edit`. Hints: changes data
 
 ### `create_boolean`
 
-Combine shapes into one boolean shape, as Penpot's boolean operations do: union merges them, difference cuts the upper shapes out of the bottom one, intersection keeps the overlap, exclude keeps everything but the overlap. Returns the new boolean shape. [editor]
+Combine shapes into one boolean shape, as Penpot's boolean operations do: union merges them, difference cuts the upper shapes out of the bottom one, intersection keeps the overlap, exclude keeps everything but the overlap. Boards cannot be combined. Returns the new boolean shape. [editor]
 
 Group: `edit`. Hints: changes data
 

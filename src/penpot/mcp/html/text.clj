@@ -108,8 +108,11 @@
 (defn content [^Element el computed]
   (finish-runs (raw-runs el computed) (get-in computed [el :style])))
 
-(defn segment [nodes style computed]
-  (finish-runs (node-runs nodes style computed) style))
+(defn segment
+  ([nodes style computed] (segment nodes style computed nil nil))
+  ([nodes style computed before after]
+   (let [own (fn [p] (when p [{:text (get p "content") :style p}]))]
+     (finish-runs (concat (own before) (node-runs nodes style computed) (own after)) style))))
 
 (defn pseudo [style]
   (finish-runs [{:text (get style "content") :style style}] style))

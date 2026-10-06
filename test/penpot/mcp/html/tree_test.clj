@@ -1,8 +1,12 @@
 (ns penpot.mcp.html.tree-test
   (:require
+   [clojure.java.io :as io]
    [clojure.test :refer [deftest is]]
+   [penpot.mcp.html.cascade :as cascade]
    [penpot.mcp.html.sample :as sample]
-   [penpot.mcp.html.tree :as tree]))
+   [penpot.mcp.html.tree :as tree])
+  (:import
+   (org.jsoup Jsoup)))
 
 (defn- desks [] (.select (sample/doc) ".desk"))
 
@@ -93,3 +97,19 @@
 (deftest the-sample-holds-nothing-unsupported
   (doseq [i (range (count (desks)))]
     (is (= {} (:unsupported (frame i))) i)))
+
+(deftest an-inline-pseudo-element-continues-the-text-of-its-block
+  (let [th (first (filter #(= "th.s" (:name %)) (nodes 0)))]
+    (is (= ["text"] (kinds th)))
+    (is (= "Code ↕" (apply str (map :text (get-in th [:children 0 :runs])))))
+    (is (= "400" (get-in th [:children 0 :runs 1 :style :fontWeight])))))
+
+(deftest an-svg-is-kept-as-markup
+  (let [doc  (Jsoup/parse ^String (slurp (io/resource "html/sayvibe-section.bundle.html")))
+        host (.selectFirst doc "#__bundler_thumbnail")
+        svg  (first (filter #(= "svg" (:kind %))
+                            (tree-seq :children :children
+                                      (:node (tree/frame host (cascade/compute doc {:viewport sample/viewport})
+                                                         {:viewport sample/viewport})))))]
+    (is (some? svg))
+    (is (= (.outerHtml (.selectFirst host "svg")) (:markup svg)))))

@@ -123,6 +123,7 @@
     "mixed-pages" (str "All shapes must be on the same page; " detail " is on another page")
     "parent-on-other-page" (str "Board or group " detail " is on another page; a shape moves only to a parent on its own page")
     "create-failed" (str "Penpot could not create the " detail)
+    "boolean-of-boards" (str "Boards cannot be combined into a boolean shape: " detail)
     "component-not-found" (str "Component " detail " not found in the library")
     "library-not-connected" (str "Library " detail " is not connected to the open file; see get_file_libraries")
     "not-a-variant" (str "Component " detail " is not part of a variant set")

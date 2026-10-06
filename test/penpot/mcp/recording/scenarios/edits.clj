@@ -21,6 +21,12 @@
     (or (first (sort-by (comp str :id) (filter #(and (:variant-id %) (not= first-set (:variant-id %))) (live-components f))))
         (throw (ex-info "The test data has only one variant set" {})))))
 
+(defn- multi-property-component [f]
+  (let [taken #{(:variant-id (variant-component f)) (:variant-id (other-variant-component f))}]
+    (or (first (sort-by (comp str :id) (filter #(and (:variant-id %) (not (taken (:variant-id %))) (<= 2 (count (:variant-properties %))))
+                                               (live-components f))))
+        (throw (ex-info "The test data has no other variant set with two properties" {})))))
+
 (defn- variant-property [f]
   (or (some-> (variant-component f) :variant-properties first :name)
       (throw (ex-info "The test data has no variant property" {}))))
@@ -75,6 +81,7 @@
    (s "reset-overrides" "reset_overrides" #(at % (plain-copy %)))
    (s "set-variant-property" "set_variant_property" #(merge (base %) {"component_id" (str (:id (variant-component %))) "property" (variant-property %) "value" "Recorded"}))
    (s "rename-variant-property" "rename_variant_property" #(let [c (other-variant-component %)] (merge (base %) {"component_id" (str (:id c)) "property" (:name (first (:variant-properties c))) "new_name" "Recorded property"})))
+   (s "rename-variant-property-numeric" "rename_variant_property" #(let [c (multi-property-component %)] (merge (base %) {"component_id" (str (:id c)) "property" (:name (second (:variant-properties c))) "new_name" "1"})))
    (s "duplicate" "duplicate_shape" #(at % (rect %)))
    (s "blend-mode" "set_blend_mode" #(at % (rect %) "mode" "multiply"))
    (s "blur" "set_blur" #(at % (rect %) "layer_blur" 4))

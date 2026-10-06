@@ -18,27 +18,27 @@
 
 (deftest fetches-file-and-commits-page-change
   (let [client (it/client)]
-    (it/with-temp-project client
-      (fn [project]
-        (let [created (rpc/call client :create-file {:project-id (:id project) :name "it-file"})
-              page-id (uuid/next)]
+    (it/with-test-data-copy client
+      (fn [_ created]
+        (let [page-id (uuid/next)
+              before  (file/fetch client (:id created))
+              names   (mapv :name (file/pages before))]
           (changes/commit! client (:id created)
                            #(pcb/add-empty-page (pcb/empty-changes) page-id "IT page"))
           (let [fetched (file/fetch client (:id created))]
-            (is (= ["Page 1" "IT page"] (mapv :name (file/pages fetched))))
+            (is (= (conj names "IT page") (mapv :name (file/pages fetched))))
             (is (= "IT page" (:name (file/page fetched page-id))))
             (is (map? (:objects (file/page fetched page-id)))))
           (is (= "IT page" (:name (file/fetch-page client (:id created) page-id))))
-          (is (= "Page 1" (:name (file/fetch-page client (:id created) nil))))
-          (is (= 1 (:revn (file/revision client (:id created)))))
-          (is (= 2 (:page-count (file/stats client (:id created))))))))))
+          (is (= (first names) (:name (file/fetch-page client (:id created) nil))))
+          (is (= (inc (:revn before)) (:revn (file/revision client (:id created)))))
+          (is (= (inc (count names)) (:page-count (file/stats client (:id created))))))))))
 
 (deftest unknown-page-is-user-error
   (let [client (it/client)]
-    (it/with-temp-project client
-      (fn [project]
-        (let [created (rpc/call client :create-file {:project-id (:id project) :name "it-page"})
-              ex      (try (file/fetch-page client (:id created) (uuid/next)) nil
+    (it/with-test-data-copy client
+      (fn [_ created]
+        (let [ex      (try (file/fetch-page client (:id created) (uuid/next)) nil
                            (catch clojure.lang.ExceptionInfo e e))]
           (is (= :tool/user-error (:type (ex-data ex))))
           (is (re-find #"^Page .+ not found in file" (ex-message ex))))))))
