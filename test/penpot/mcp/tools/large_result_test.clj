@@ -3,14 +3,15 @@
    [clojure.data.json :as json]
    [clojure.test :refer [deftest is]]
    [penpot.mcp.exports :as exports]
+   [penpot.mcp.replay :as replay]
    [penpot.mcp.tool :as tool]
+   [penpot.mcp.tools :as all]
    [penpot.mcp.tools.large-result :as large-result])
   (:import
    (java.io ByteArrayInputStream)
    (java.util.zip ZipInputStream)))
 
-(defn- ctx []
-  {:exports (exports/store {:now (constantly 0)})})
+(def ^:private tools (into {} (map (juxt :name identity)) all/all))
 
 (defn- unzip [^bytes data]
   (with-open [z (ZipInputStream. (ByteArrayInputStream. data))]
@@ -19,37 +20,42 @@
         (recur (assoc acc (.getName e) (String. (.readAllBytes z) "UTF-8")))
         acc))))
 
-(defn- text-of [result]
-  (json/read-str (get-in result [:content 0 :text])))
+(defn- run [scenario]
+  (let [r (replay/run (tools (:tool (replay/recording scenario))) scenario)]
+    (is (empty? (:left r)) scenario)
+    {:answer (get-in r [:result :content 0 :text]) :ctx (:ctx r)}))
 
-(def ^:private big {:items (vec (repeat 30000 "abcdef"))})
+(defn- archive [{:keys [answer ctx]}]
+  (let [id (second (re-find #"export=([0-9a-f]{32})" (get-in (json/read-str answer) ["full_result" "download"])))]
+    (unzip (exports/take! (:exports ctx) id))))
 
-(deftest a-small-result-is-returned-as-it-is
-  (let [full {:items [1 2 3]}]
-    (is (= (tool/json-result full)
-           (large-result/result (ctx) {:full full :brief (constantly {:count 3}) :file-name "x.zip" :entry "x.json"})))))
+(deftest the-limit-keeps-every-answer-within-what-claude-code-accepts
+  (is (= 30000 large-result/max-inline-chars)))
 
-(deftest a-large-result-gives-the-brief-and-a-one-time-download
-  (let [c      (ctx)
-        result (text-of (large-result/result c {:full big :brief (constantly {:count 30000}) :file-name "items.zip" :entry "items.json"}))
-        id     (second (re-find #"export=([0-9a-f]{32})" (get-in result ["full_result" "download"])))
-        files  (unzip (exports/take! (:exports c) id))]
-    (is (= 30000 (get result "count")))
-    (is (re-find #"^curl -o items\.zip \"<MCP address>\?export=" (get-in result ["full_result" "download"])))
+(deftest a-real-answer-under-the-limit-is-returned-as-it-is
+  (let [{:keys [answer]} (run "library/tokens-type")]
+    (is (< (count answer) large-result/max-inline-chars))
+    (is (nil? (get (json/read-str answer) "full_result")))))
+
+(deftest a-real-answer-over-the-limit-gives-the-brief-and-a-one-time-download
+  (let [{:keys [answer] :as r} (run "token-usage/saved")
+        result (json/read-str answer)]
+    (is (< (count answer) large-result/max-inline-chars))
+    (is (re-find #"^curl -o token-usage\.zip \"<MCP address>\?export=" (get-in result ["full_result" "download"])))
     (is (= 60 (get-in result ["full_result" "expires_in_minutes"])))
-    (is (< large-result/max-inline-bytes (get-in result ["full_result" "size_bytes"])))
-    (is (= big (json/read-str (get files "items.json") :key-fn keyword)))))
+    (is (< large-result/max-inline-chars (get-in result ["full_result" "size_bytes"])))
+    (is (some? (get result "summary")))
+    (is (seq (json/read-str (get (archive r) "token-usage.json"))))))
+
+(deftest a-real-token-catalog-over-the-limit-is-archived-whole
+  (let [{:keys [answer] :as r} (run "library/tokens")
+        files (archive r)]
+    (is (some? (get (json/read-str answer) "full_result")))
+    (is (= 1 (count files)))
+    (is (seq (get (json/read-str (val (first files))) "sets")))))
 
 (deftest a-full-store-is-a-user-error
-  (let [c {:exports (exports/store {:now (constantly 0) :max-bytes 10})}
-        e (try (large-result/result c {:full big :brief (constantly {}) :file-name "x.zip" :entry "x.json"}) nil
-               (catch clojure.lang.ExceptionInfo e e))]
-    (is (tool/user-error? e))
-    (is (re-find #"narrow" (ex-message e)))))
-
-(deftest the-archive-can-hold-only-part-of-the-result
-  (let [c      (ctx)
-        result (text-of (large-result/result c {:full (assoc big :head 1) :brief (constantly {:head 1})
-                                                :archived (constantly big) :file-name "x.zip" :entry "x.json"}))
-        id     (second (re-find #"export=([0-9a-f]{32})" (get-in result ["full_result" "download"])))]
-    (is (= big (json/read-str (get (unzip (exports/take! (:exports c) id)) "x.json") :key-fn keyword)))))
+  (let [{:keys [args]} (replay/recording "token-usage/saved")
+        c (assoc (replay/context "token-usage/saved") :exports (exports/store {:now (constantly 0) :max-bytes 10}))
+        r (tool/invoke (tools "token_usage") c args)]
+    (is (re-find #"narrow" (get-in r [:content 0 :text])))))

@@ -11,7 +11,7 @@
 (defn- run [scenario]
   (let [replayed (replay/run (tools (:tool (replay/recording scenario))) scenario)]
     (is (empty? (:left replayed)) (str scenario " left recorded requests unused"))
-    (replay/data replayed)))
+    (replay/full-data replayed)))
 
 (defn- args [scenario]
   (:args (replay/recording scenario)))

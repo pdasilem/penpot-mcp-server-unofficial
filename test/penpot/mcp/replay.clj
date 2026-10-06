@@ -123,6 +123,23 @@
       (= :image type) {:image (select-keys content [:data :mime-type])}
       :else (json/read-str text))))
 
+(defn- unzip [^bytes data]
+  (with-open [z (java.util.zip.ZipInputStream. (java.io.ByteArrayInputStream. data))]
+    (loop [acc {}]
+      (if-let [e (.getNextEntry z)]
+        (recur (assoc acc (.getName e) (String. (.readAllBytes z) "UTF-8")))
+        acc))))
+
+(defn full-data [{:keys [ctx] :as replayed}]
+  (let [answer (data replayed)
+        link   (get-in answer ["full_result" "download"])]
+    (if-not link
+      answer
+      (let [id      (second (re-find #"export=([0-9a-f]{32})" link))
+            entries (unzip (exports/take! (:exports ctx) id))
+            archived (json/read-str (val (first entries)))]
+        (merge (dissoc answer "full_result" "archived_sections") archived)))))
+
 (defn penpot-answers [scenario cmd]
   (for [{:keys [kind status body] :as e} (:entries (recording scenario))
         :when (and (= :rpc kind) (= cmd (:cmd e)))]

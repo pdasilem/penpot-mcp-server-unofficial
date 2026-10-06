@@ -194,7 +194,7 @@ After the data is read from the editor, computing and writing an export takes at
 
 ## Large results
 
-A read tool whose answer would be larger than 100 KB returns a short version and `full_result`: a one-time download of the whole answer as a zip archive, kept for an hour, as a curl command for the MCP endpoint without the MCP key:
+A read tool whose answer would be longer than 30,000 characters returns a short version and `full_result`: a one-time download of the whole answer as a zip archive, kept for an hour, as a curl command for the MCP endpoint without the MCP key:
 
 ```bash
 curl -o shape-tree.zip "https://penpot.example.com/mcp/stream?export=<id>"

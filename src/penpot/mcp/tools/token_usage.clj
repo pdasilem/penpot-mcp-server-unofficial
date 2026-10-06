@@ -148,7 +148,7 @@
                       "Each raw value lists the tokens of the default theme combination with the same value in matches, or off_scale when none has it; "
                       "summary.unresolved_tokens names tokens whose value could not be computed. "
                       "sections picks the parts to return besides the summary. page_id narrows raw_values to one page; raw_values are paged with limit and cursor. "
-                      "When the other parts would be larger than 100 KB they are left out, archived_sections names them and full_result holds a one-time download of them.")
+                      "When the other parts would be longer than 30,000 characters they are left out, archived_sections names them and full_result holds a one-time download of them.")
     :annotations tool/read-only
     :input-schema (into [:map {:closed true}
                          common/file-id-param

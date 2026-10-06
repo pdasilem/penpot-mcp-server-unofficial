@@ -148,7 +148,7 @@
                          [:type {:optional true :description "Only shapes of this type"} common/plugin-types]] common/page-params)
     :handler list-shapes}
    {:name "get_shape_tree"
-    :description "Return the layer tree of a page, or of one shape, with id, name, type, geometry and child count per node. Children are listed bottom to top. Use depth to limit the size of the answer; a tree larger than 100 KB comes as the root with node_count and a one-time download of the whole tree in full_result."
+    :description "Return the layer tree of a page, or of one shape, with id, name, type, geometry and child count per node. Children are listed bottom to top. Use depth to limit the size of the answer; a tree longer than 30,000 characters comes as the root with node_count and a one-time download of the whole tree in full_result."
     :annotations tool/read-only
     :input-schema [:map {:closed true}
                    common/file-id-param
@@ -157,7 +157,7 @@
                    [:depth {:optional true :description "Levels of children to include (default 3)"} [:int {:min 0 :max 50}]]]
     :handler shape-tree}
    {:name "get_shape"
-    :description "Return all Penpot attributes of one shape (fills, strokes, layout, text content, tokens and so on), its plugin type and the id of the page it is on. When the answer would be larger than 100 KB, content is replaced by its size and full_result holds a one-time download of the whole shape."
+    :description "Return all Penpot attributes of one shape (fills, strokes, layout, text content, tokens and so on), its plugin type and the id of the page it is on. When the answer would be longer than 30,000 characters, content is replaced by its size and full_result holds a one-time download of the whole shape."
     :annotations tool/read-only
     :input-schema [:map {:closed true}
                    common/file-id-param
@@ -174,7 +174,7 @@
                          [:type {:optional true :description "Only shapes of this type"} common/plugin-types]] common/page-params)
     :handler search-shapes}
    {:name "get_shape_css"
-    :description "Generate CSS for a shape, and optionally for all its visible descendants: size, position (when not inside a layout), fills and gradients, border, radius, shadows, blur, flex and grid layout, and text styles. Returns one rule per shape and the whole stylesheet as text. When the answer would be larger than 100 KB it holds the rule of the shape itself and rule_count, and full_result holds a one-time download of styles.css and rules.json."
+    :description "Generate CSS for a shape, and optionally for all its visible descendants: size, position (when not inside a layout), fills and gradients, border, radius, shadows, blur, flex and grid layout, and text styles. Returns one rule per shape and the whole stylesheet as text. When the answer would be longer than 30,000 characters it holds the rule of the shape itself and rule_count, and full_result holds a one-time download of styles.css and rules.json."
     :annotations tool/read-only
     :input-schema [:map {:closed true}
                    common/file-id-param
@@ -183,7 +183,7 @@
                    [:include_children {:optional true :description "Also generate rules for all descendants"} :boolean]]
     :handler shape-css}
    {:name "get_shape_svg"
-    :description "Render a shape and its descendants as a standalone SVG document. With the file open in the editor the markup comes from Penpot itself; otherwise it is drawn from the saved file data, with text as plain SVG text and images as placeholders. Use export_shape for a raster image. Markup larger than 100 KB comes as svg_bytes and a one-time download in full_result."
+    :description "Render a shape and its descendants as a standalone SVG document. With the file open in the editor the markup comes from Penpot itself; otherwise it is drawn from the saved file data, with text as plain SVG text and images as placeholders. Use export_shape for a raster image. Markup longer than 30,000 characters comes as svg_bytes and a one-time download in full_result."
     :annotations tool/read-only
     :input-schema [:map {:closed true} common/file-id-param common/shape-id-param common/shape-page-param]
     :handler shape-svg}])
