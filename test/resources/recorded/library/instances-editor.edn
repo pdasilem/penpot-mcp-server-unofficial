@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf50af1e536f", "component_id" "14f85022-fd8f-806f-8008-aed188c4a23b"}, :unsaved [], :entries [{:blob "6e74b7d818577e5507ed26bda9cd03818049e87e408bd3ec6ca7a5f65dfe0bb8"}], :tool "get_component_instances", :scenario "library/instances-editor"}

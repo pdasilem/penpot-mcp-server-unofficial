@@ -84,9 +84,12 @@
   (str/join
    "\n"
    ["const catalog = penpot.library.local.tokens;"
+    "const filter = (typeof args !== 'undefined' && args.tokenFilter) || {};"
+    "const query = filter.query ? filter.query.toLowerCase() : null;"
+    "const wanted = (t) => (!filter.type || t.type === filter.type) && (!query || t.name.toLowerCase().includes(query));"
     "return {"
-    "  sets: catalog.sets.map((s) => ({ id: s.id, name: s.name, active: s.active,"
-    "    tokens: s.tokens.map((t) => ({ id: t.id, name: t.name, type: t.type, value: t.value, description: t.description })) })),"
+    "  sets: catalog.sets.filter((s) => !filter.set || s.name === filter.set).map((s) => ({ id: s.id, name: s.name, active: s.active,"
+    "    tokens: s.tokens.filter(wanted).map((t) => ({ id: t.id, name: t.name, type: t.type, value: t.value, description: t.description })) })),"
     "  themes: catalog.themes.map((t) => ({ id: t.id, group: t.group, name: t.name, active: t.active,"
     "    sets: t.activeSets.map((s) => s.name) }))"
     "};"]))

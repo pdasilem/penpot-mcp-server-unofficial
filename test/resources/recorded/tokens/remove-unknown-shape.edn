@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf7b286205b5", "attr" "fill", "shape_id" "1673b4f9-5b86-8073-8008-b50b12401b80"}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:blob "5179b2cd5c37b177839fa07634f85e113261d34ee664b31a0f3e40284660d0a7"}], :tool "remove_token", :scenario "tokens/remove-unknown-shape"}

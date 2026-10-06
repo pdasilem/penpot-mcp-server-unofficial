@@ -1,7 +1,7 @@
 (ns penpot.mcp.html.bundle
   (:require
-   [clojure.data.json :as json]
    [clojure.string :as str]
+   [penpot.mcp.codec :as json]
    [penpot.mcp.tool :as tool])
   (:import
    (java.io ByteArrayInputStream)
@@ -14,7 +14,7 @@
   (when-let [^Element el (.selectFirst doc (str "script[type=__bundler/" kind "]"))]
     (json/read-str (.data el))))
 
-(def default-max-bytes (* 64 1024 1024))
+(def default-max-bytes (* 32 1024 1024))
 
 (defn- over-budget [max-bytes]
   (tool/user-error (str "The design bundle's assets unpack to more than " max-bytes " bytes; "

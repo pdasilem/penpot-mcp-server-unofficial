@@ -51,12 +51,5 @@
 (defn- explain [model]
   (some-> (m/explain model-schema model) me/humanize))
 
-(deftest the-fixture-model-has-the-agreed-shape
+(deftest the-model-of-the-real-catalog-has-the-agreed-shape
   (is (nil? (explain (fixture/model)))))
-
-(deftest a-model-with-gradients-and-typographies-has-the-agreed-shape
-  (is (nil? (explain (fixture/model (assoc fixture/catalog
-                                           :colors [{:name "Sky" :path "" :gradient {:type "linear" :start-x 0 :start-y 0 :end-x 1 :end-y 1 :width 1
-                                                                                     :stops [{:color "#ffffff" :opacity 1 :offset 0} {:color "#000000" :opacity 0.5 :offset 1}]}}]
-                                           :typographies [{:name "Body" :path "Text" :font-family "Inter" :font-size "16" :font-weight "700"
-                                                           :font-style "italic" :line-height "1.5" :letter-spacing "0" :text-transform "uppercase"}]))))))

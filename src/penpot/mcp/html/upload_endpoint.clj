@@ -1,7 +1,7 @@
 (ns penpot.mcp.html.upload-endpoint
   (:require
-   [clojure.data.json :as json]
    [penpot.mcp.auth :as auth]
+   [penpot.mcp.codec :as json]
    [penpot.mcp.html.uploads :as uploads])
   (:import
    (jakarta.servlet Filter)

@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf944a6bb1b7", "shape_id" "1af5d650-912d-8079-8008-bb4e5dfbdc4b"}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf944a6bb1b7"], :entries [{:blob "9696f6721539f3d960c160e0f5cd36aefe116f0a869cab5a241887862d6871fb"} {:blob "e90961713ba7bc374380ec27f1fed821e9ce5e989aad0f65d24f655e8534c699"}], :tool "detach_instance", :scenario "edits/detach"}

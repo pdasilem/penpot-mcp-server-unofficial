@@ -1,60 +1,59 @@
 (ns penpot.mcp.html.box-test
   (:require
-   [clojure.test :refer [deftest is testing]]
-   [penpot.mcp.html.box :as box]))
+   [clojure.test :refer [deftest is]]
+   [penpot.mcp.html.box :as box]
+   [penpot.mcp.html.sample :as sample]))
 
-(def ctx {:font-size 16 :root-font-size 16 :viewport 1440})
+(def ^:private ctx {:font-size 15 :root-font-size 15 :viewport sample/viewport})
 
-(defn- border [side w style color]
-  {(str "border-" side "-width") w (str "border-" side "-style") style (str "border-" side "-color") color})
+(defn- decoration [selector] (box/decoration (sample/style selector) ctx))
 
-(def all-borders
-  (merge (border "top" "1px" "solid" "#c9cdd0") (border "right" "1px" "solid" "#c9cdd0")
-         (border "bottom" "1px" "solid" "#c9cdd0") (border "left" "1px" "solid" "#c9cdd0")))
+(defn- spacing [selector] (box/spacing (sample/style selector) ctx))
 
-(deftest background-color-becomes-a-fill
-  (is (= [{:fillColor "#e9ecee" :fillOpacity 1.0}] (:fills (box/decoration {"background-color" "#e9ecee"} ctx))))
-  (is (= [] (:fills (box/decoration {"background-color" "transparent"} ctx)))))
-
-(deftest linear-gradient-becomes-a-gradient-fill
-  (let [[f] (:fills (box/decoration {"background-image" "linear-gradient(90deg, #fff, #000)"} ctx))]
-    (is (= "linear" (get-in f [:fillColorGradient :type])))
-    (is (= [0 50 100 50] (mapv #(Math/round (* 100.0 (double (get-in f [:fillColorGradient %])))) [:startX :startY :endX :endY])))
-    (is (= [{:color "#ffffff" :opacity 1.0 :offset 0.0} {:color "#000000" :opacity 1.0 :offset 1.0}]
-           (get-in f [:fillColorGradient :stops])))))
+(deftest a-background-color-becomes-a-fill
+  (is (= [{:fillColor "#ffffff" :fillOpacity 1.0}] (:fills (decoration ".rule"))))
+  (is (= [{:fillColor "#e9ecee" :fillOpacity 1.0}] (:fills (decoration ".nav div.on"))))
+  (is (= [] (:fills (decoration ".top")))))
 
 (deftest equal-borders-become-an-inner-stroke
-  (let [d (box/decoration all-borders ctx)]
+  (let [d (decoration ".rule")]
     (is (= [{:strokeColor "#c9cdd0" :strokeOpacity 1.0 :strokeWidth 1.0 :strokeStyle "solid" :strokeAlignment "inner"}] (:strokes d)))
     (is (= [] (:lines d)))))
 
-(deftest partial-borders-become-lines
-  (let [d (box/decoration (merge (border "bottom" "1px" "solid" "#e3e6e8") (border "left" "2px" "solid" "#000") (border "top" "0" "solid" "#000")) ctx)]
+(deftest a-one-side-border-becomes-a-line
+  (let [d (decoration ".top")]
     (is (= [] (:strokes d)))
-    (is (= [] (:shadows d)))
-    (is (= [{:side "bottom" :width 1.0 :color "#e3e6e8" :opacity 1.0} {:side "left" :width 2.0 :color "#000000" :opacity 1.0}] (:lines d)))))
+    (is (= [{:side "bottom" :width 1.0 :color "#e3e6e8" :opacity 1.0}] (:lines d)))))
 
 (deftest dashed-borders-keep-their-style
-  (is (= "dashed" (get-in (box/decoration (assoc all-borders "border-top-style" "dashed" "border-right-style" "dashed"
-                                                 "border-bottom-style" "dashed" "border-left-style" "dashed") ctx)
-                          [:strokes 0 :strokeStyle]))))
+  (is (= "dashed" (get-in (decoration "div[style*=dashed]") [:strokes 0 :strokeStyle]))))
 
-(deftest radius-shadows-opacity-and-clip
-  (let [d (box/decoration {"border-top-left-radius" "10px" "border-top-right-radius" "10px"
-                           "border-bottom-right-radius" "6px" "border-bottom-left-radius" "0"
-                           "box-shadow" "inset 0 -2px 0 #5a6167" "opacity" ".55" "overflow-x" "hidden"} ctx)]
-    (is (= [10.0 10.0 6.0 0.0] (:radius d)))
-    (is (= [{:style "inner-shadow" :offsetX 0.0 :offsetY -2.0 :blur 0.0 :spread 0.0 :hidden false
-             :color {:color "#5a6167" :opacity 1.0}}]
-           (:shadows d)))
-    (is (= 0.55 (:opacity d)))
-    (is (true? (:clip d)))))
+(deftest radius-comes-from-the-border-radius
+  (is (= [8.0 8.0 8.0 8.0] (:radius (decoration ".rule"))))
+  (is (= [10.0 10.0 10.0 10.0] (:radius (decoration ".desk")))))
+
+(deftest an-inset-box-shadow-becomes-an-inner-shadow
+  (is (= [{:style "inner-shadow" :offsetX 0.0 :offsetY -2.0 :blur 0.0 :spread 0.0 :hidden false
+           :color {:color "#5a6167" :opacity 1.0}}]
+         (:shadows (decoration ".tabs span.on")))))
+
+(deftest an-outer-box-shadow-becomes-a-drop-shadow
+  (is (= [{:style "drop-shadow" :offsetX 0.0 :offsetY 8.0 :blur 28.0 :spread 0.0 :hidden false
+           :color {:color "#000000" :opacity 0.12}}]
+         (:shadows (decoration "div.form[style*=box-shadow]")))))
+
+(deftest opacity-and-overflow-become-opacity-and-clipping
+  (is (= 0.45 (:opacity (decoration "div.main[style*=opacity]"))))
+  (is (true? (:clip (decoration ".desk"))))
+  (is (false? (:clip (decoration ".rule")))))
 
 (deftest spacing-resolves-in-pixels
-  (let [s (box/spacing {"padding-top" "7px" "padding-right" "10px" "padding-bottom" "7px" "padding-left" "10px"
-                        "margin-top" "-6px" "margin-left" "auto" "row-gap" "1em" "column-gap" "8px"} ctx)]
-    (is (= [7.0 10.0 7.0 10.0] (:padding s)))
-    (is (= [-6.0 0.0 0.0 0.0] (:margin s)))
-    (is (= [16.0 8.0] (:gap s)))
-    (testing "auto margins are reported for alignment"
-      (is (= #{:left} (:auto-margins s))))))
+  (let [s (spacing ".rule")]
+    (is (= [12.0 14.0 12.0 14.0] (:padding s)))
+    (is (= [0.0 0.0 28.0 0.0] (:margin s))))
+  (is (= [10.0 10.0] (:gap (spacing ".top"))))
+  (is (= [0.0 8.0 0.0 8.0] (:margin (spacing ".nav div.on")))))
+
+(deftest auto-margins-are-reported-for-alignment
+  (is (= #{:left} (:auto-margins (spacing ".top .who"))))
+  (is (= #{} (:auto-margins (spacing ".rule")))))

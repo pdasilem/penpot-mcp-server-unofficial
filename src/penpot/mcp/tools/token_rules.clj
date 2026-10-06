@@ -1,10 +1,13 @@
 (ns penpot.mcp.tools.token-rules
   (:require
-   [app.common.types.shape.layout :as ctsl]
-   [app.common.types.token :as ctt]
+      [penpot.mcp.penpot.token :as ctt]
    [clojure.set :as set]
    [clojure.string :as str]
    [penpot.mcp.tool :as tool]))
+
+(defn- layout-child? [objects shape]
+  (let [parent (get objects (:parent-id shape))]
+    (and (= :frame (:type parent)) (contains? #{:flex :grid} (:layout parent)))))
 
 (def ^:private token-properties
   {:border-radius   {:attributes ctt/border-radius-keys}
@@ -98,7 +101,7 @@
         token-attrs   (or all-attributes attributes)
         _             (when-not token-attrs
                         (throw (tool/user-error (str "A " (type-name type) " token cannot be applied to shapes"))))
-        layout-child? (ctsl/any-layout-immediate-child? objects shape)
+        layout-child? (layout-child? objects shape)
         allowed       (shape-attrs shape layout-child?)
         shape-type    (name (:type shape))]
     (if (seq attrs)

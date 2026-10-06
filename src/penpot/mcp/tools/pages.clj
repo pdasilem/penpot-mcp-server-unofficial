@@ -1,11 +1,11 @@
 (ns penpot.mcp.tools.pages
   (:require
-   [app.common.files.changes-builder :as pcb]
-   [app.common.uuid :as uuid]
    [clojure.string :as str]
    [penpot.mcp.penpot.changes :as changes]
    [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.revision :as revision]
+   [penpot.mcp.penpot.shape :as shape]
+   [penpot.mcp.penpot.uuid :as uuid]
    [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.common :as common]))
@@ -46,13 +46,13 @@
     (tool/json-result {:page_id page-id :name name})
     (let [page-id (uuid/next)]
       (revision/await-clean! ctx file_id)
-      (changes/commit! rpc file_id #(pcb/add-empty-page (pcb/empty-changes) page-id name))
+      (changes/commit! rpc file_id #(vector (shape/add-page page-id name)))
       (tool/json-result {:page_id page-id :name name}))))
 
 (defn- rename-page [{:keys [rpc] :as ctx} {:keys [file_id page_id name]}]
   (when-not (in-editor ctx file_id rename-body {:page-id page_id :name name})
     (let [page (file/read-page ctx file_id page_id)]
-      (changes/commit! rpc file_id #(pcb/mod-page (pcb/empty-changes) page {:name name}))))
+      (changes/commit! rpc file_id #(vector (shape/mod-page page {:name name})))))
   (tool/json-result {:page_id page_id :name name}))
 
 (defn- delete-page [{:keys [rpc] :as ctx} {:keys [file_id page_id]}]
@@ -60,7 +60,7 @@
     (let [page (file/read-page ctx file_id page_id)]
       (when (<= (:page-count (file/stats rpc file_id)) 1)
         (throw (tool/user-error "A Penpot file must keep at least one page")))
-      (changes/commit! rpc file_id #(pcb/del-page (pcb/empty-changes) page))))
+      (changes/commit! rpc file_id #(vector (shape/del-page page)))))
   (tool/json-result {:deleted page_id}))
 
 (def ^:private page-param

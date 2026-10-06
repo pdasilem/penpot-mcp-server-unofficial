@@ -1,9 +1,10 @@
 (ns penpot.mcp.server-test
   (:require
    [clojure.data.json]
+   [clojure.java.io]
    [clojure.test :refer [deftest is use-fixtures]]
    [penpot.mcp.exports]
-   [penpot.mcp.fixtures]
+   [penpot.mcp.replay]
    [penpot.mcp.tools.design-system]
    [penpot.mcp.html.upload-endpoint]
    [penpot.mcp.html.uploads]
@@ -13,6 +14,10 @@
    [penpot.mcp.tool :as tool]))
 
 (def mcp-key "test-mcp-key")
+
+(def sample-html (slurp (clojure.java.io/resource "html/sayvibe-section.html")))
+
+(def upload-limit (alength (.getBytes ^String sample-html "UTF-8")))
 (def version-error (atom nil))
 
 (def echo-tool
@@ -47,7 +52,7 @@
                             :mcp-key mcp-key
                             :tools [echo-tool image-tool nested-tool]
                             :instructions "Shared rules"
-                            :upload-limit 2048
+                            :upload-limit upload-limit
                             :ctx {:version-error (fn [] @version-error) :uploads uploads :exports exports}})]
       (try
         (binding [*server* s] (run))
@@ -140,28 +145,28 @@
     {:status (.statusCode resp) :body (.body resp)}))
 
 (deftest html-upload-is-stored-and-returns-an-id
-  (let [{:keys [status body]} (raw-post (str "userToken=" mcp-key "&upload=html") "<html><body>Hi</body></html>")
+  (let [{:keys [status body]} (raw-post (str "userToken=" mcp-key "&upload=html") sample-html)
         id                    (get (clojure.data.json/read-str body) "upload_id")]
     (is (= 201 status))
-    (is (= "<html><body>Hi</body></html>" (penpot.mcp.html.uploads/text uploads id)))))
+    (is (= sample-html (penpot.mcp.html.uploads/text uploads id)))))
 
 (deftest html-upload-needs-the-mcp-key
-  (is (= 401 (:status (raw-post "userToken=wrong&upload=html" "<html></html>")))))
+  (is (= 401 (:status (raw-post "userToken=wrong&upload=html" sample-html)))))
 
 (deftest html-upload-rejects-empty-and-oversized-bodies
   (is (= 400 (:status (raw-post (str "userToken=" mcp-key "&upload=html") ""))))
-  (is (= 413 (:status (raw-post (str "userToken=" mcp-key "&upload=html") (apply str (repeat 2049 "a")))))))
+  (is (= 413 (:status (raw-post (str "userToken=" mcp-key "&upload=html") (str sample-html " "))))))
 
 (deftest html-upload-beyond-the-store-budget-is-refused
   (let [full (penpot.mcp.html.uploads/store {:now #(System/currentTimeMillis) :max-bytes 4})
-        f    (penpot.mcp.html.upload-endpoint/upload-filter full 2048)
+        f    (penpot.mcp.html.upload-endpoint/upload-filter full upload-limit)
         out  (java.io.StringWriter.)
         status (atom nil)
         req  (reify jakarta.servlet.http.HttpServletRequest
                (getQueryString [_] "upload=html")
                (getMethod [_] "POST")
                (getInputStream [_]
-                 (let [in (java.io.ByteArrayInputStream. (.getBytes "<html></html>"))]
+                 (let [in (java.io.ByteArrayInputStream. (.getBytes ^String sample-html "UTF-8"))]
                    (proxy [jakarta.servlet.ServletInputStream] []
                      (read ([] (.read in)) ([b o l] (.read in b o l)))
                      (isFinished [] false) (isReady [] true) (setReadListener [_])))))
@@ -201,14 +206,11 @@
 
 (deftest an-exported-design-system-downloads-through-the-mcp-address
   (let [store  (penpot.mcp.exports/store {:now #(System/currentTimeMillis)})
-        editor {:tokens {:sets [{:id "s" :name "core" :active true :tokens [{:id "t" :name "space.base" :type "spacing" :value "4"}]}]
-                         :themes []}
-                :colors [] :typographies [] :fileName "Kit"}
-        ctx    (assoc (penpot.mcp.fixtures/plugin-ctx editor) :version-error (constantly nil) :exports store)
+        ctx    (assoc (penpot.mcp.replay/context "design-system/css") :exports store)
         s      (server/start! {:host "127.0.0.1" :port 0 :mcp-key mcp-key :tools penpot.mcp.tools.design-system/tools :ctx ctx})]
     (try
       (let [c      (client/connect (str "http://127.0.0.1:" (:port s) "/mcp?userToken=" mcp-key))
-            result (clojure.data.json/read-str (get-in (client/call-tool c "export_design_system" {:file_id (str penpot.mcp.fixtures/file-id) :platform "css"})
+            result (clojure.data.json/read-str (get-in (client/call-tool c "export_design_system" (:args (penpot.mcp.replay/recording "design-system/css")))
                                                        [:content 0 :text]))
             id     (get result "export_id")
             get-zip (fn [] (let [http (java.net.http.HttpClient/newHttpClient)

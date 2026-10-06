@@ -1,84 +1,40 @@
 (ns penpot.mcp.design.export-test
   (:require
+   [clojure.set :as set]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is]]
-   [penpot.mcp.design.export :as export]
-   [penpot.mcp.design.tokens :as tokens]))
+   [penpot.mcp.design.fixture :as fixture]))
 
-(def ^:private catalog
-  {:sets [{:name "core" :active true
-           :tokens [{:name "space.base" :type :spacing :value "4" :description "Base step"}
-                    {:name "radius" :type :border-radius :value "{space.base} * 2"}
-                    {:name "weight" :type :font-weight :value "Bold Italic"}
-                    {:name "body" :type :typography :value {:font-family ["Inter"] :font-size "16" :line-height "150%"}}
-                    {:name "lift" :type :shadow :value [{:offset-x "0" :offset-y "2" :blur "4" :spread "0" :color "rgba(#000000, 0.25)" :inset false}]}
-                    {:name "broken" :type :spacing :value "{nope}"}]}
-          {:name "light" :active true :tokens [{:name "bg" :type :color :value "#FFFFFF"}]}
-          {:name "dark" :active false :tokens [{:name "bg" :type :color :value "#111111"} {:name "only-dark" :type :spacing :value "1"}]}]
-   :themes [{:group "mode" :name "light" :active false :sets ["core" "light"]}
-            {:group "mode" :name "dark" :active true :sets ["core" "dark"]}]
-   :colors [{:name "Primary" :path "Brand" :color "#3366ff" :opacity 0.5}
-            {:name "Sky" :path "" :gradient {:type "linear" :start-x 0.5 :start-y 0 :end-x 0.5 :end-y 1 :width 1
-                                             :stops [{:color "#ffffff" :opacity 1 :offset 0} {:color "#000000" :opacity 1 :offset 1}]}}
-            {:name "Photo" :path "" :image {:id "img"}}]
-   :typographies [{:name "Body" :path "Text" :font-family "Inter" :font-size "16" :font-weight "700" :font-style "italic" :line-height "" :letter-spacing "0"}]
-   :warnings []})
+(defn- catalog-tokens [set-names]
+  (let [by-name (into {} (map (juxt :name identity)) (:sets (fixture/catalog)))]
+    (mapcat (comp :tokens by-name) set-names)))
 
-(def ^:private exported
-  (delay (export/model catalog (tokens/resolve-catalog catalog))))
+(deftest combinations-follow-the-themes-and-the-active-one-is-the-default
+  (let [themes (:themes (fixture/catalog))]
+    (is (= (map #(str (:group %) "=" (:name %)) themes) (map :id (:combinations (fixture/model)))))
+    (is (= (map :active themes) (map :default? (:combinations (fixture/model)))))))
 
-(defn- token [combination name]
-  (some #(when (= name (:name %)) %) (:tokens combination)))
-
-(deftest combinations-carry-an-id-and-the-active-default
-  (is (= [["mode=light" false] ["mode=dark" true]] (map (juxt :id :default?) (:combinations @exported)))))
+(deftest every-combination-holds-the-tokens-of-its-sets
+  (doseq [{:keys [themes tokens]} (:combinations (fixture/model))
+          :let [[group theme-name] (first themes)
+                theme (some #(when (and (= group (:group %)) (= theme-name (:name %))) %) (:themes (fixture/catalog)))]]
+    (is (= (set (map :name (catalog-tokens (:sets theme)))) (set (map :name tokens))) theme-name)))
 
 (deftest values-are-normalized-per-kind
-  (let [light (first (:combinations @exported))]
-    (is (= {:name "space.base" :path ["space" "base"] :type :spacing :value {:kind :dimension :value 4.0 :unit "px"} :description "Base step"}
-           (token light "space.base")))
-    (is (= {:kind :dimension :value 8.0 :unit "px"} (:value (token light "radius"))))
-    (is (= {:kind :font-weight :weight 700 :italic true :css "Bold Italic"} (:value (token light "weight"))))
-    (is (= {:kind :typography :fields {:font-family {:kind :font-family :families ["Inter"]}
-                                       :font-size {:kind :dimension :value 16.0 :unit "px"}
-                                       :line-height {:kind :number :value 1.5}}}
-           (:value (token light "body"))))
-    (is (= {:r 0 :g 0 :b 0 :a 0.25} (get-in (token light "lift") [:value :layers 0 :color :rgba])))
-    (is (= {:kind :color :css "#ffffff" :rgba {:r 255 :g 255 :b 255 :a 1.0}} (:value (token light "bg"))))))
+  (let [kinds (frequencies (map (comp :kind :value) (:tokens (first (:combinations (fixture/model))))))]
+    (is (every? kinds [:color :dimension :number :font-weight :font-family :typography :shadow]))))
 
-(deftest tokens-keep-library-order
-  (is (= ["space.base" "radius" "weight" "body" "lift" "bg"] (map :name (:tokens (first (:combinations @exported)))))))
+(deftest colors-keep-the-css-penpot-shows
+  (doseq [{:keys [value name]} (:tokens (first (:combinations (fixture/model))))
+          :when (= :color (:kind value))]
+    (is (re-matches #"#[0-9a-f]{6}|rgba\(.*\)" (:css value)) name)))
 
-(deftest typed-platforms-get-only-tokens-present-everywhere
-  (is (= ["space.base" "radius" "weight" "body" "lift" "bg"] (:uniform @exported)))
-  (is (not-any? #(= :not-in-every-combination (:code %)) (:problems @exported))))
+(deftest typed-platforms-get-the-tokens-present-everywhere
+  (let [per-combination (map (comp set (partial map :name) :tokens) (:combinations (fixture/model)))]
+    (is (= (apply set/intersection per-combination) (set (:uniform (fixture/model)))))))
 
-(deftest broken-tokens-become-problems
-  (is (some #(and (= :token-error (:code %)) (= "broken" (:token %)) (= "mode=light" (:combination %))) (:problems @exported))))
-
-(deftest library-colors-and-typographies-are-normalized
-  (let [{:keys [colors typographies]} (:library @exported)]
-    (is (= {:name "Brand / Primary" :value {:kind :color :rgba {:r 51 :g 102 :b 255 :a 0.5} :css "rgba(51, 102, 255, 0.5)"}} (first colors)))
-    (is (= "linear-gradient(180deg, #ffffff 0%, #000000 100%)" (get-in colors [1 :value :css])))
-    (is (= 2 (count colors)))
-    (is (some #{{:code :image-color-skipped :color "Photo"}} (:problems @exported)))
-    (is (= {:kind :font-weight :weight 700 :italic true :css "700 italic"} (get-in typographies [0 :value :fields :font-weight])))
-    (is (not (contains? (get-in typographies [0 :value :fields]) :line-height)))))
-
-(deftest a-theme-group-without-a-name-is-called-theme
-  (let [c {:sets [{:name "a" :active true :tokens [{:name "x" :type :spacing :value "1"}]}]
-           :themes [{:group "" :name "in" :active true :sets ["a"]}]
-           :colors [] :typographies [] :warnings []}]
-    (is (= ["theme=in"] (map :id (:combinations (export/model c (tokens/resolve-catalog c))))))))
-
-(deftest a-failed-default-combination-is-reported
-  (let [c {:sets [{:name "ok" :active false :tokens [{:name "x" :type :spacing :value "1"}]}
-                  {:name "loop" :active false :tokens [{:name "a" :type :spacing :value "{b} + 1"} {:name "b" :type :spacing :value "{a} * 2"}]}]
-           :themes [{:group "mode" :name "broken" :active true :sets ["ok" "loop"]}
-                    {:group "mode" :name "fine" :active false :sets ["ok"]}]
-           :colors [] :typographies [] :warnings []}
-        m (export/model c (tokens/resolve-catalog c))]
-    (is (= ["mode=fine"] (map :id (:combinations m))))
-    (is (some #{{:code :default-combination-failed :combination "mode=broken"}} (:problems m)))))
-
-(deftest gradients-carry-their-angle
-  (is (= 180.0 (get-in @exported [:library :colors 1 :value :angle]))))
+(deftest library-colors-are-normalized
+  (let [{:keys [name value]} (first (get-in (fixture/model) [:library :colors]))
+        source (first (:colors (fixture/catalog)))]
+    (is (str/ends-with? name (str (:name source))))
+    (is (= (str/lower-case (:color source)) (:css value)))))

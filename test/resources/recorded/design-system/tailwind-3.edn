@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf50af1e536f", "platform" "tailwind", "options" {"version" 3}}, :unsaved [], :entries [{:blob "fa8eea1ed44f5c309d24e9330c47ff40ddc186c03b0acd5ba1d503168590e31a"}], :tool "export_design_system", :scenario "design-system/tailwind-3"}

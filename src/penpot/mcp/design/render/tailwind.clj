@@ -94,9 +94,12 @@
         :when (or (nil? bucket) (= bucket (:bucket d)))]
     (str (:property d) ": " (:value d) ";")))
 
-(defn- dark-variant [group]
-  (let [attr (css/attribute group)]
-    (str "@custom-variant dark (&:where([" attr "=dark], [" attr "=dark] *));\n")))
+(defn- dark-variant [model group]
+  (let [attr  (css/attribute group)
+        parts (mapcat (fn [t] (let [sel (str "[" attr "=" (css/quoted t) "]")] [sel (str sel " *")]))
+                      (table/scheme-themes model group "dark"))]
+    (when (seq parts)
+      (str "@custom-variant dark (&:where(" (str/join ", " parts) "));\n"))))
 
 (defn- named-entries [model ident-of]
   (let [default (table/default-combination model)
@@ -117,7 +120,7 @@
         variants (for [c (remove #(= (:id default) (:id %)) (:combinations model))]
                    (css/block (css/selector (:themes c) (:themes default))
                               (lines-for prefix entries (:id c) nil #(not= %2 (get % (:id default))))))
-        variant  (when color-scheme-group (dark-variant color-scheme-group))]
+        variant  (when color-scheme-group (dark-variant model color-scheme-group))]
     {:files [{:path "tokens.css" :content (str/join "\n" (remove nil? (concat [theme root] variants [variant])))}]
      :problems (into (:problems named) (table/scheme-group-problems model color-scheme-group))}))
 

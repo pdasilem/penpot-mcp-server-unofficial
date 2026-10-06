@@ -1,13 +1,14 @@
 (ns penpot.mcp.tool
   (:require
-   [clojure.data.json :as data.json]
    [clojure.string :as str]
-   [clojure.tools.logging :as log]
    [malli.core :as m]
    [malli.error :as me]
    [malli.json-schema :as mjs]
    [malli.transform :as mt]
-   [penpot.mcp.json :as json]))
+   [penpot.mcp.codec :as data.json]
+   [penpot.mcp.json :as json]
+   [penpot.mcp.log :as log]
+   [penpot.mcp.penpot.heavy :as heavy]))
 
 (defn- stringify [x]
   (cond
@@ -65,8 +66,14 @@
 (def external
   (assoc additive :open-world true))
 
+(defn json-text [data]
+  (data.json/write-str (json/prune (json/plain data))))
+
+(defn text-result [text]
+  {:content [{:type :text :text text}] :error? false})
+
 (defn json-result [data]
-  {:content [{:type :text :text (data.json/write-str (json/prune (json/plain data)))}] :error? false})
+  (text-result (json-text data)))
 
 (defn error-result [message]
   {:content [{:type :text :text message}] :error? true})
@@ -87,7 +94,10 @@
       (if error
         (error-result error)
         (try
-          (handler ctx value)
+          (heavy/run #(handler ctx value))
+          (catch OutOfMemoryError _
+            (log/warn "Tool" name "ran out of memory")
+            (error-result (str "Tool " name " ran out of memory; narrow the request and try again")))
           (catch Exception e
             (if (user-error? e)
               (error-result (ex-message e))

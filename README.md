@@ -90,7 +90,20 @@ mcp:
       valueFrom: {secretKeyRef: {name: penpot-mcp, key: password}}
     - name: PENPOT_MCP_KEY
       valueFrom: {secretKeyRef: {name: penpot-mcp, key: mcp-key}}
+    - name: PENPOT_MCP_SPOOL_DIR
+      value: /var/spool/penpot-mcp
+  volumes:
+    - name: spool
+      emptyDir: {sizeLimit: 256Mi}
+  volumeMounts:
+    - name: spool
+      mountPath: /var/spool/penpot-mcp
+  resources:
+    limits:
+      memory: 512Mi
 ```
+
+The `spool` volume keeps downloads and uploads on the node's disk instead of in the server's memory; an `emptyDir` with `medium: Memory` would count against the memory limit again.
 
 `<frontend service>` is the chart's full name: the release name when it contains `penpot`, otherwise `<release>-penpot`, or `fullnameOverride` when set. Keep `mcp.service.httpPort` 4401 and `mcp.service.wsPort` 4402, or set `MCP_PORT` and `WS_PORT` in `extraEnvs` to the same values. The chart already points the frontend at the `-mcp` service.
 
@@ -155,7 +168,7 @@ The `import` group turns a static HTML design, such as a Claude Design export, i
    curl --data-binary @design.html "https://penpot.example.com/mcp/stream?userToken=<MCP key>&upload=html"
    ```
 
-   The answer holds `upload_id`. Uploads are limited to 20 MB each and 100 MB in total and kept in memory for an hour; a full store answers 507.
+   The answer holds `upload_id`. Uploads are limited to 20 MB each, kept for an hour after their last use and share the store described in [Memory](#memory); a full store answers 507.
 2. `import_html` with the file id, `upload_id`, `frame_selector` (each match becomes a board) and optionally `section_selector` (each section heading starts a new page) starts a background job.
 3. `get_import_status` reports progress; `cancel_import` stops after the current frame; `resume_import` continues a failed or cancelled job.
 
@@ -177,7 +190,21 @@ curl -o design-system.zip "https://penpot.example.com/mcp/stream?export=<id>"
 
 The archive holds the generated files and `problems.json`. Each entry of `problems.json` has `code`, `severity` (`error` when something was left out of the files, `warning` otherwise), `subject` (`kind` and `name`), the theme `combinations` it applies to and `details`.
 
-After the data is read from the editor, computing and writing an export takes at most 30 seconds; two exports run at once and four more wait up to 30 seconds. One export may be at most 20 MB. Exports live in the memory of the server instance that made them: a restart drops them, and with several instances the download must reach the same one. The download id is in the request URL, so Penpot's nginx log holds it until the download; restrict access to that log.
+After the data is read from the editor, computing and writing an export takes at most 30 seconds; two exports run at once and four more wait up to 30 seconds. One export may be at most 20 MB. Exports live in the store of the server instance that made them: a restart drops them, and with several instances the download must reach the same one. The download id is in the request URL, so Penpot's nginx log holds it until the download; restrict access to that log.
+
+## Large results
+
+A read tool whose answer would be larger than 100 KB returns a short version and `full_result`: a one-time download of the whole answer as a zip archive, kept for an hour, as a curl command for the MCP endpoint without the MCP key:
+
+```bash
+curl -o shape-tree.zip "https://penpot.example.com/mcp/stream?export=<id>"
+```
+
+The tool descriptions say what each short version holds. Images from `export_shape` are scaled so that their longer side is at most `max_size`, 768 pixels by default and 1568 at most.
+
+## Memory
+
+The server gives half of its memory limit to the Java heap; the rest is used by the JVM itself. Downloads and uploads share one store of `PENPOT_MCP_STORE_MB`. With `PENPOT_MCP_SPOOL_DIR` set the store keeps them as files in that directory, otherwise in memory; [docker-compose.penpot.yml](docker-compose.penpot.yml) and the Helm values above mount a volume for it. At most two calls that read a whole file or walk all its pages run at once; others wait up to 30 seconds and then ask to try again. The file read whole last is kept for a minute for the next call.
 
 ## Reverse proxy in front of Penpot
 
@@ -214,7 +241,9 @@ location /mcp/ {
 | `VERSION_CHECK_INTERVAL` | no | `300` | Seconds between Penpot version checks |
 | `LOG_LEVEL` | no | `info` | `trace`, `debug`, `info`, `warn`, `error` |
 | `PENPOT_MCP_TOOLSETS` | no | `read,edit` | Tool groups enabled at start: `read`, `edit`, `manage`, `export`, `import`; `read` is always enabled |
-| `PENPOT_MCP_IMPORT_MAX_ASSET_MB` | no | `64` | Megabytes the assets packed into an imported HTML bundle may unpack to |
+| `PENPOT_MCP_IMPORT_MAX_ASSET_MB` | no | `32` | Megabytes the assets packed into an imported HTML bundle may unpack to |
+| `PENPOT_MCP_STORE_MB` | no | `64` | Megabytes the downloads and uploads waiting on the server may take together |
+| `PENPOT_MCP_SPOOL_DIR` | no | | Directory for the downloads and uploads; without it they are kept in memory |
 | `FULL_FILE_SHAPES_MAX` | no | `5000` | Most shapes in a file that the server downloads whole; larger files are read page by page and through the open editor |
 
 ## Versions
@@ -227,11 +256,12 @@ Releases are tagged `v<version>`; the image `ghcr.io/pdasilem/penpot-mcp-server-
 
 The server is built against one Penpot version. After upgrading Penpot, update the server:
 
-1. Change the tag and sha of `penpot/common` in `deps.edn`, and in `src/penpot/mcp/penpot/version.clj` set `supported` to the new Penpot version and `fix-release` to 0.
-2. Set the new server version as the image tag in `docker-compose.penpot.yml` and as `version` in `claude-plugin/.claude-plugin/plugin.json`; the unit tests check both.
-3. Run the unit tests. The token table test compares `src/penpot/mcp/tools/token_rules.clj` with the token properties of the new Penpot frontend; update the table when it fails.
-4. Run the integration tests against the new Penpot version.
-5. Compare the bundled plugin protocol (`mcp/packages/common/src/types.ts` in the Penpot repository) and the Plugin API methods the tools use with the new version.
+1. Change the tag and sha of `penpot/common` in the `:test` alias of `deps.edn`, and in `src/penpot/mcp/penpot/version.clj` set `supported` to the new Penpot version and `fix-release` to 0. The server does not load `penpot/common`; the tests compare the server's reading and writing of Penpot data with it.
+2. Regenerate `resources/penpot/contract.edn` with `(penpot.mcp.penpot.contract-test/write-contract!)` from the test classpath; the unit tests check it against `penpot/common`.
+3. Set the new server version as the image tag in `docker-compose.penpot.yml` and as `version` in `claude-plugin/.claude-plugin/plugin.json`; the unit tests check both.
+4. Run the unit tests. The token table test compares `src/penpot/mcp/tools/token_rules.clj` with the token properties of the new Penpot frontend; update the table when it fails.
+5. Run the integration tests against the new Penpot version.
+6. Compare the bundled plugin protocol (`mcp/packages/common/src/types.ts` in the Penpot repository) and the Plugin API methods the tools use with the new version.
 
 ## Development
 

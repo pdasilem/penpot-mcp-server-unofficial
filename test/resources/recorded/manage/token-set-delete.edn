@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf7b286205b5", "set_id" "8d364592-097e-807e-8008-bf7b868c0dd3"}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:blob "2e9e3a83fd582450da58475a135661fb30324898179576cc6b5beffa8f592124"}], :tool "delete_token_set", :scenario "manage/token-set-delete"}

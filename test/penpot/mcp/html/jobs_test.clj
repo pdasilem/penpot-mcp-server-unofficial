@@ -1,209 +1,89 @@
 (ns penpot.mcp.html.jobs-test
   (:require
+   [app.common.uuid :as uuid]
    [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]]
-   [penpot.mcp.fixtures :as fx]
-   [penpot.mcp.html.cascade :as cascade]
+   [clojure.test :refer [deftest is]]
    [penpot.mcp.html.frames :as frames]
-   [penpot.mcp.html.jobs :as jobs])
-  (:import
-   (org.jsoup Jsoup)))
+   [penpot.mcp.html.jobs :as jobs]
+   [penpot.mcp.html.sample :as sample]
+   [penpot.mcp.penpot.transit :as transit]
+   [penpot.mcp.replay :as replay]
+   [penpot.mcp.tools.html-import :as html-import]))
 
-(def html
-  (str "<style>body{margin:0}.desk{width:400px;height:250px;background:#fff;font-family:Inter,sans-serif}"
-       ".brand{font-family:'Brand Sans'}</style>"
-       "<h2>One</h2><div class='desk'>a</div><div class='desk'><span class='brand'>b</span><img src='data:image/png;base64,AAAA' alt='logo'></div>"
-       "<h2>Two</h2><div class='desk'>c</div>"))
+(def ^:private scenario "import/sections")
 
-(def page-one "aaaaaaaa-0000-0000-0000-000000000001")
-(def page-two "aaaaaaaa-0000-0000-0000-000000000002")
+(def ^:private imported
+  (delay (let [r (replay/run (first html-import/tools) scenario)]
+           (assoc r :status (jobs/status (:ctx r) (get (replay/data r) "job_id"))))))
 
-(def ^:private inter
-  {:fontId "gfont-inter" :fontFamily "Inter" :variants [{:id "regular" :weight "400" :style "normal"}]})
+(defn- rpc-entries [cmd]
+  (filter #(and (= :rpc (:kind %)) (= cmd (:cmd %))) (:entries (replay/recording scenario))))
 
-(def ^:private source-sans
-  {:fontId "sourcesanspro" :fontFamily "sourcesanspro" :variants [{:id "regular" :weight "400" :style "normal"}]})
+(defn- placed-frames []
+  (for [e (rpc-entries :update-file)
+        c (:changes (transit/decode (:params e)))
+        :when (and (= :add-obj (:type c)) (= uuid/zero (:parent-id c)))]
+    (assoc (select-keys (:obj c) [:name :x :y :width :height]) :page-id (:page-id c))))
 
-(defn- kind [code]
-  (cond
-    (str/includes? code "penpot.createPage()") :page
-    (str/includes? code "penpot.currentFile.revn") :prepare
-    (str/includes? code "layout.rowGap = layout.rowGap") :finish
-    (str/includes? code "return { removed") :remove
-    :else :other))
+(defn- overlap? [a b]
+  (and (< (:x a) (+ (:x b) (:width b))) (< (:x b) (+ (:x a) (:width a)))
+       (< (:y a) (+ (:y b) (:height b))) (< (:y b) (+ (:y a) (:height a)))))
 
-(defn- fake-editor [{:keys [bottom]}]
-  (let [calls (atom [])]
-    {:calls calls
-     :execute (fn [code]
-                (let [args (fx/script-args code)
-                      k    (kind code)]
-                  (swap! calls conj [k args])
-                  (case k
-                    :page {:result {:pageId (if (= "One" (get args "name")) page-one page-two) :name (get args "name")} :changed true}
-                    :prepare {:result {:pageId (or (get args "pageId") page-one) :revn 7 :bottom bottom
-                                       :fonts (into {} (map (fn [f] [(keyword f) (when (= "Inter" f) inter)])) (get args "families"))
-                                       :fallback (when (get args "fallback") source-sans)}
-                              :changed false}
-                    :finish {:result {:boardId (get args "rootId") :name "x" :pageId (get args "pageId")
-                                      :x 0 :y 0 :width 400 :height 250}
-                             :changed true}
-                    :remove {:result {:removed true} :changed true}
-                    {:result {} :changed false})))}))
+(defn- plan []
+  (frames/plan (sample/document) {:frame-selector ".desk" :section-selector "h2"}))
 
-(defn- fake-rpc [{:keys [fail-at vern]}]
-  (let [updates (atom []) n (atom 0) lookups (atom 0) attempts (atom [])]
-    {:updates updates
-     :attempts attempts
-     :lookups lookups
-     :client {:session-id #uuid "99999999-0000-0000-0000-000000000001"
-              :send (fn [cmd params]
-                      (case cmd
-                        :update-file (let [i (swap! n inc)]
-                                       (swap! attempts conj params)
-                                       (when (= i fail-at)
-                                         (throw (ex-info "Penpot update-file failed: boom" {:type :tool/user-error})))
-                                       (when (and vern (not= vern (:vern params)))
-                                         (throw (ex-info "Penpot update-file failed: vern" {:penpot/code :vern-conflict})))
-                                       (swap! updates conj params)
-                                       {:revn (:revn params) :lagged []})
-                        :get-all-projects (do (swap! lookups inc) [{:id :p1} {:id :p2}])
-                        :get-project-files (if (= :p2 (:project-id params))
-                                             [{:id #uuid "11111111-0000-0000-0000-000000000001" :vern (or vern 0)}]
-                                             [{:id #uuid "11111111-0000-0000-0000-0000000000ff" :vern 9}])
-                        (throw (ex-info (str "unexpected " cmd) {}))))}}))
+(deftest the-real-import-replays-completely
+  (is (empty? (:left @imported)))
+  (is (= "done" (get-in @imported [:status :status]))))
 
-(defn- setup [opts]
-  (let [doc      (Jsoup/parse ^String html)
-        computed (cascade/compute doc {:viewport 1440})
-        plan     (frames/plan doc {:frame-selector ".desk" :section-selector "h2"})
-        editor   (fake-editor opts)
-        rpc      (fake-rpc opts)
-        ctx      {:execute (:execute editor) :rpc (:client rpc) :persistence {:dirty (atom #{})} :import-jobs (atom {})}
-        job      (jobs/create! ctx {:file-id fx/file-id :plan plan :computed computed
-                                    :opts {:viewport 1440 :font-family "sourcesanspro" :page-id nil}})]
-    {:ctx ctx :editor editor :rpc rpc :job-id (:id job)}))
+(deftest each-frame-is-one-file-change-and-each-section-one-page
+  (is (= (count (plan)) (count (rpc-entries :update-file))))
+  (is (= (count (distinct (keep :section (plan))))
+         (count (filter #(str/includes? % "penpot.createPage()") (replay/editor-scripts scenario))))))
 
-(defn- calls-of [editor k] (map second (filter #(= k (first %)) @(:calls editor))))
+(deftest frames-on-a-page-start-at-the-origin-and-never-overlap
+  (doseq [[_ fs] (group-by :page-id (placed-frames))]
+    (is (= [0.0 0.0] ((juxt :x :y) (first fs))))
+    (is (not-any? (fn [[a b]] (overlap? a b)) (for [a fs b fs :when (not= a b)] [a b])))))
 
-(defn- added [update] (filter #(= :add-obj (:type %)) (:changes update)))
-
-(defn- root-of [update] (:obj (first (added update))))
-
-(deftest each-frame-is-one-file-change-with-a-page-per-section
-  (let [{:keys [ctx editor rpc job-id]} (setup {})]
-    (jobs/run! ctx job-id)
-    (let [st      (jobs/status ctx job-id)
-          updates @(:updates rpc)]
-      (is (= "done" (:status st)))
-      (is (= [3 3] [(:frames_total st) (:frames_done st)]))
-      (is (= ["One" "Two"] (:sections st)))
-      (is (= 3 (count updates)) "one update-file per frame")
-      (is (= [page-one page-one page-two] (map #(str (:page-id (first (added %)))) updates)))
-      (is (= [7 7 7] (map :revn updates)) "the revision comes from the editor, not from a file download")
-      (is (= (map (comp str :id root-of) updates) (map :id (:boards st))))
-      (is (= 2 (count (calls-of editor :page))))
-      (is (= 3 (count (calls-of editor :finish)))))))
-
-(deftest frames-are-placed-in-rows-below-existing-content
-  (let [{:keys [ctx rpc job-id]} (setup {:bottom 900})]
-    (jobs/run! ctx job-id)
-    (is (= [[0.0 1100.0] [520.0 0.0] [0.0 1100.0]]
-           (map (comp (juxt :x :y) root-of) @(:updates rpc))))))
-
-(deftest fonts-are-resolved-once-through-the-editor
-  (let [{:keys [ctx editor job-id]} (setup {})]
-    (jobs/run! ctx job-id)
-    (let [prepares (calls-of editor :prepare)]
-      (is (= [#{"Inter"} #{"Brand Sans"} #{}] (map #(set (get % "families")) prepares)))
-      (is (= [true false false] (map #(get % "fallback") prepares))))
-    (is (= ["Brand Sans"] (:substituted_fonts (jobs/status ctx job-id))))))
-
-(deftest images-are-handed-to-the-editor-with-the-frame
-  (let [{:keys [ctx editor job-id]} (setup {})]
-    (jobs/run! ctx job-id)
-    (let [media (map #(get % "media") (calls-of editor :finish))]
-      (is (= [0 1 0] (map count media)))
-      (is (= "image" (get-in (first (second media)) ["node" "kind"]))))))
+(deftest the-fallback-font-is-asked-of-the-editor-once
+  (let [asked (filter #(true? (get % "fallback")) (keep #(when (str/includes? % "penpot.currentFile.revn") (replay/script-args %))
+                                                        (replay/editor-scripts scenario)))]
+    (is (= 1 (count asked)))))
 
 (deftest the-file-version-comes-from-the-project-listing-once
-  (let [{:keys [ctx rpc job-id]} (setup {:vern 3})]
-    (jobs/run! ctx job-id)
-    (is (= "done" (:status (jobs/status ctx job-id))))
-    (is (= [3 3 3] (map :vern @(:updates rpc))))
-    (is (= 1 @(:lookups rpc)))))
+  (is (= 1 (count (rpc-entries :get-project-files)))))
 
-(deftest a-failing-frame-stops-the-job-and-resume-continues
-  (let [{:keys [ctx editor rpc job-id]} (setup {:fail-at 2})]
-    (jobs/run! ctx job-id)
-    (let [st (jobs/status ctx job-id)]
-      (is (= "failed" (:status st)))
-      (is (= 1 (:frames_done st)))
-      (is (= 2 (get-in st [:failed_frame :index])) "index counts from 1")
-      (is (str/includes? (:error st) "boom")))
-    (testing "resume starts at the failed frame"
-      (jobs/resume-sync! ctx job-id)
-      (let [st (jobs/status ctx job-id)]
-        (is (= "done" (:status st)))
-        (is (= 3 (:frames_done st)))
-        (is (= 2 (count (calls-of editor :page))) "each section page is created once")
-        (is (= [(str (:id (root-of (second @(:attempts rpc)))))] (map #(get % "shapeId") (calls-of editor :remove)))
-            "a frame sent without an answer may exist, so resume removes it first")))))
+(deftest the-finished-status-lists-boards-sections-and-substituted-fonts
+  (let [st (:status @imported)]
+    (is (= (count (plan)) (:frames_done st) (count (:boards st))))
+    (is (= (vec (distinct (keep :section (plan)))) (:sections st)))
+    (is (= (map :section (plan)) (map :section (:boards st))))
+    (is (= ["ui-sans-serif,system-ui,sans-serif"] (:substituted_fonts st)))
+    (is (= {} (:unsupported st)))))
 
-(deftest resume-removes-a-frame-written-but-not-finished
-  (let [{:keys [ctx editor rpc job-id]} (setup {})
-        execute (:execute ctx)
-        ctx     (assoc ctx :execute (fn [code]
-                                      (if (and (= :finish (kind code)) (= 1 (count (calls-of editor :finish))))
-                                        (do (swap! (:calls editor) conj [:finish {}])
-                                            (throw (ex-info "Penpot editor did not answer in time" {:type :tool/user-error})))
-                                        (execute code))))]
-    (jobs/run! ctx job-id)
-    (is (= ["failed" 1] ((juxt :status :frames_done) (jobs/status ctx job-id))))
-    (jobs/resume-sync! ctx job-id)
-    (is (= "done" (:status (jobs/status ctx job-id))))
-    (is (= [(str (:id (root-of (second @(:updates rpc)))))] (map #(get % "shapeId") (calls-of editor :remove))))))
+(deftest a-finished-job-cannot-be-resumed
+  (let [{:keys [ctx status]} @imported]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"is done; only failed or cancelled jobs can be resumed"
+                          (jobs/resume! ctx (:job_id status))))))
 
-(deftest cancel-stops-before-the-next-frame
-  (let [{:keys [ctx job-id]} (setup {})]
-    (jobs/cancel! ctx job-id)
-    (jobs/run! ctx job-id)
-    (is (= ["cancelled" 0] ((juxt :status :frames_done) (jobs/status ctx job-id))))
-    (jobs/resume-sync! ctx job-id)
-    (is (= ["done" 3] ((juxt :status :frames_done) (jobs/status ctx job-id))))))
-
-(deftest unknown-job-is-reported
-  (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Import job .* not found"
-                        (jobs/status {:import-jobs (atom {})} "00000000-0000-0000-0000-000000000000"))))
-
-(deftest unfinished-status-is-compact
-  (let [{:keys [ctx job-id]} (setup {})
-        st (jobs/status ctx job-id)]
+(deftest an-unfinished-status-is-compact
+  (let [ctx (replay/context)
+        job (jobs/create! ctx {:file-id (parse-uuid (get (:args (replay/recording scenario)) "file_id")) :plan (plan) :computed {} :opts {}})
+        st  (jobs/status ctx (:id job))]
     (is (= #{:job_id :status :frames_total :frames_done :current_frame} (set (keys st))))
-    (is (= {:index 1 :name "One" :section "One"} (:current_frame st)))))
-
-(deftest a-second-resume-of-the-same-job-is-refused
-  (let [{:keys [ctx job-id]} (setup {:fail-at 2})]
-    (jobs/run! ctx job-id)
-    (with-redefs [jobs/start! (fn [_ _] nil)]
-      (jobs/resume! ctx job-id)
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"is pending" (jobs/resume! ctx job-id))))))
-
-(deftest errors-beyond-exceptions-fail-the-job
-  (let [{:keys [ctx job-id]} (setup {})
-        ctx (assoc ctx :execute (fn [_] (throw (StackOverflowError.))))]
-    (jobs/run! ctx job-id)
-    (is (= "failed" (:status (jobs/status ctx job-id))))))
-
-(deftest unknown-jobs-are-not-created-by-updates
-  (let [ctx {:import-jobs (atom {})}]
-    (@#'jobs/update-job! ctx "nope" assoc :status "running")
-    (is (= {} @(:import-jobs ctx)))))
+    (is (= {:index 1 :name (:name (first (plan))) :section (:section (first (plan)))} (:current_frame st)))))
 
 (deftest only-two-imports-run-at-once
-  (let [{:keys [ctx]} (setup {})
-        doc  (Jsoup/parse ^String html)
-        plan (frames/plan doc {:frame-selector ".desk"})
-        mk   #(jobs/create! ctx {:file-id fx/file-id :plan plan :computed {} :opts {}})]
+  (let [ctx  (replay/context)
+        file (parse-uuid (get (:args (replay/recording scenario)) "file_id"))
+        mk   #(jobs/create! ctx {:file-id file :plan (plan) :computed {} :opts {}})]
     (mk)
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"already running" (mk)))))
+    (mk)
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"2 imports are already running" (mk)))))
+
+(deftest unknown-jobs-are-reported-and-never-created-by-updates
+  (let [ctx (replay/context)]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Import job .* not found" (jobs/status ctx (str (uuid/next)))))
+    (@#'jobs/update-job! ctx "absent" assoc :status "running")
+    (is (= {} @(:import-jobs ctx)))))

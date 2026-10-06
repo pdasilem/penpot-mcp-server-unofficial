@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf7b286205b5", "token_id" "8d364592-097e-807e-8008-bf7b9f4386db"}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:blob "2636382537645eae8eab3ad42ca60bc2c95cd79e129dc8c1ecd334e9f3114fb6"}], :tool "delete_token", :scenario "manage/token-delete"}

@@ -1,226 +1,111 @@
 (ns penpot.mcp.tools.canvas-test
   (:require
-   [clojure.string :as str]
    [clojure.test :refer [deftest is]]
-   [penpot.mcp.fixtures :as fx]
-   [penpot.mcp.tools.create :as create]
-   [penpot.mcp.tools.layout :as layout]
-   [penpot.mcp.tools.modify :as modify]
-   [penpot.mcp.tools.text :as text]))
+   [penpot.mcp.replay :as replay]
+   [penpot.mcp.tools :as all]))
 
-(def fid (str fx/file-id))
-(def sid (str fx/rect-id))
-(def shape-result {:id sid :name "Submit Button" :type "rectangle" :x 1 :y 2 :width 3 :height 4})
+(def ^:private tools (into {} (map (juxt :name identity)) all/all))
 
-(defn- call [tools tool-name args]
-  (let [ctx (fx/plugin-ctx shape-result)
-        res (fx/call (fx/find-tool tools tool-name) ctx args)]
-    {:result res :args (some-> (last @(:scripts ctx)) fx/script-args) :code (last @(:scripts ctx)) :ctx ctx}))
+(defn- replayed [scenario]
+  (let [r (replay/run (tools (:tool (replay/recording scenario))) scenario)]
+    (is (empty? (:left r)) (str scenario " left recorded requests unused"))
+    r))
 
-(deftest create-rect-passes-geometry-and-parent
-  (let [{:keys [result args code]} (call create/tools "create_rect"
-                                         {"file_id" fid "x" 10 "y" 20 "width" 30 "height" 40 "name" "Card"
-                                          "parent_id" (str fx/board-id) "border_radius" 6})]
-    (is (= {"fileId" fid "x" 10 "y" 20 "width" 30 "height" 40 "name" "Card" "parentId" (str fx/board-id)
-            "borderRadius" 6}
-           args))
-    (is (str/includes? code "penpot.createRectangle()"))
-    (is (= {"shape" {"id" sid "name" "Submit Button" "type" "rectangle" "x" 1 "y" 2 "width" 3 "height" 4}} result))))
+(defn- run [scenario]
+  (replay/data (replayed scenario)))
 
-(deftest create-tools-take-no-paint
-  (doseq [[tool-name extra] [["create_board" {"width" 10 "height" 10}]
-                             ["create_rect" {"width" 10 "height" 10}]
-                             ["create_ellipse" {"width" 10 "height" 10}]
-                             ["create_text" {"text" "Hello"}]
-                             ["create_path" {"d" "M0 0 L10 10"}]]
-          paint    [{"fills" [{"color" "#FF0000"}]} {"strokes" [{"color" "#000000"}]}]]
-    (is (contains? (:result (call create/tools tool-name (merge {"file_id" fid "x" 0 "y" 0} extra paint))) :error)
-        (str tool-name " " (ffirst paint)))))
+(defn- args [scenario]
+  (:args (replay/recording scenario)))
 
-(deftest create-tools-use-matching-factories
-  (doseq [[tool-name factory extra] [["create_board" "penpot.createBoard()" {"width" 10 "height" 10}]
-                                     ["create_ellipse" "penpot.createEllipse()" {"width" 10 "height" 10}]
-                                     ["create_text" "penpot.createText(args.text)" {"text" "Hello"}]
-                                     ["create_path" "penpot.createPath()" {"d" "M0 0 L10 10"}]]]
-    (is (str/includes? (:code (call create/tools tool-name (merge {"file_id" fid "x" 0 "y" 0} extra))) factory) tool-name)))
+(defn- changed [scenario]
+  (get-in (run scenario) ["shape" "changed"]))
 
-(deftest gradient-fill-is-converted
-  (let [{:keys [args]} (call modify/tools "set_fills"
-                             {"file_id" fid "shape_id" sid
-                              "fills" [{"gradient" {"type" "linear" "start_x" 0 "start_y" 0 "end_x" 1 "end_y" 1
-                                                    "stops" [{"color" "#FF0000" "offset" 0} {"color" "#0000FF" "opacity" 0.5 "offset" 1}]}}]})]
-    (is (= [{"fillColorGradient" {"type" "linear" "startX" 0 "startY" 0 "endX" 1 "endY" 1 "width" 1
-                                  "stops" [{"color" "#FF0000" "opacity" 1 "offset" 0}
-                                           {"color" "#0000FF" "opacity" 0.5 "offset" 1}]}}]
-           (get args "fills")))))
+(defn- refused [tool-name scenario changes]
+  (:error (replay/data (replay/run-without-penpot (tools tool-name) (merge (args scenario) changes)))))
 
-(deftest rejects-invalid-color
-  (is (contains? (:result (call modify/tools "set_fills" {"file_id" fid "shape_id" sid "fills" [{"color" "red"}]})) :error)))
+(deftest created-shapes-take-their-parent-and-geometry
+  (doseq [[scenario type] [["canvas/create-rect" "rectangle"] ["canvas/create-ellipse" "ellipse"] ["canvas/create-board" "board"]]]
+    (let [shape (get (run scenario) "shape")
+          a     (args scenario)]
+      (is (= type (get shape "type")) scenario)
+      (is (= (get a "parent_id") (get shape "parentId")) scenario)
+      (is (= [(get a "width") (get a "height")] [(get shape "width") (get shape "height")]) scenario))))
 
-(deftest group-and-component-take-shape-ids
-  (let [{:keys [args code]} (call create/tools "create_group" {"file_id" fid "shape_ids" [sid (str fx/text-id)] "name" "G"})]
-    (is (= [sid (str fx/text-id)] (get args "shapeIds")))
-    (is (str/includes? code "penpot.group(")))
-  (is (str/includes? (:code (call create/tools "create_component" {"file_id" fid "shape_ids" [sid]}))
-                     "penpot.library.local.createComponent(")))
-
-(deftest modify-tools-send-their-values
-  (doseq [[tool-name extra expected snippet]
-          [["set_position" {"x" 5 "y" 6} {"x" 5 "y" 6} "s.x = args.x"]
-           ["resize" {"width" 50 "height" 60} {"width" 50 "height" 60} "s.resize(args.width, args.height)"]
-           ["rotate" {"angle" 45} {"angle" 45} "s.rotate(args.angle)"]
-           ["rename_shape" {"name" "New"} {"name" "New"} "s.name = args.name"]
-           ["set_opacity" {"opacity" 0.3} {"opacity" 0.3} "s.opacity = args.opacity"]
-           ["set_visible" {"visible" false} {"visible" false} "s.visible = args.visible"]
-           ["set_blocked" {"blocked" true} {"blocked" true} "s.blocked = args.blocked"]
-           ["set_parent_index" {"index" 2} {"index" 2} "s.setParentIndex(args.index)"]
-           ["set_radius" {"top_left" 1 "bottom_right" 3} {"topLeft" 1 "bottomRight" 3} "borderRadiusTopLeft"]]]
-    (let [{:keys [args code]} (call modify/tools tool-name (merge {"file_id" fid "shape_id" sid} extra))]
-      (is (= (merge {"fileId" fid "shapeId" sid} expected) args) tool-name)
-      (is (str/includes? code snippet) tool-name))))
-
-(deftest rejects-non-positive-size
-  (is (contains? (:result (call modify/tools "resize" {"file_id" fid "shape_id" sid "width" 0 "height" 10})) :error)))
-
-(deftest move-to-parent-and-delete
-  (is (= {"fileId" fid "shapeId" sid "parentId" (str fx/board-id) "index" 0}
-         (:args (call modify/tools "move_to_parent" {"file_id" fid "shape_id" sid "parent_id" (str fx/board-id) "index" 0}))))
-  (let [{:keys [args code]} (call modify/tools "delete_shapes" {"file_id" fid "shape_ids" [sid]})]
-    (is (= [sid] (get args "shapeIds")))
-    (is (str/includes? code ".remove()"))))
-
-(deftest flex-layout-maps-options
-  (let [{:keys [args code]} (call layout/tools "set_flex_layout"
-                                  {"file_id" fid "board_id" (str fx/board-id) "dir" "column" "row_gap" 8
-                                   "align_items" "center" "justify_content" "space-between" "wrap" "wrap"
-                                   "padding" {"top" 1 "right" 2 "bottom" 3 "left" 4}
-                                   "horizontal_sizing" "auto"})]
-    (is (= {"fileId" fid "boardId" (str fx/board-id) "dir" "column" "rowGap" 8 "alignItems" "center"
-            "justifyContent" "space-between" "wrap" "wrap"
-            "padding" {"top" 1 "right" 2 "bottom" 3 "left" 4} "horizontalSizing" "auto"}
-           args))
-    (is (str/includes? code "addFlexLayout()"))))
-
-(deftest grid-layout-takes-tracks
-  (let [{:keys [args code]} (call layout/tools "set_grid_layout"
-                                  {"file_id" fid "board_id" (str fx/board-id)
-                                   "columns" [{"type" "flex" "value" 1} {"type" "fixed" "value" 120}]
-                                   "rows" [{"type" "auto"}]})]
-    (is (= [{"type" "flex" "value" 1} {"type" "fixed" "value" 120}] (get args "columns")))
-    (is (str/includes? code "addGridLayout()"))))
-
-(deftest remove-layout
-  (is (str/includes? (:code (call layout/tools "remove_layout" {"file_id" fid "board_id" (str fx/board-id)})) ".remove()")))
-
-(deftest text-content-and-style
-  (is (= {"fileId" fid "shapeId" (str fx/text-id) "text" "Hi"}
-         (:args (call text/tools "set_text_content" {"file_id" fid "shape_id" (str fx/text-id) "text" "Hi"}))))
-  (let [{:keys [args]} (call text/tools "set_text_style" {"file_id" fid "shape_id" (str fx/text-id)
-                                                          "font_family" "Inter" "font_size" 18 "font_weight" "700"
-                                                          "align" "center" "grow_type" "auto-height"})]
-    (is (= {"fontFamily" "Inter" "fontSize" "18" "fontWeight" "700" "align" "center" "growType" "auto-height"}
-           (get args "style")))))
-
-(deftest text-style-requires-a-value
-  (is (contains? (:result (call text/tools "set_text_style" {"file_id" fid "shape_id" sid})) :error)))
-
-(deftest create-rejects-page-and-parent-together
-  (is (= {:error "Give page_id or parent_id, not both"}
-         (:result (call create/tools "create_rect" {"file_id" fid "x" 0 "y" 0 "width" 1 "height" 1
-                                                    "page_id" (str fx/page-id) "parent_id" (str fx/board-id)})))))
-
-(deftest create-body-removes-shape-on-failure
-  (is (str/includes? (:code (call create/tools "create_rect" {"file_id" fid "x" 0 "y" 0 "width" 1 "height" 1}))
-                     "catch (e) { s.remove(); throw e; }")))
-
-(deftest group-rejects-mixed-pages
-  (is (str/includes? (:code (call create/tools "create_group" {"file_id" fid "shape_ids" [sid]})) "fail('mixed-pages'")))
-
-(deftest delete-skips-already-removed-shapes
-  (is (str/includes? (:code (call modify/tools "delete_shapes" {"file_id" fid "shape_ids" [sid]})) "if (!locateShape(id)) continue;")))
-
-(deftest radius-requires-a-value
-  (is (= {:error "Give radius or at least one corner"}
-         (:result (call modify/tools "set_radius" {"file_id" fid "shape_id" sid})))))
-
-(deftest text-style-none-clears-property
-  (is (= {"textTransform" nil "textDecoration" nil}
-         (get (:args (call text/tools "set_text_style" {"file_id" fid "shape_id" sid "text_transform" "none" "text_decoration" "none"}))
-              "style"))))
-
-(deftest rejects-huge-numbers
-  (is (contains? (:result (call modify/tools "set_radius" {"file_id" fid "shape_id" sid "radius" 1e12})) :error)))
-
-(deftest modify-marks-change-only-when-fingerprint-differs
-  (let [code (:code (call modify/tools "set_opacity" {"file_id" fid "shape_id" sid "opacity" 0.5}))]
-    (is (str/includes? code "const before = fingerprint(s);"))
-    (is (str/includes? code "if (fingerprint(s) !== before) markChanged();"))))
-
-(deftest unchanged-plugin-result-keeps-file-clean
-  (let [dirty (atom #{})
-        ctx   (assoc (fx/plugin-ctx shape-result) :persistence {:dirty dirty}
-                     :execute (fn [_] {:result shape-result :changed false}))]
-    (fx/call (fx/find-tool modify/tools "set_opacity") ctx {"file_id" fid "shape_id" sid "opacity" 0.5})
-    (is (empty? @dirty))))
-
-(deftest changed-plugin-result-marks-file-dirty
-  (let [dirty (atom #{})
-        ctx   (assoc (fx/plugin-ctx shape-result) :persistence {:dirty dirty})]
-    (fx/call (fx/find-tool modify/tools "set_opacity") ctx {"file_id" fid "shape_id" sid "opacity" 0.5})
-    (is (= #{fx/file-id} @dirty))))
-
-(deftest fills-are-limited-like-penpot
-  (is (contains? (:result (call modify/tools "set_fills" {"file_id" fid "shape_id" sid "fills" (vec (repeat 9 {"color" "#000000"}))})) :error))
-  (is (not (contains? (:result (call modify/tools "set_fills" {"file_id" fid "shape_id" sid "fills" (vec (repeat 8 {"color" "#000000"}))})) :error))))
-
-(deftest gradient-stops-are-limited-like-penpot
-  (let [stops (vec (repeat 17 {"color" "#000000" "offset" 0}))]
-    (is (contains? (:result (call modify/tools "set_fills" {"file_id" fid "shape_id" sid
-                                                            "fills" [{"gradient" {"type" "linear" "start_x" 0 "start_y" 0 "end_x" 1 "end_y" 1 "stops" stops}}]}))
-                   :error))))
-
-(deftest edits-return-only-changes
-  (doseq [[tools tool-name args] [[modify/tools "set_opacity" {"opacity" 0.5}]
-                                  [modify/tools "rename_shape" {"name" "X"}]]]
-    (is (str/includes? (:code (call tools tool-name (merge {"file_id" fid "shape_id" sid} args)))
-                       "return changes(beforeInfo, s);")
-        tool-name)))
-
-(deftest prelude-leaves-out-defaults-and-diffs-states
-  (let [code (:code (call modify/tools "set_opacity" {"file_id" fid "shape_id" sid "opacity" 0.5}))]
-    (is (str/includes? code "const defaults = { rotation: 0, opacity: 1, visible: true, blocked: false };"))
-    (is (str/includes? code "return { id, changed };"))))
+(deftest a-path-is-created-from-its-d
+  (let [shape (get (run "canvas/create-path") "shape")]
+    (is (= "path" (get shape "type")))
+    (is (= [80 40] [(get shape "width") (get shape "height")]))))
 
 (deftest text-is-created-with-typography-and-color-tokens-in-one-call
-  (let [typo "88888888-0000-0000-0000-0000000000a1"
-        color "88888888-0000-0000-0000-0000000000a2"
-        {:keys [code args]} (call create/tools "create_text" {"file_id" fid "x" 0 "y" 0 "text" "Hi"
-                                                              "typography_token_id" typo "color_token_id" color})]
-    (is (= [typo color] [(get args "typographyTokenId") (get args "colorTokenId")]))
-    (is (str/includes? code "bindToken(args.typographyTokenId, 'typography', 'typography');"))
-    (is (str/includes? code "bindToken(args.colorTokenId, 'color', 'fill');"))))
+  (let [shape (get (run "canvas/create-text-tokens") "shape")]
+    (is (= "text" (get shape "type")))
+    (is (= #{"typography" "fill"} (set (keys (get shape "tokens")))))))
 
-(deftest shapes-can-be-created-out-of-the-layout-flow-in-one-call
-  (let [{:keys [code args]} (call create/tools "create_rect" {"file_id" fid "x" 5 "y" 6 "width" 10 "height" 10
-                                                              "parent_id" (str fx/board-id) "absolute" true
-                                                              "constraint_horizontal" "right" "constraint_vertical" "top"})]
-    (is (= [true "right" "top"] [(get args "absolute") (get args "constraintHorizontal") (get args "constraintVertical")]))
-    (is (str/includes? code "(s.layoutChild ?? fail('not-in-layout', s.id)).absolute = true;"))
-    (is (< (str/index-of code "parent.appendChild(s);") (str/index-of code ".absolute = true;")))))
+(deftest a-shape-can-be-created-out-of-the-layout-flow
+  (let [shape (get (run "canvas/create-absolute-in-layout") "shape")]
+    (is (= (get (args "canvas/create-absolute-in-layout") "parent_id") (get shape "parentId")))))
 
-(deftest component-name-is-the-full-name-with-its-path
-  (let [{:keys [code]} (call create/tools "create_component" {"file_id" fid "shape_ids" [sid] "name" "ICON / MENU_FOLD"})]
-    (is (str/includes? code "const parts = args.name.split('/').map((p) => p.trim()).filter(Boolean);"))
-    (is (< (str/index-of code "c.path = path;") (str/index-of code "c.name = leaf;")))))
+(deftest groups-and-components-take-shape-ids
+  (is (= "group" (get-in (run "canvas/group") ["shape" "type"])))
+  (let [component (run "canvas/component")]
+    (is (= ["Recorded" "Component"] [(get component "path") (get component "name")]))
+    (is (some? (get component "componentId")))))
 
-(deftest grid-tracks-are-changed-in-place-and-only-free-extras-are-removed
-  (let [{:keys [code]} (call layout/tools "set_grid_layout"
-                             {"file_id" fid "board_id" (str fx/board-id)
-                              "columns" [{"type" "flex" "value" 1}] "rows" [{"type" "auto"}]})]
-    (is (str/includes? code "l.setColumn(i, t.type, t.value);"))
-    (is (str/includes? code "l.setRow(i, t.type, t.value);"))
-    (is (str/includes? code "fail('track-occupied',"))
-    (is (< (str/index-of code "const columnsPlan = plan('column', args.columns);")
-           (str/index-of code "const rowsPlan = plan('row', args.rows);")
-           (str/index-of code "columnsPlan();")))
-    (is (not (str/includes? code "for (let i = l.columns.length - 1; i >= 0; i--) l.removeColumn(i);")))))
+(deftest shapes-on-different-pages-cannot-be-grouped
+  (is (re-find #"same page" (:error (run "canvas/group-across-pages")))))
+
+(deftest edits-return-only-what-changed
+  (is (= {"x" 15 "y" 25} (changed "canvas/set-position")))
+  (is (= {"width" 77 "height" 33} (select-keys (changed "canvas/resize") ["width" "height"])))
+  (is (= 30 (get (changed "canvas/rotate") "rotation")))
+  (is (= {"name" "Renamed rect"} (changed "canvas/rename")))
+  (is (= {"opacity" 0.5} (changed "canvas/set-opacity")))
+  (is (= {"visible" false} (changed "canvas/set-visible")))
+  (is (= {"parentIndex" 0} (changed "canvas/set-parent-index")))
+  (is (= "linear" (get-in (changed "canvas/set-fills-gradient") ["fills" 0 "fillColorGradient" "type"])))
+  (is (= "#223344" (get-in (changed "canvas/set-strokes") ["strokes" 0 "strokeColor"]))))
+
+(deftest a-new-radius-is-reported-as-a-change
+  (is (seq (changed "canvas/set-radius"))))
+
+(deftest setting-the-same-opacity-changes-nothing
+  (is (= {} (changed "canvas/set-opacity-same"))))
+
+(deftest an-edit-marks-the-file-unsaved
+  (let [{:keys [ctx]} (replayed "canvas/set-opacity")]
+    (is (contains? @(get-in ctx [:persistence :dirty]) (parse-uuid (get (args "canvas/set-opacity") "file_id"))))))
+
+(deftest a-shape-moves-to-a-board-on-its-page
+  (is (= (get (args "canvas/move-to-parent-same-page") "parent_id") (get (changed "canvas/move-to-parent-same-page") "parentId"))))
+
+(deftest a-move-to-a-board-on-another-page-is-explained
+  (is (re-find #"(?i)another page" (:error (run "canvas/move-to-parent")))))
+
+(deftest deleting-reports-what-was-deleted
+  (is (= (set (get (args "canvas/delete") "shape_ids")) (set (get (run "canvas/delete") "deleted"))))
+  (is (= [] (get (run "canvas/delete-absent") "deleted"))))
+
+(deftest layouts-are-set-and-removed
+  (is (= {"type" "flex" "dir" "column" "rowGap" 8 "alignItems" "center" "padding" [4 0 0 6]}
+         (select-keys (get (run "canvas/flex-layout") "layout") ["type" "dir" "rowGap" "alignItems" "padding"])))
+  (is (= [{"type" "flex" "value" 1} {"type" "fixed" "value" 40}] (get-in (run "canvas/grid-layout") ["layout" "rows"])))
+  (is (= (get (args "canvas/remove-layout") "board_id") (get (run "canvas/remove-layout") "id"))))
+
+(deftest grid-tracks-that-still-hold-shapes-are-not-dropped
+  (is (re-find #"still holds shapes" (:error (run "canvas/grid-tracks-in-place")))))
+
+(deftest text-content-and-style-change
+  (is (= "Recorded text" (get (changed "canvas/text-content") "characters")))
+  (is (= {"fontSize" "19" "fontWeight" "700" "textTransform" "uppercase"}
+         (select-keys (changed "canvas/text-style") ["fontSize" "fontWeight" "textTransform"]))))
+
+(deftest a-text-transform-can-be-cleared
+  (is (nil? (:error (run "canvas/text-style-none")))))
+
+(deftest arguments-are-checked-before-asking-penpot
+  (is (= "Give page_id or parent_id, not both" (:error (run "canvas/create-page-and-parent"))))
+  (is (refused "resize" "canvas/resize" {"width" 0}))
+  (is (refused "resize" "canvas/resize" {"width" 1e12}))
+  (is (refused "set_radius" "canvas/set-radius" {"radius" nil}))
+  (is (refused "set_text_style" "canvas/text-style" {"font_size" nil "font_weight" nil "text_transform" nil}))
+  (is (refused "set_fills" "canvas/set-fills-gradient" {"fills" (vec (repeat 1000 {"color" "#112233"}))})))

@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf50af1e536f", "page_id" "3974177c-9157-8020-8008-aa6db3dd6523", "shape_id" "1673b4f9-5b86-8073-8008-b5ecade28819"}, :unsaved [], :entries [{:blob "daf2c756347e967af559328d26c4d869956fec368939766b4307ffed38611365"}], :tool "get_shape", :scenario "shapes/get-path"}

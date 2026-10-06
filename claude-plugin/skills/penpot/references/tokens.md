@@ -2,7 +2,7 @@
 
 ## Catalog
 
-- `get_design_tokens` lists sets with their tokens and themes with their sets.
+- `get_design_tokens` lists sets with their tokens and themes with their sets. `query` (part of the token name), `type` and `set` narrow the tokens; use `query` to find the token to bind instead of reading the whole catalog.
 - `create_token_set`, `set_token_set_active`, `delete_token_set` manage sets; names use `/` for groups, e.g. `mode/dark`.
 - `create_token`, `update_token`, `delete_token` manage tokens. A referenced token must exist before the token that references it, e.g. create `space.1` before `space.2` with value `{space.1} * 2`.
 - `create_token_theme` with `group` and `name`; `set_theme_sets` sets its sets; `set_token_theme_active` activates it. One theme per group is active.

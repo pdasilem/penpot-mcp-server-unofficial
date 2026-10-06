@@ -1,19 +1,19 @@
 (ns penpot.mcp.design.tokens.catalog
   (:require
-   [app.common.data :as d]
-   [clojure.tools.logging :as log]
+   [linked.core :as linked]
    [penpot.mcp.design.budget :as budget]
    [penpot.mcp.design.sd :as sd]
    [penpot.mcp.design.tokens.admission :as admission]
    [penpot.mcp.design.tokens.result :as result]
-   [penpot.mcp.design.tokens.sd-input :as sd-input]))
+   [penpot.mcp.design.tokens.sd-input :as sd-input]
+   [penpot.mcp.log :as log]))
 
 (defn- resolve-set [tokens]
   (admission/check-count! tokens)
   (let [rejected   (into {} (keep (fn [t] (some->> (admission/rejection t) (vector (:name t))))) tokens)
         accepted   (remove #(contains? rejected (:name %)) tokens)
         resolution (sd/resolve-tree (sd-input/tree (sd-input/valid-tokens accepted)))]
-    {:tokens (into (d/ordered-map)
+    {:tokens (into (linked/map)
                    (map (fn [token] [(:name token) (result/token-result resolution rejected token)]))
                    tokens)
      :warnings (:warnings resolution)}))

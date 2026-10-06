@@ -1,9 +1,9 @@
 (ns penpot.mcp.tools.comments
   (:require
-   [app.common.geom.point :as gpt]
-   [app.common.uuid :as uuid]
    [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.rpc :as rpc]
+   [penpot.mcp.penpot.types :as types]
+   [penpot.mcp.penpot.uuid :as uuid]
    [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.common :as common]))
@@ -54,7 +54,7 @@
         thread (rpc/call rpc :create-comment-thread {:file-id file_id
                                                      :page-id page-id
                                                      :frame-id (or frame_id uuid/zero)
-                                                     :position (gpt/point x y)
+                                                     :position (types/->Point x y)
                                                      :content content})]
     (tool/json-result {:thread_id (:id thread) :seqn (:seqn thread)})))
 

@@ -1,12 +1,12 @@
 (ns penpot.mcp.penpot.version
   (:require
-   [clojure.tools.logging :as log])
+   [penpot.mcp.log :as log])
   (:import
    (java.util.concurrent Executors ScheduledExecutorService ThreadFactory TimeUnit)))
 
 (def supported "2.18.1")
 
-(def ^:private fix-release 7)
+(def ^:private fix-release 8)
 
 (def server-version (str supported "." fix-release))
 

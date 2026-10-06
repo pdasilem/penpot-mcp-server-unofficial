@@ -1,11 +1,8 @@
 (ns penpot.mcp.json-test
   (:require
-   [app.common.geom.matrix :as gmt]
-   [app.common.geom.point :as gpt]
-   [app.common.geom.rect :as grc]
-   [app.common.types.path :as path]
    [clojure.test :refer [deftest is]]
-   [penpot.mcp.json :as json]))
+   [penpot.mcp.json :as json]
+   [penpot.mcp.real-file :as real]))
 
 (def id (parse-uuid "d05b6569-e539-818f-8008-babe0368eab1"))
 
@@ -23,16 +20,16 @@
 (deftest converts-sets-to-vectors
   (is (= ["a"] (json/plain #{:a}))))
 
-(deftest converts-geometry-records
-  (is (= {"a" 1.0 "b" 0.0 "c" 0.0 "d" 1.0 "e" 0.0 "f" 0.0} (json/plain (gmt/matrix))))
-  (is (= {"x" 1 "y" 2} (json/plain (gpt/point 1 2))))
-  (is (= 10 (get (json/plain (grc/make-rect 0 0 10 20)) "width"))))
+(deftest converts-geometry-records-of-a-real-shape
+  (let [{:keys [transform points selrect]} (:shape (real/one #(and (:transform %) (= :rect (:type %))) "rectangle"))]
+    (is (= (into {} (map (fn [[k v]] [(name k) v])) transform) (json/plain transform)))
+    (is (= (mapv (fn [p] {"x" (:x p) "y" (:y p)}) points) (json/plain points)))
+    (is (= (:width selrect) (get (json/plain selrect) "width")))))
 
-(deftest converts-path-content-to-svg-string
-  (let [content (path/from-plain [{:command :move-to :params {:x 0 :y 0}}
-                                  {:command :line-to :params {:x 10 :y 0}}])]
-    (is (= (str content) (json/plain content)))
-    (is (string? (json/plain content)))))
+(deftest converts-real-path-content-to-its-svg-string
+  (let [content (:content (:shape (real/one #(= :path (:type %)) "path")))]
+    (is (re-find #"^M[-0-9.]+,[-0-9.]+" (json/plain content)))
+    (is (= (str content) (json/plain content)))))
 
 (deftest prune-drops-empty-values-below-the-top-level
   (is (= {"shapes" [] "page" {"name" "P"} "flags" {"hidden" false}}

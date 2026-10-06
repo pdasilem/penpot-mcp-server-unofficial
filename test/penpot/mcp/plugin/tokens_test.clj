@@ -1,6 +1,6 @@
 (ns penpot.mcp.plugin.tokens-test
   (:require
-   [app.common.types.tokens-lib :as ctob]
+   [penpot.mcp.penpot.tokens-lib :as ctob]
    [clojure.test :refer [deftest is]]
    [penpot.mcp.plugin.tokens :as tokens]))
 

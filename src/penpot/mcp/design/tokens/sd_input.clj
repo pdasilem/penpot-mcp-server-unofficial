@@ -1,6 +1,6 @@
 (ns penpot.mcp.design.tokens.sd-input
   (:require
-   [app.common.path-names :as cpn]))
+   [penpot.mcp.penpot.names :as cpn]))
 
 (defn- sd-value [v]
   (cond
@@ -18,6 +18,6 @@
 
 (defn tree [valid]
   (reduce-kv (fn [acc _ token]
-               (assoc-in acc (cpn/split-path (:name token) :separator ".") (sd-token token)))
+               (assoc-in acc (cpn/split-path (:name token) ".") (sd-token token)))
              {}
              valid))

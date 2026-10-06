@@ -1,8 +1,8 @@
 (ns penpot.mcp.plugin.scripts
   (:refer-clojure :exclude [run!])
   (:require
-   [clojure.data.json :as json]
-   [clojure.string :as str])
+   [clojure.string :as str]
+   [penpot.mcp.codec :as json])
   (:import
    (java.util.concurrent TimeUnit)
    (java.util.concurrent.locks ReentrantLock)))
@@ -47,7 +47,7 @@
     "  return (await waitFor(() => penpot.currentPage.getShapeById(id))) ?? fail('shape-not-found', id);"
     "};"
     "const defaults = { rotation: 0, opacity: 1, visible: true, blocked: false };"
-    "const withoutDefaults = (o) => { for (const [k, v] of Object.entries(defaults)) if (o[k] === v) delete o[k]; return o; };"
+    "const withoutDefaults = (o) => { for (const [k, v] of Object.entries(defaults)) if (o[k] === v || o[k] == null) delete o[k]; return o; };"
     "const info = (s) => withoutDefaults({"
     "  id: s.id, name: s.name, type: s.type, pageId: penpot.currentPage.id,"
     "  parentId: s.parent ? s.parent.id : null, parentIndex: s.parentIndex,"
@@ -121,7 +121,9 @@
     "token-not-applied" (str "Penpot did not apply the token to " detail "; check that the attribute fits the token type")
     "token-not-removed" (str "Penpot did not remove the token from " detail)
     "mixed-pages" (str "All shapes must be on the same page; " detail " is on another page")
+    "parent-on-other-page" (str "Board or group " detail " is on another page; a shape moves only to a parent on its own page")
     "create-failed" (str "Penpot could not create the " detail)
+    "boolean-of-boards" (str "Boards cannot be combined into a boolean shape: " detail)
     "component-not-found" (str "Component " detail " not found in the library")
     "library-not-connected" (str "Library " detail " is not connected to the open file; see get_file_libraries")
     "not-a-variant" (str "Component " detail " is not part of a variant set")
@@ -130,6 +132,7 @@
     "property-exists" (str "The variant set already has a property named " detail)
     "value-not-found" (str "No variant has this property value: " detail)
     "variant-not-updated" (str "Penpot did not update the variant property " detail)
+    "property-order-unknown" (str "Penpot does not report the order of variant properties while one is named with digits only (" detail "); rename it in Penpot's design panel so the name has a letter, then try again")
     "not-a-copy" (str "Shape " detail " is not the root of a component copy")
     "not-detached" (str "Penpot did not detach the copy " detail)
     "not-in-layout" (str "Shape " detail " is not inside a flex or grid layout")

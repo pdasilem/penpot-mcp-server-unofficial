@@ -1,71 +1,36 @@
 (ns penpot.mcp.penpot.changes-test
   (:require
-   [app.common.files.changes-builder :as pcb]
-   [app.common.uuid :as uuid]
    [clojure.test :refer [deftest is]]
-   [penpot.mcp.penpot.changes :as changes]))
+   [penpot.mcp.penpot.transit :as transit]
+   [penpot.mcp.replay :as replay]
+   [penpot.mcp.tools :as all]))
 
-(def file-id (uuid/next))
-(def session-id (uuid/next))
-(def team-id (uuid/next))
-(def project-id (uuid/next))
+(def ^:private tools (into {} (map (juxt :name identity)) all/all))
 
-(defn- revision-at [revn]
-  [[{:id team-id}] [{:id project-id}] [{:id file-id :revn revn :vern 0}]])
+(defn- run [scenario]
+  (let [r (replay/run (tools (:tool (replay/recording scenario))) scenario)]
+    (is (empty? (:left r)) (str scenario " left recorded requests unused"))
+    (replay/data r)))
 
-(defn- fake-client [responses]
-  (let [calls (atom [])
-        queue (atom responses)]
-    {:session-id session-id
-     :calls calls
-     :send (fn [cmd params]
-             (swap! calls conj [cmd params])
-             (let [[r & more] @queue]
-               (reset! queue more)
-               (if (instance? Exception r) (throw r) r)))}))
+(defn- update-params [scenario]
+  (some #(when (= :update-file (:cmd %)) (transit/decode (:params %))) (:entries (replay/recording scenario))))
 
-(defn- add-page []
-  (pcb/add-empty-page (pcb/empty-changes) (uuid/next) "Page"))
+(defn- listed-revision [scenario file-id]
+  (some (fn [files] (some #(when (= file-id (:id %)) %) files))
+        (replay/penpot-answers scenario :get-project-files)))
 
-(def conflict (ex-info "conflict" {:penpot/code :vern-conflict}))
+(deftest a-page-change-is-committed-at-the-revision-penpot-lists
+  (doseq [[scenario change] [["manage/api-page" :add-page] ["manage/api-page-rename" :mod-page] ["manage/api-page-delete" :del-page]]
+          :let [params (update-params scenario)
+                listed (listed-revision scenario (:id params))]]
+    (is (nil? (:error (run scenario))) scenario)
+    (is (= [(:revn listed) (:vern listed)] [(:revn params) (:vern params)]) scenario)
+    (is (= [change] (mapv :type (:changes params))) scenario)))
 
-(defn- commands [client]
-  (mapv first @(:calls client)))
+(deftest the-page-name-is-what-the-agent-asked-for
+  (is (= (get (:args (replay/recording "manage/api-page")) "name") (:name (first (:changes (update-params "manage/api-page"))))))
+  (is (= (get (:args (replay/recording "manage/api-page-rename")) "name") (:name (first (:changes (update-params "manage/api-page-rename")))))))
 
-(deftest commits-validated-changes-with-file-revision
-  (let [client (fake-client (conj (revision-at 7) [{:revn 8}]))
-        result (changes/commit! client file-id add-page)
-        [update-cmd update-params] (last @(:calls client))]
-    (is (= [{:revn 8}] result))
-    (is (= [:get-teams :get-projects :get-project-files :update-file] (commands client)))
-    (is (= :update-file update-cmd))
-    (is (= file-id (:id update-params)))
-    (is (= 7 (:revn update-params)))
-    (is (= 0 (:vern update-params)))
-    (is (= session-id (:session-id update-params)))
-    (is (= [:add-page] (mapv :type (:changes update-params))))))
-
-(deftest never-downloads-the-file
-  (let [client (fake-client (conj (revision-at 7) [{:revn 8}]))]
-    (changes/commit! client file-id add-page)
-    (is (not-any? #{:get-file} (commands client)))))
-
-(deftest retries-once-after-revision-conflict
-  (let [client (fake-client (concat (revision-at 7) [conflict] (revision-at 9) [[{:revn 10}]]))
-        result (changes/commit! client file-id add-page)]
-    (is (= [{:revn 10}] result))
-    (is (= 9 (:revn (second (last @(:calls client))))))))
-
-(deftest gives-up-after-second-conflict
-  (let [client (fake-client (concat (revision-at 7) [conflict] (revision-at 9) [conflict]))
-        ex (try (changes/commit! client file-id add-page) nil (catch clojure.lang.ExceptionInfo e e))]
-    (is (= :tool/user-error (:type (ex-data ex))))
-    (is (= "The Penpot file changed concurrently; try again" (ex-message ex)))))
-
-(deftest refuses-invalid-changes-without-sending
-  (let [client (fake-client (revision-at 7))
-        ex (try (changes/commit! client file-id (fn [] {:redo-changes [{:type :not-a-change}]}))
-                nil
-                (catch clojure.lang.ExceptionInfo e e))]
-    (is (some? ex))
-    (is (not-any? #{:update-file} (commands client)))))
+(deftest a-page-change-never-downloads-the-file
+  (doseq [scenario ["manage/api-page" "manage/api-page-rename" "manage/api-page-delete"]]
+    (is (not-any? #{:get-file} (replay/requests scenario)) scenario)))

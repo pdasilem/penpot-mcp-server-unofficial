@@ -1,6 +1,7 @@
 (ns penpot.mcp.penpot.file
   (:require
-   [app.common.features :as cfeat]
+   [penpot.mcp.penpot.contract :as cfeat]
+   [penpot.mcp.penpot.heavy :as heavy]
    [penpot.mcp.penpot.revision :as revision]
    [penpot.mcp.penpot.rpc :as rpc]
    [penpot.mcp.plugin.read :as read]
@@ -50,17 +51,29 @@
              hint (str "; " hint))
            {:type :tool/user-error :reason ::too-large :stats stats}))
 
+(def cache-idle-ms 60000)
+
+(defn- now-ms []
+  (System/currentTimeMillis))
+
 (defn- cached [{:keys [file-cache]} key load]
   (if-not file-cache
     (load)
     (locking file-cache
       (let [{cached-key :key value :file} @file-cache]
         (if (= key cached-key)
-          value
+          (do (swap! file-cache assoc :used (now-ms))
+              value)
           (do (reset! file-cache nil)
               (let [value (load)]
-                (reset! file-cache {:key key :file value})
+                (reset! file-cache {:key key :file value :used (now-ms)})
                 value)))))))
+
+(defn evict-idle! [file-cache at-ms]
+  (swap! file-cache (fn [{:keys [used] :as entry}]
+                      (when (and entry (<= (- at-ms used) cache-idle-ms))
+                        entry)))
+  nil)
 
 (defn stats [client file-id]
   (rpc/call client :get-file-stats {:id file-id}))
@@ -75,6 +88,7 @@
 (defn read-whole
   ([ctx file-id] (read-whole ctx file-id nil))
   ([{:keys [rpc] :as ctx} file-id hint]
+   (heavy/enter!)
    (revision/await-clean! ctx file-id)
    (let [{:keys [revn updated-at]} (check-whole! ctx file-id hint)]
      (cached ctx [file-id revn updated-at] #(fetch rpc file-id)))))
@@ -93,6 +107,7 @@
 (defn read-pages
   ([ctx file-id] (read-pages ctx file-id editor-hint))
   ([ctx file-id hint]
+   (heavy/enter!)
    (revision/await-clean! ctx file-id)
    (if-let [{listed :value} (editor-pages ctx file-id)]
      (one-by-one #(read-page ctx file-id (parse-uuid (:id %))) listed)

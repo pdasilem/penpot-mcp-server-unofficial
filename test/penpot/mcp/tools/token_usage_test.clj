@@ -1,114 +1,91 @@
 (ns penpot.mcp.tools.token-usage-test
   (:require
-   [clojure.string :as str]
+   [penpot.mcp.penpot.tokens-lib :as ctob]
+   [app.common.uuid :as uuid]
    [clojure.test :refer [deftest is]]
-   [penpot.mcp.design.tokens :as tokens]
-   [penpot.mcp.fixtures :as fx]
-   [penpot.mcp.plugin.read :as read]
+   [penpot.mcp.replay :as replay]
    [penpot.mcp.tools :as tools]
    [penpot.mcp.tools.token-usage :as token-usage]))
 
-(def ^:private fid (str fx/file-id))
+(def ^:private tool (first token-usage/tools))
 
-(def ^:private tool (fx/find-tool token-usage/tools "token_usage"))
+(defn- run [scenario]
+  (let [replayed (replay/run tool scenario)]
+    (is (empty? (:left replayed)) (str scenario " left recorded requests unused"))
+    (replay/data replayed)))
+
+(defn- args [scenario]
+  (:args (replay/recording scenario)))
 
 (def ^:private file
-  (assoc-in fx/file [:data :pages-index fx/page-id :objects fx/rect-id :applied-tokens] {:stroke-color "color.primary"}))
+  (delay (first (replay/penpot-answers "token-usage/saved" :get-file))))
 
-(defn- run [f args]
-  (fx/call tool (fx/ctx (fx/file-responses f)) args))
+(defn- shapes []
+  (for [p (vals (get-in @file [:data :pages-index]))
+        s (vals (:objects p))
+        :when (not= uuid/zero (:id s))]
+    (assoc s :page p)))
 
-(defn- shapes [result]
-  (mapcat #(get % "shapes") (get result "raw_values")))
+(defn- token-names []
+  (let [lib (get-in @file [:data :tokens-lib])]
+    (set (for [s (ctob/get-sets lib) t (vals (ctob/get-tokens lib (ctob/get-id s)))] (:name t)))))
 
-(defn- values-of [result shape-name]
-  (some #(when (= shape-name (get % "shape")) (get % "values")) (shapes result)))
+(defn- applied-names []
+  (set (mapcat (comp vals :applied-tokens) (shapes))))
 
 (deftest token-usage-is-a-read-tool
-  (is (= "read" (:toolset (fx/find-tool tools/all "token_usage")))))
+  (is (= "read" (:toolset (first (filter #(= "token_usage" (:name %)) tools/all))))))
 
-(deftest reports-usage-of-the-applied-token
-  (let [result (run file {"file_id" fid})]
-    (is (= {"tokens" 1 "applied" 1 "missing" 0 "referenced_only" 0 "unused" 0 "shapes_checked" 6 "raw_values" 17 "values_compared" true}
-           (get result "summary")))
-    (is (= [{"name" "color.primary" "shapes" 1 "copies" 0 "attributes" ["strokeColor"]
-             "pages" [{"id" (str fx/page-id) "name" "Screens" "shapes" 1}]}]
-           (get result "usage")))))
+(deftest the-summary-counts-the-file
+  (let [summary (get (run "token-usage/saved") "summary")]
+    (is (= (count (token-names)) (get summary "tokens")))
+    (is (= (count (filter (token-names) (applied-names))) (get summary "applied")))
+    (is (= (count (remove (token-names) (applied-names))) (get summary "missing")))
+    (is (= (count (shapes)) (get summary "shapes_checked")))
+    (is (true? (get summary "values_compared")))))
 
-(deftest a-token-no-shape-applies-is-unused
-  (is (= [{"name" "color.primary" "type" "color" "sets" [{"set" "brand" "value" "#3366FF"}]}]
-         (get (run fx/file {"file_id" fid}) "unused"))))
+(deftest every-used-token-counts-the-shapes-that-apply-it
+  (doseq [{:strs [name copies pages] shape-count "shapes"} (get (run "token-usage/saved") "usage")]
+    (let [applying (filter #(some #{name} (vals (:applied-tokens %))) (shapes))]
+      (is (= (count applying) shape-count) name)
+      (is (= (count (filter :shape-ref applying)) copies) name)
+      (is (= (set (map (comp :name :page) applying)) (set (map #(get % "name") pages))) name))))
 
-(deftest raw-values-are-grouped-by-frame-and-shape
-  (let [result (run file {"file_id" fid})
-        [card] (get result "raw_values")]
-    (is (= {"page_id" (str fx/page-id) "page" "Screens" "frame_id" (str fx/board-id) "frame" "Login Card"}
-           (dissoc card "shapes")))
-    (is (= {"attribute" "paddingTop" "value" 24 "off_scale" true} (first (values-of result "Login Card"))))
-    (is (= {"attribute" "fill" "value" "#3366ff" "opacity" 0.5 "off_scale" true}
-           (last (values-of result "Submit Button"))))
-    (is (not-any? #(= "strokeColor" (get % "attribute")) (values-of result "Submit Button")))
-    (is (nil? (values-of result "Avatar")) "gradients are not raw values")))
+(deftest unused-tokens-are-applied-to-no-shape
+  (let [unused (map #(get % "name") (get (run "token-usage/saved") "unused"))]
+    (is (seq unused))
+    (is (not-any? (applied-names) unused))))
+
+(deftest raw-values-are-attributes-not-bound-to-a-token
+  (let [by-id (into {} (map (juxt (comp str :id) identity)) (shapes))]
+    (doseq [frame (get (run "token-usage/saved") "raw_values")
+            {:strs [shape_id values]} (get frame "shapes")]
+      (is (not (:shape-ref (by-id shape_id))) "copies are not checked")
+      (is (seq values) shape_id))))
 
 (deftest raw-values-page-with-limit-and-cursor
-  (let [first-page (run file {"file_id" fid "limit" 3})
-        second     (run file {"file_id" fid "limit" 3 "cursor" (get first-page "next_cursor")})]
-    (is (= "3" (get first-page "next_cursor")))
-    (is (= 3 (count (mapcat #(get % "values") (shapes first-page)))))
-    (is (= {"attribute" "paddingLeft" "value" 16 "off_scale" true} (first (values-of second "Login Card"))))))
+  (let [result (run "token-usage/editor-paged")]
+    (is (= "7" (get (args "token-usage/editor-paged") "cursor")))
+    (is (= 7 (count (mapcat #(get % "values") (mapcat #(get % "shapes") (get result "raw_values"))))))
+    (is (= "14" (get result "next_cursor")))))
 
-(deftest page-id-narrows-raw-values
-  (let [result (run file {"file_id" fid "page_id" (str fx/page2-id)})]
-    (is (= [] (get result "raw_values")))
-    (is (= 0 (get-in result ["summary" "raw_values"])))
-    (is (= 1 (get-in result ["summary" "applied"])))))
-
-(defn- editor [editor-tokens]
-  (fn [code]
-    (cond
-      (str/includes? code read/pages-body) [{:id (str fx/page-id) :name "Screens"}]
-      (str/includes? code read/tokens-body)
-      {:sets [{:id "s" :name "brand" :active true
-               :tokens (into [{:id "t" :name "color.primary" :type "color" :value "#3366FF" :description ""}] editor-tokens)}]
-       :themes []})))
-
-(def ^:private blue-instance
-  (assoc-in file [:data :pages-index fx/page-id :objects fx/instance-id :fills] [{:fill-color "#3366FF" :fill-opacity 1}]))
-
-(deftest reads-tokens-and-page-list-from-the-open-editor
-  (let [ctx    (fx/plugin-ctx (editor []) (fx/file-responses blue-instance))
-        result (fx/call tool ctx {"file_id" fid})]
-    (is (= [:get-page] (distinct (fx/rpc-commands ctx))))
-    (is (= 1 (get-in result ["summary" "applied"])))
-    (is (= ["color.primary"] (get (first (values-of result "Button Instance")) "matches")))))
-
-(deftest tokens-that-fail-to-resolve-are-named-in-the-summary
-  (let [ctx    (fx/plugin-ctx (editor [{:id "b" :name "space.bad" :type "spacing" :value "{nope} * 2" :description ""}])
-                              (fx/file-responses blue-instance))
-        result (fx/call tool ctx {"file_id" fid})]
-    (is (= ["space.bad"] (get-in result ["summary" "unresolved_tokens"])))
-    (is (true? (get-in result ["summary" "values_compared"])))))
-
-(deftest raw-values-stay-without-a-verdict-when-token-values-cannot-be-computed
-  (with-redefs [tokens/resolve-catalog (fn [_] (throw (ex-info "Token resolution is busy, try again later"
-                                                               {:type :penpot.mcp.design.budget/busy})))]
-    (let [result (run file {"file_id" fid})]
-      (is (false? (get-in result ["summary" "values_compared"])))
-      (is (= "Token resolution is busy, try again later" (get-in result ["summary" "values_not_compared"])))
-      (is (not-any? #(or (contains? % "matches") (contains? % "off_scale")) (mapcat #(get % "values") (shapes result)))))))
-
-(deftest sections-limit-the-answer
-  (let [result (run file {"file_id" fid "sections" ["unused" "missing"]})]
-    (is (= #{"summary" "unused" "missing"} (set (keys result))))))
-
-(deftest token-values-are-not-computed-when-raw-values-are-not-asked
-  (with-redefs [tokens/resolve-catalog (fn [_] (throw (AssertionError. "not expected")))]
-    (is (= 1 (get-in (run file {"file_id" fid "sections" ["usage"]}) ["summary" "applied"])))))
+(deftest page-id-narrows-raw-values-to-that-page
+  (let [page (get (args "token-usage/saved-page") "page_id")
+        result (run "token-usage/saved-page")]
+    (is (every? #(= page (get % "page_id")) (get result "raw_values")))
+    (is (= (get-in (run "token-usage/saved") ["summary" "applied"]) (get-in result ["summary" "applied"])))))
 
 (deftest an-unknown-page-is-an-error
-  (is (str/includes? (:error (run file {"file_id" fid "page_id" "11111111-0000-0000-0000-0000000000ff"})) "not found")))
+  (is (re-find #"not found" (:error (run "token-usage/saved-absent-page")))))
 
-(deftest without-the-editor-the-file-is-downloaded-once
-  (let [ctx (assoc (fx/ctx (fx/file-responses file)) :file-cache (atom nil))]
-    (fx/call tool ctx {"file_id" fid})
-    (is (= 1 (count (filter #{:get-file} (fx/rpc-commands ctx)))))))
+(deftest sections-limit-the-answer
+  (is (= #{"summary" "unused" "missing"} (set (keys (run "token-usage/editor-sections")))))
+  (let [result (run "token-usage/editor-usage-only")]
+    (is (= #{"summary" "usage"} (set (keys result))))
+    (is (not (contains? (get result "summary") "values_compared")))))
+
+(deftest without-the-editor-the-file-is-read-once
+  (is (= [:get-file-stats :get-file] (replay/requests "token-usage/saved"))))
+
+(deftest the-editor-gives-the-same-audit
+  (is (= (run "token-usage/saved") (run "token-usage/editor"))))

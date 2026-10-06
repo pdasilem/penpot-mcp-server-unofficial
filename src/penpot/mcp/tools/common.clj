@@ -1,7 +1,8 @@
 (ns penpot.mcp.tools.common
   (:require
-   [app.common.uuid :as uuid]
-   [app.common.types.fills.impl :as fills-impl]))
+   [penpot.mcp.penpot.contract :as contract]
+   [penpot.mcp.penpot.uuid :as uuid]
+   [penpot.mcp.transform.geometry :as geometry]))
 
 (def plugin-type
   {:frame "board"
@@ -47,10 +48,10 @@
    :name (:name shape)
    :type (shape-type shape)
    :parent_id (:parent-id shape)
-   :x (:x shape)
-   :y (:y shape)
-   :width (:width shape)
-   :height (:height shape)})
+   :x (geometry/x shape)
+   :y (geometry/y shape)
+   :width (geometry/width shape)
+   :height (geometry/height shape)})
 
 (defn page-shapes [page]
   (remove root? (vals (:objects page))))
@@ -74,7 +75,7 @@
    [:start_y {:description "Start Y relative to the shape, 0..1"} unit-interval]
    [:end_x {:description "End X relative to the shape, 0..1"} unit-interval]
    [:end_y {:description "End Y relative to the shape, 0..1"} unit-interval]
-   [:stops [:vector {:min 1 :max fills-impl/MAX-GRADIENT-STOPS}
+   [:stops [:vector {:min 1 :max contract/max-gradient-stops}
             [:map {:closed true}
              [:color {:description "Stop color #RRGGBB"} hex-color]
              [:opacity {:optional true :description "0..1, default 1"} unit-interval]
@@ -97,7 +98,7 @@
    [:alignment {:optional true :description "Position relative to the shape edge, default center"} [:enum "center" "inner" "outer"]]])
 
 (def fills
-  [:vector {:max fills-impl/MAX-FILLS} fill])
+  [:vector {:max contract/max-fills} fill])
 
 (defn ->plugin-fill [{:keys [color opacity gradient]}]
   (if gradient

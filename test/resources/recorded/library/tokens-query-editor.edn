@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf50af1e536f", "query" "surface"}, :unsaved [], :entries [{:blob "ad9ad20e51e014e6d3f445c84d82ceedbcb1afd59cc5bbb7d35e751a0718c4a0"}], :tool "get_design_tokens", :scenario "library/tokens-query-editor"}

@@ -1,7 +1,7 @@
 (ns penpot.mcp.app
   (:require
-   [clojure.tools.logging :as log]
    [penpot.mcp.config :as config]
+   [penpot.mcp.log :as log]
    [penpot.mcp.system :as system]
    [penpot.mcp.tools :as tools]))
 

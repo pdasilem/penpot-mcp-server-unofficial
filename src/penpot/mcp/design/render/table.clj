@@ -1,5 +1,6 @@
 (ns penpot.mcp.design.render.table
   (:require
+   [clojure.string :as str]
    [penpot.mcp.design.render.naming :as naming]))
 
 (defn default-combination [{:keys [combinations]}]
@@ -35,6 +36,19 @@
         kept?   #(or (:library? %) (contains? allowed (:name %)))]
     {:entries (filterv kept? entries)
      :problems (into [] (comp (remove kept?) (map (fn [e] {:code :not-in-every-combination :token (:name e)}))) entries)}))
+
+(defn- name-words [theme-name]
+  (remove str/blank? (str/split (str/lower-case (str theme-name)) #"[^\p{L}\p{N}]+")))
+
+(defn color-scheme [theme-name]
+  (let [found (filter #{"light" "dark"} (name-words theme-name))]
+    (when (= 1 (count (distinct found))) (first found))))
+
+(defn palette [theme-name]
+  (str/join " " (remove #{"light" "dark"} (name-words theme-name))))
+
+(defn scheme-themes [{:keys [combinations]} group scheme]
+  (vec (distinct (filter #(= scheme (color-scheme %)) (keep #(get (:themes %) group) combinations)))))
 
 (defn scheme-group-problems [{:keys [combinations]} group]
   (when (and group (not-any? #(contains? (:themes %) group) combinations))

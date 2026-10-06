@@ -60,10 +60,7 @@
   (let [style (into {}
                     (keep (fn [[k target]]
                             (when-let [v (get params k)]
-                              [target (cond
-                                        (stringly k) (str v)
-                                        (#{"none"} v) nil
-                                        :else v)])))
+                              [target (if (stringly k) (str v) v)])))
                     style-keys)]
     (when (empty? (select-keys params (keys style-keys)))
       (throw (tool/user-error "Give at least one style property")))

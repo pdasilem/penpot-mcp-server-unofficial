@@ -1,0 +1,1 @@
+{:args {"name" "Recorded file", "project_id" "4c1c501c-ee3b-8136-8008-bf7bc40e1312"}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:blob "acb82fbe004727ff240bc96e7035a0ef3578866e6b5ec7a147e1e2c0b8555270"}], :tool "create_file", :scenario "manage/file"}

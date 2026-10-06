@@ -1,0 +1,1037 @@
+<html>
+ <head>
+  <title>SayVibe — каркасы: админ-панель</title>
+  <style>
+  :root { --ink:#1a1d20; --mid:#6b7276; --line:#c9cdd0; --thin:#e3e6e8;
+          --paper:#f4f5f6; --card:#fff; --note:#8a9196; --fill:#e9ecee; --accent:#5a6167; }
+  body { margin:0; background:var(--paper); color:var(--ink);
+         font:15px/1.5 ui-sans-serif, system-ui, sans-serif; }
+  .wrap { max-width:1560px; margin:0 auto; padding:40px 24px 80px; }
+  h1 { font-size:28px; margin:0 0 6px; letter-spacing:-.01em; }
+  .sub { color:var(--mid); margin:0 0 20px; max-width:74ch; }
+  .rule { border:1px solid var(--line); border-radius:8px; background:var(--card);
+          padding:12px 14px; font-size:13px; color:var(--mid); margin:0 0 28px; max-width:74ch; }
+  h2 { font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--mid);
+       margin:40px 0 14px; font-weight:600; }
+  .grid { display:flex; flex-wrap:wrap; gap:28px; }
+  .unit { width:100%; max-width:1440px; }
+  .num { font-size:13px; font-weight:700; color:var(--ink); margin:0 0 7px; letter-spacing:.04em; }
+  .num span { font-weight:400; color:var(--note); margin-left:8px; letter-spacing:0; }
+  .num em { font-style:normal; color:var(--note); font-weight:400; margin-left:8px;
+            border:1px solid var(--thin); border-radius:4px; padding:1px 6px; font-size:11px; }
+  .desk { border:1px solid var(--line); border-radius:10px; background:var(--card);
+          overflow:hidden; display:flex; flex-direction:column; aspect-ratio:16/10; }
+  .top { height:38px; border-bottom:1px solid var(--thin); display:flex; align-items:center;
+         padding:0 12px; gap:10px; font-size:12px; color:var(--mid); flex:none; }
+  .top b { color:var(--ink); font-size:13px; }
+  .top .who { margin-left:auto; }
+  .split { display:flex; flex:1; min-height:0; }
+  .nav { width:210px; border-right:1px solid var(--thin); padding:14px 0; flex:none;
+         display:flex; flex-direction:column; gap:1px; }
+  .nav div { padding:6px 12px; font-size:12.5px; color:var(--mid); }
+  .nav div.on { color:var(--ink); font-weight:600; background:var(--fill);
+                border-radius:6px; margin:0 8px; padding:6px 10px; }
+  .tabs { display:flex; gap:20px; align-items:center; border-bottom:1px solid var(--thin);
+          overflow:hidden; }
+  .tabs span { font-size:12.5px; color:var(--mid); padding:8px 0; white-space:nowrap; }
+  .tabs span.on { color:var(--ink); font-weight:600; box-shadow:inset 0 -2px 0 var(--accent); }
+  .nav .gap { height:8px; padding:0; }
+  .main { flex:1; padding:18px 20px; display:flex; flex-direction:column; gap:12px;
+         min-width:0; overflow:auto; }
+  .h { font-size:16px; font-weight:600; }
+  .label { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--note); }
+  .blk { font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink);
+         font-weight:700; border-top:1px solid var(--line); padding-top:9px; margin-top:4px; }
+  .blk:first-child { border-top:0; padding-top:0; margin-top:0; }
+  .blk i { font-style:normal; font-weight:400; color:var(--note); letter-spacing:0;
+           text-transform:none; margin-left:8px; font-size:11px; }
+  .why { font-size:11.5px; color:var(--mid); line-height:1.45; margin-top:-6px; }
+  .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .inp { border:1px solid var(--thin); border-radius:6px; padding:7px 10px; font-size:12.5px;
+         color:var(--note); flex:1; }
+  .sel { border:1px solid var(--line); border-radius:6px; padding:7px 10px; font-size:12.5px;
+         color:var(--ink); flex:1; background:var(--fill); display:flex;
+         justify-content:space-between; align-items:center; gap:8px; }
+  .sel::after { content:"▾"; color:var(--mid); font-size:11px; }
+  .tgl { border:1px solid var(--line); border-radius:20px; padding:5px 10px; font-size:12px;
+         color:var(--ink); background:var(--fill); flex:none; }
+  .ta { border:1px solid var(--line); border-radius:6px; padding:9px 11px; font-size:12.5px;
+        color:var(--ink); min-height:104px; line-height:1.5; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .chip { border:1px solid var(--accent); border-radius:14px; padding:3px 9px; font-size:11.5px;
+          background:var(--fill); }
+  .chip.add { border-style:dashed; border-color:var(--line); background:transparent;
+              color:var(--mid); }
+  th.s { cursor:default; }
+  th.s::after { content:" ↕"; color:var(--note); font-weight:400; }
+  th.s.up::after { content:" ↑"; color:var(--ink); }
+  th.s.down::after { content:" ↓"; color:var(--ink); }
+  .btn { border:1px solid var(--accent); border-radius:6px; padding:7px 12px; font-size:12.5px;
+         font-weight:600; background:var(--fill); flex:none; }
+  .btn.ghost { border-color:var(--thin); background:transparent; font-weight:400; color:var(--mid); }
+  .btn.off { border-color:var(--thin); background:transparent; font-weight:400; color:var(--note);
+             opacity:.55; }
+  table { border-collapse:collapse; width:100%; font-size:12.5px; }
+  th { text-align:left; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase;
+       color:var(--note); font-weight:600; padding:6px 8px; border-bottom:1px solid var(--line); }
+  td { padding:7px 8px; border-bottom:1px solid var(--thin); color:var(--ink); }
+  td.m { color:var(--mid); }
+  .tag { border:1px solid var(--thin); border-radius:4px; padding:1px 6px; font-size:11px;
+         color:var(--mid); display:inline-block; }
+  .tag.on { border-color:var(--accent); color:var(--ink); background:var(--fill); }
+  .row { border:1px solid var(--thin); border-radius:7px; padding:9px 11px;
+         display:flex; justify-content:space-between; align-items:center; font-size:13px; gap:8px; }
+  .row small { display:block; font-weight:400; color:var(--mid); font-size:11px; margin-top:2px; }
+  .row .val { color:var(--mid); font-size:12px; flex:none; }
+  .form { display:flex; flex-direction:column; gap:8px; max-width:420px; }
+  .pair { display:flex; gap:16px; align-items:flex-start; }
+  .pair .form { flex:none; }
+  .side { flex:1; border:1px solid var(--thin); border-radius:7px; padding:10px 12px;
+          font-size:12px; color:var(--mid); min-width:0; }
+  .side b { display:block; color:var(--ink); font-size:10.5px; letter-spacing:.09em;
+            text-transform:uppercase; margin:0 0 6px; font-weight:700; }
+  .side table { font-size:11.5px; }
+  .side th { font-size:10px; padding:4px 6px; }
+  .side td { padding:4px 6px; }
+  .side p { margin:8px 0 0; }
+  .btn.ic { display:flex; align-items:center; justify-content:center; gap:8px; }
+  .btn.ic svg { width:17px; height:17px; flex:none; }
+  .meta { border:1px solid var(--thin); border-radius:8px; background:var(--card);
+          padding:11px 13px; font-size:12.5px; line-height:1.45; color:var(--mid);
+          margin-top:9px; max-width:96ch; }
+  .meta b { display:block; color:var(--ink); font-size:10.5px; letter-spacing:.1em;
+            text-transform:uppercase; margin:8px 0 3px; font-weight:700; }
+  .meta b:first-child { margin-top:0; }
+  code { font:12px ui-monospace, monospace; background:var(--fill); border-radius:3px;
+         padding:1px 4px; }
+</style>
+ </head>
+ <body>
+  <div class="wrap">
+   <h1>Админ-панель</h1>
+   <p class="sub">Внутренний интерфейс управления. Vaadin внутри бэкенда, наружу не публикуется, доступ по правам консоли. Это не приложение пользователя: кадры в пропорции монитора 16:10, плотность выше, украшений нет. Подписи на английском — <a href="../../../sayvibe-docs/docs/02-stack/adr/0013-english-is-the-source.md">ADR-0013</a>.</p>
+   <div class="rule">
+    <b>Статус: черновик.</b> Каркасы показывают состав разделов и то, что в них управляется, — не проработанный интерфейс. Расхождения в подписях, колонках и переходах ожидаемы и правятся по мере реализации: панель внутренняя, приоритет её UI ниже клиентского. Пометка справа от номера — веха, на которой раздел появляется.
+   </div>
+   <h2>Оболочка — M11</h2>
+   <div class="grid">
+    <div class="unit">
+     <div class="num">
+      10.0.1 <span>Shell · menu unfolded</span><em>M11</em>
+     </div>
+     <div class="desk">
+      <div class="top">
+       <span>☰</span><b>SayVibe Console</b><span class="who">admin@sayvibe.app</span><span class="tag">Sign out</span>
+      </div>
+      <div class="split">
+       <div class="nav" style="display:flex; flex-direction:column;">
+        <div style="flex:1; overflow:hidden;">
+         <div class="on">Configuration</div>
+         <div>Jobs</div>
+         <div>Uploads</div>
+         <div class="gap"></div>
+         <div>Moderation</div>
+         <div>Topics</div>
+         <div>Formulas</div>
+         <div>Money</div>
+         <div>Creator Pass</div>
+         <div>Reports</div>
+        </div>
+        <div style="border-top:1px solid var(--thin); padding:9px 12px; display:flex; flex-direction:column; gap:6px;">
+         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+          <div style="line-height:1.2; white-space:nowrap;">
+           <div style="font-size:12px; color:var(--ink);">12:31 AM</div>
+           <div style="font-size:10.5px; color:var(--note);">Sep 08, 2026</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+           <span class="tag">☾</span><span class="tag">⚙</span>
+          </div>
+         </div>
+         <div style="font-size:10px; color:var(--note); white-space:nowrap;">v 1.4.0 · 266d6dae6298</div>
+        </div>
+       </div>
+       <div class="main">
+        <div class="toolbar">
+         <span class="tag on">Connections</span><span class="tag">Adapters</span><span class="tag">Bindings</span><span class="tag">Prices</span><span class="tag">Prompts</span><span class="tag">Languages</span><span class="tag">Level tasks</span><span class="tag">Exercises</span><span class="tag">Parameters</span><span class="tag">Translations</span><span class="tag">Orphaned scenes</span><span class="tag">Voice samples</span><span class="tag">Roles</span>
+        </div>
+        <div class="h">Connections</div>
+        <div class="toolbar">
+         <span class="tag on">Connections</span><span class="tag">Adapters</span><span class="tag">Bindings</span><span class="tag">Prices</span><span class="tag">Prompts</span><span class="tag">Languages</span><span class="tag">Level tasks</span><span class="tag">Exercises</span><span class="tag">Parameters</span><span class="tag">Translations</span><span class="tag">Orphaned scenes</span><span class="tag">Voice samples</span><span class="tag">Roles</span>
+        </div>
+        <div class="toolbar">
+         <div class="inp">Search</div>
+         <div class="sel">Adapter: any</div>
+         <div class="btn">Add</div>
+        </div>
+        <table>
+         <tbody>
+          <tr>
+           <th class="s">Code</th>
+           <th>Adapter</th>
+           <th>Model</th>
+           <th>State</th>
+           <th></th>
+          </tr>
+          <tr>
+           <td>gemini.flash.first</td>
+           <td class="m">gemini</td>
+           <td class="m">gemini-3.1-flash</td>
+           <td><span class="tag on">on</span></td>
+           <td><span class="tag">Open</span></td>
+          </tr>
+          <tr>
+           <td>veo.lite.first</td>
+           <td class="m">veo</td>
+           <td class="m">veo-3.1-lite</td>
+           <td><span class="tag">off</span></td>
+           <td><span class="tag">Open</span></td>
+          </tr>
+         </tbody>
+        </table>
+       </div>
+      </div>
+     </div>
+     <div class="meta">
+      <b>Что задаёт кадр</b>Раскладку всех экранов панели: шапка, меню слева, рабочая область справа. Остальные кадры разделов повторяют её и не переопределяют. <b>Меню</b>Состав приходит с поверхности — <code>GET /console/sections</code>. В меню стоят разделы верхнего уровня; разделы с родителем показываются вкладками над рабочей областью. Раздела, на который нет права, в ответе нет и в меню тоже. <b>Подвал меню</b>Время и дата браузера слева, тема и настройки справа, под ними версия сборки и хеш образа. Шестерёнка — заглушка до появления экрана настроек. <b>Элементы</b>Ant Design. Своего в экране не рисуется.
+     </div>
+    </div>
+    <div class="unit">
+     <div class="num">
+      10.0.2 <span>Shell · menu folded</span><em>M11</em>
+     </div>
+     <div class="desk">
+      <div class="top">
+       <span>☰</span><b>SayVibe Console</b><span class="who">admin@sayvibe.app</span><span class="tag">Sign out</span>
+      </div>
+      <div class="split">
+       <div class="nav" style="width:56px; display:flex; flex-direction:column; align-items:center;">
+        <div style="flex:1; width:100%; text-align:center;">
+         <div class="on" style="border-left:0; padding:6px 0;">C</div>
+         <div style="padding:6px 0;">J</div>
+         <div style="padding:6px 0;">U</div>
+         <div style="padding:6px 0;">M</div>
+         <div style="padding:6px 0;">M</div>
+         <div style="padding:6px 0;">A</div>
+        </div>
+        <div style="border-top:1px solid var(--thin); padding:10px 0; width:100%; text-align:center;">
+         <span class="tag">⚙</span>
+        </div>
+       </div>
+       <div class="main">
+        <div class="h">Connections</div>
+        <div class="toolbar">
+         <div class="inp">Search</div>
+         <div class="sel">Adapter: any</div>
+         <div class="btn">Add</div>
+        </div>
+        <table>
+         <tbody>
+          <tr>
+           <th class="s">Code</th>
+           <th>Adapter</th>
+           <th>Model</th>
+           <th>State</th>
+           <th></th>
+          </tr>
+          <tr>
+           <td>gemini.flash.first</td>
+           <td class="m">gemini</td>
+           <td class="m">gemini-3.1-flash</td>
+           <td><span class="tag on">on</span></td>
+           <td><span class="tag">Open</span></td>
+          </tr>
+         </tbody>
+        </table>
+       </div>
+      </div>
+     </div>
+     <div class="meta">
+      <b>Свёрнутое меню</b>Полоса 56 пикселей, разделы — первыми буквами названий: значков поверхность не отдаёт. Выбор свёрнутого состояния запоминается. <b>Наведение накрывает, а не двигает</b>Развёрнутое указателем меню ложится поверх рабочей области с тенью: содержимое не сдвигается ни на пиксель. Сдвигает только закрепление меню кнопкой в шапке. <b>Подвал</b>Остаётся одна шестерёнка. Часы, тема и версия скрыты. <b>Буквы совпадают</b>Moderation и Money дают одну и ту же «M». Значков поверхность не отдаёт и заводить их сейчас не будем: свёрнутое меню разворачивается наведением, и полное название видно в один жест.
+     </div>
+    </div>
+    <div class="unit">
+     <div class="num">
+      10.0.3 <span>Sign in</span><em>M11</em>
+     </div>
+     <div class="desk">
+      <div class="top">
+       <b>SayVibe Console</b>
+      </div>
+      <div class="split">
+       <div class="main" style="align-items:center; padding:34px 14px;">
+        <div class="form" style="width:300px;">
+         <div class="h">SayVibe Console</div>
+         <div class="label">Email</div>
+         <div class="inp">admin@sayvibe.app</div>
+         <div class="label">Password</div>
+         <div class="inp">••••••••</div>
+         <div class="btn" style="text-align:center;">Sign in</div>
+         <div class="row">
+          <div>
+           Wrong email or password<small>The same answer for a wrong password and for an account with no console right</small>
+          </div>
+          <span class="val">401</span>
+         </div>
+        </div>
+       </div>
+      </div>
+     </div>
+     <div class="meta">
+      <b>Заменяет 10.1</b>Тот кадр рисовался под Vaadin и снимается при пересогласовании. <b>Вход</b>Почта и пароль, <code>POST /auth/login</code>, ответ без тела. Личность и права панель берёт следующим вызовом <code>GET /auth/me</code>. <b>Отказ</b>Один и тот же текст на неверный пароль и на учётную запись без права консоли: разные тексты превратили бы форму в оракул. <b>Ссылки «Забыли пароль» нет</b>Администраторов единицы, сброс делается руками.
+     </div>
+    </div>
+    <div class="unit">
+     <div class="num">
+      10.0.4 <span>List</span><em>M11</em>
+     </div>
+     <div class="desk">
+      <div class="top">
+       <span>☰</span><b>SayVibe Console</b><span class="who">admin@sayvibe.app</span>
+      </div>
+      <div class="split">
+       <div class="nav">
+        <div>Configuration</div>
+        <div class="on">Word lists</div>
+        <div>Topics</div>
+        <div>Money</div>
+       </div>
+       <div class="main">
+        <div class="h">Word lists</div>
+        <div class="toolbar">
+         <div class="inp">Search a word</div>
+         <div class="sel">Language: en</div>
+         <div class="sel">Kind: any</div>
+         <div class="btn">Add</div>
+        </div>
+        <table>
+         <tbody>
+          <tr>
+           <th class="s down">Word</th>
+           <th>Language</th>
+           <th>Kind</th>
+           <th>Added</th>
+           <th></th>
+          </tr>
+          <tr>
+           <td>bloody</td>
+           <td class="m">en</td>
+           <td><span class="tag">profanity</span></td>
+           <td class="m">05.09 09:15</td>
+           <td><span class="tag">Remove</span></td>
+          </tr>
+          <tr>
+           <td>damn</td>
+           <td class="m">en</td>
+           <td><span class="tag">profanity</span></td>
+           <td class="m">04.09 10:40</td>
+           <td><span class="tag">Remove</span></td>
+          </tr>
+          <tr>
+           <td>bribe</td>
+           <td class="m">en</td>
+           <td><span class="tag">sensitive</span></td>
+           <td class="m">01.09 11:20</td>
+           <td><span class="tag">Remove</span></td>
+          </tr>
+         </tbody>
+        </table>
+        <div class="toolbar" style="justify-content:flex-end; color:var(--note); font-size:12px;">
+         <span>1–3 of 128</span><span class="tag">‹</span><span class="tag on">1</span><span class="tag">2</span><span class="tag">3</span><span class="tag">›</span>
+        </div>
+       </div>
+      </div>
+     </div>
+     <div class="meta">
+      <b>Что задаёт кадр</b>Вид любого списка панели: отбор строкой и выпадающими списками над таблицей, сортировка по заголовку, страничная выдача под таблицей, действие над строкой последним столбцом. <b>Отбирает сервер, листает панель</b>Отбор уходит в запрос вместе с пределом строк; своей выборки панель не держит, а полученное листает у себя. Предел один на все списки — пятьсот строк. <b>Подписи значений</b>Виды и состояния приходят подписями из <code>GET /console/words</code>; машинный код показывается только там, где он и есть опознаватель строки.
+     </div>
+    </div>
+    <div class="unit">
+     <div class="num">
+      10.0.5 <span>Form in a dialog</span><em>M11</em>
+     </div>
+     <div class="desk">
+      <div class="top">
+       <span>☰</span><b>SayVibe Console</b><span class="who">admin@sayvibe.app</span>
+      </div>
+      <div class="split" style="position:relative;">
+       <div class="nav">
+        <div>Configuration</div>
+        <div class="on">Word lists</div>
+        <div>Topics</div>
+       </div>
+       <div class="main" style="opacity:.45;">
+        <div class="h">Word lists</div>
+        <div class="toolbar">
+         <div class="inp">Search a word</div>
+         <div class="sel">Language: en</div>
+         <div class="btn">Add</div>
+        </div>
+        <table>
+         <tbody>
+          <tr>
+           <th>Word</th>
+           <th>Language</th>
+           <th>Kind</th>
+           <th>Added</th>
+          </tr>
+          <tr>
+           <td>bloody</td>
+           <td class="m">en</td>
+           <td><span class="tag">profanity</span></td>
+           <td class="m">05.09 13:05</td>
+          </tr>
+          <tr>
+           <td>damn</td>
+           <td class="m">en</td>
+           <td><span class="tag">profanity</span></td>
+           <td class="m">04.09 14:35</td>
+          </tr>
+         </tbody>
+        </table>
+       </div>
+       <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;">
+        <div class="form" style="width:420px; border:1px solid var(--line); border-radius:10px; padding:16px; background:var(--card); box-shadow:0 8px 28px rgba(0,0,0,.12);">
+         <div class="h">Add a word</div>
+         <div class="label">Word</div>
+         <div class="inp">bribe</div>
+         <div class="row">
+          <div>
+           Length<small>The bound comes from the contract, the panel keeps none of its own</small>
+          </div>
+          <span class="val">5 / 64</span>
+         </div>
+         <div class="label">Language</div>
+         <div class="sel">en</div>
+         <div class="label">Kind</div>
+         <div class="sel">sensitive</div>
+         <div class="row">
+          <div>
+           This word is already on the list<small>The refusal of the surface, shown as it came</small>
+          </div>
+          <span class="val">409</span>
+         </div>
+         <div class="toolbar" style="justify-content:flex-end;">
+          <div class="btn ghost">Cancel</div>
+          <div class="btn">Save</div>
+         </div>
+        </div>
+       </div>
+      </div>
+     </div>
+     <div class="meta">
+      <b>Что задаёт кадр</b>Вид правки: диалог поверх списка, поля сверху вниз, действия справа внизу, отказ поверхности над действиями. <b>Границы полей</b>Берутся из спеки — <code>maxLength</code>, <code>minimum</code>, <code>maximum</code>. Своих чисел панель не держит, проверка на стороне браузера серверную не заменяет. <b>Отказ</b>Показывается текст поверхности, а не свой. Экран остаётся открытым, введённое не теряется.
+     </div>
+    </div>
+    <div class="unit">
+     <div class="num">
+      10.0.6 <span>States</span><em>M11</em>
+     </div>
+     <div class="desk">
+      <div class="top">
+       <span>☰</span><b>SayVibe Console</b><span class="who">admin@sayvibe.app</span>
+      </div>
+      <div class="split">
+       <div class="nav">
+        <div>Configuration</div>
+        <div class="on">Word lists</div>
+        <div>Topics</div>
+       </div>
+       <div class="main">
+        <div class="blk">Loading</div>
+        <div class="row">
+         <div style="color:var(--note);">The list is on its way</div>
+         <span class="val">spinner</span>
+        </div>
+        <div class="blk">Empty</div>
+        <div class="row">
+         <div>
+          Nothing on this list yet<small>The filter is named and can be dropped in one press</small>
+         </div>
+         <span class="val">Drop the filter</span>
+        </div>
+        <div class="blk">The surface refuses</div>
+        <div class="row">
+         <div>
+          This resource is not available<small>403 · the right is missing, the session stays</small>
+         </div>
+         <span class="val">403</span>
+        </div>
+        <div class="row">
+         <div>
+          A console session is required<small>401 · the panel goes to the sign in and keeps the address it was on</small>
+         </div>
+         <span class="val">401</span>
+        </div>
+        <div class="blk">A newer build waits</div>
+        <div class="row">
+         <div>
+          The server carries a newer build<small>Shown under the version in the foot of the menu, one press reloads</small>
+         </div>
+         <span class="val">Reload</span>
+        </div>
+       </div>
+      </div>
+     </div>
+     <div class="meta">
+      <b>Что задаёт кадр</b>Четыре состояния, которые встречаются на каждом экране, и вид каждого. Разделы их не переопределяют. <b>401 и 403 различаются</b><code>401</code> уводит на вход с сохранением адреса, <code>403</code> показывает отказ и из сессии не выходит. <b>Сессия перепроверяется</b>Раз в минуту, при возврате окна в фокус и при восстановлении связи: панель не верит своему кэшу.
+     </div>
+    </div>
+   </div>
+   <h2>Конфигурация — M1</h2>
+   <div class="grid">
+    <div class="unit">
+     <div class="num">
+      10.2.1 <span>Connection · editor</span><em>M1</em>
+     </div>
+     <div class="desk">
+      <div class="top">
+       <span>☰</span><b>SayVibe Console</b><span class="who">admin@sayvibe.app</span><span class="tag">Sign out</span>
+      </div>
+      <div class="split">
+       <div class="nav" style="display:flex; flex-direction:column;">
+        <div style="flex:1; overflow:hidden;">
+         <div class="on">Configuration</div>
+         <div>Jobs</div>
+         <div>Uploads</div>
+         <div class="gap"></div>
+         <div>Moderation</div>
+         <div>Topics</div>
+         <div>Formulas</div>
+         <div>Money</div>
+         <div>Creator Pass</div>
+         <div>Reports</div>
+        </div>
+        <div style="border-top:1px solid var(--thin); padding:9px 12px; display:flex; flex-direction:column; gap:6px;">
+         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+          <div style="line-height:1.2; white-space:nowrap;">
+           <div style="font-size:12px; color:var(--ink);">12:31 AM</div>
+           <div style="font-size:10.5px; color:var(--note);">Sep 08, 2026</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+           <span class="tag">☾</span><span class="tag">⚙</span>
+          </div>
+         </div>
+         <div style="font-size:10px; color:var(--note); white-space:nowrap;">v 1.4.0 · 266d6dae6298</div>
+        </div>
+       </div>
+       <div class="main">
+        <div class="toolbar">
+         <span class="tag on">Connections</span><span class="tag">Adapters</span><span class="tag">Bindings</span><span class="tag">Prices</span><span class="tag">Prompts</span><span class="tag">Languages</span><span class="tag">Level tasks</span><span class="tag">Exercises</span><span class="tag">Parameters</span><span class="tag">Translations</span><span class="tag">Orphaned scenes</span><span class="tag">Voice samples</span><span class="tag">Roles</span>
+        </div>
+        <div class="h">Connection · gemini.video.veo-3.1-fast.eight-seconds</div>
+        <div class="toolbar">
+         <span class="tag on">Connections</span><span class="tag">Adapters</span><span class="tag">Bindings</span><span class="tag">Prices</span><span class="tag">Prompts</span><span class="tag">Languages</span><span class="tag">Level tasks</span><span class="tag">Exercises</span><span class="tag">Parameters</span><span class="tag">Translations</span><span class="tag">Orphaned scenes</span><span class="tag">Voice samples</span><span class="tag">Roles</span>
+        </div>
+        <div class="pair">
+         <div class="form" style="width:430px;">
+          <div class="label">Code · formed by the surface, read only</div>
+          <div class="inp">gemini.video.veo-3.1-fast.eight-seconds</div>
+          <div class="label">Adapter · fixed after saving</div>
+          <div class="sel">gemini.video</div>
+          <div class="label">Model · fixed after saving</div>
+          <div class="sel">veo-3.1-fast</div>
+          <div class="label">Purpose · fixed after saving</div>
+          <div class="inp">eight-seconds</div>
+          <div class="label">Parameters</div>
+          <div class="ta">{ "aspectRatio": "16:9", "resolution": "720p", "durationSeconds": 8 }</div>
+          <div class="label">Key variable</div>
+          <div class="inp">SAYVIBE_PROVIDER_GEMINI_KEY</div>
+          <div class="label">Health check</div>
+          <div class="sel">manual</div>
+          <div class="row">
+           <div>Enabled</div>
+           <span class="val">yes</span>
+          </div>
+          <div class="toolbar" style="justify-content:flex-end;">
+           <div class="btn ghost">Cancel</div>
+           <div class="btn">Save</div>
+          </div>
+         </div>
+         <div class="side">
+          <b>Parameters the adapter declares</b>
+          <table>
+           <tbody>
+            <tr>
+             <th>Key</th>
+             <th>Type</th>
+             <th>Default</th>
+            </tr>
+            <tr>
+             <td>aspectRatio</td>
+             <td class="m">text</td>
+             <td class="m">16:9</td>
+            </tr>
+            <tr>
+             <td>resolution</td>
+             <td class="m">text</td>
+             <td class="m">720p</td>
+            </tr>
+            <tr>
+             <td>durationSeconds</td>
+             <td class="m">number</td>
+             <td class="m">8</td>
+            </tr>
+           </tbody>
+          </table>
+          <p>A key the adapter does not declare is refused. The value of the key variable is never shown here and never entered here.</p>
+         </div>
+        </div>
+       </div>
+      </div>
+     </div>
+     <div class="meta">
+      <b>Что правится</b>У сохранённого подключения меняются параметры, режим проверки и признак «включено». Адаптер, модель и дополнение закрыты: подключение — это «эта модель этого провайдера», на нём висит цена. Нужна другая модель — новое подключение. <b>Границы полей</b>Из спеки. Своих чисел экран не держит. <b>Набор параметров</b>Объявляет адаптер, поверхность отдаёт его вместе с типом и значением по умолчанию. Неизвестный ключ отклоняет сервер, а не панель.
+     </div>
+    </div>
+   </div>
+   <h2>Модерация и право — M4</h2>
+   <div class="grid">
+    <div class="unit">
+     <div class="num">
+      10.27 <span>Adapters</span><em>M11</em>
+     </div>
+     <div class="desk">
+      <div class="top">
+       <span>☰</span><b>SayVibe Console</b><span class="who">admin@sayvibe.app</span><span class="tag">Sign out</span>
+      </div>
+      <div class="split">
+       <div class="nav" style="display:flex; flex-direction:column;">
+        <div style="flex:1; overflow:hidden;">
+         <div class="on">Configuration</div>
+         <div>Jobs</div>
+         <div>Uploads</div>
+         <div class="gap"></div>
+         <div>Moderation</div>
+         <div>Topics</div>
+         <div>Formulas</div>
+         <div>Money</div>
+         <div>Creator Pass</div>
+         <div>Reports</div>
+        </div>
+        <div style="border-top:1px solid var(--thin); padding:9px 12px; display:flex; flex-direction:column; gap:6px;">
+         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+          <div style="line-height:1.2; white-space:nowrap;">
+           <div style="font-size:12px; color:var(--ink);">12:31 AM</div>
+           <div style="font-size:10.5px; color:var(--note);">Sep 08, 2026</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+           <span class="tag">☾</span><span class="tag">⚙</span>
+          </div>
+         </div>
+         <div style="font-size:10px; color:var(--note); white-space:nowrap;">v 1.4.0 · 266d6dae6298</div>
+        </div>
+       </div>
+       <div class="main">
+        <div class="h">Adapters</div>
+        <div class="tabs">
+         <span>Connections</span><span class="on">Adapters</span><span>Bindings</span><span>Prices</span><span>Prompts</span><span>Languages</span><span>Level tasks</span><span>Exercises</span><span>Parameters</span><span>Translations</span><span>Orphaned scenes</span><span>Voice samples</span><span>Roles</span>
+        </div>
+        <div class="label">The list is fixed by the build · an adapter is read here, a connection to it is made on the previous tab</div>
+        <div class="toolbar">
+         <div class="sel" style="flex:none; width:190px;">Kind: any</div>
+        </div>
+        <table>
+         <tbody>
+          <tr>
+           <th class="s"></th>
+           <th>Code</th>
+           <th>Kind</th>
+           <th>Address by default</th>
+           <th>Model</th>
+           <th>Price units</th>
+           <th>Documentation</th>
+           <th>Checked</th>
+          </tr>
+          <tr>
+           <td class="m">›</td>
+           <td>gemini</td>
+           <td class="m">TEXT</td>
+           <td class="m">https://generativelanguage.googleapis.com/v1beta</td>
+           <td><span class="tag on">needed</span></td>
+           <td class="m">TOKENS</td>
+           <td class="m">ai.google.dev ↗</td>
+           <td class="m">08.08.2026</td>
+          </tr>
+          <tr>
+           <td class="m">›</td>
+           <td>llamaswap.text</td>
+           <td class="m">TEXT</td>
+           <td class="m">http://sayvibe-runner:8080/v1</td>
+           <td><span class="tag on">needed</span></td>
+           <td class="m">TOKENS</td>
+           <td class="m">github.com/mostlygeek ↗</td>
+           <td class="m">20.08.2026</td>
+          </tr>
+          <tr>
+           <td class="m">∨</td>
+           <td>qwen.align</td>
+           <td class="m">ALIGNMENT</td>
+           <td class="m">http://sayvibe-aligner:8391</td>
+           <td><span class="tag on">needed</span></td>
+           <td class="m">SECONDS</td>
+           <td class="m">huggingface.co/Qwen ↗</td>
+           <td class="m">15.08.2026</td>
+          </tr>
+         </tbody>
+        </table>
+        <div class="side" style="margin-top:12px;">
+         <b>qwen.align · parameters</b>
+         <div style="padding:6px 9px; font-size:11px; color:var(--note);">Undeclared parameters are refused by this adapter</div>
+         <table>
+          <tbody>
+           <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Default</th>
+            <th>Bound to the model</th>
+            <th>What it does</th>
+           </tr>
+           <tr>
+            <td class="m">device</td>
+            <td class="m">ENUM</td>
+            <td class="m">cpu</td>
+            <td class="m">no</td>
+            <td>Where the alignment runs: cpu or cuda</td>
+           </tr>
+           <tr>
+            <td class="m">threads</td>
+            <td class="m">INTEGER</td>
+            <td class="m">10</td>
+            <td class="m">no</td>
+            <td>Cores given to the model</td>
+           </tr>
+          </tbody>
+         </table>
+        </div>
+       </div>
+      </div>
+     </div>
+     <div class="meta">
+      <b>Что на экране</b>Все адаптеры сборки с их профилями. Только чтение: кнопок, меняющих состояние, нет. <b>Ручка</b><code>GET /adapters</code> одним запросом отдаёт весь список. <b>Адрес по умолчанию</b>Куда адаптер стучит, когда у подключения свой адрес не задан. У локальных служб он приходит из окружения. <b>Раскрытие строки</b>Параметры адаптера и признак необъявленных параметров. <b>Отбор</b>По виду работы; названия видов и единиц цены приходят словами поверхности.
+     </div>
+    </div>
+    <div class="unit">
+     <div class="num">
+      10.33 <span>Reports · funnel</span><em>M11</em>
+     </div>
+     <div class="desk">
+      <div class="top">
+       <span>☰</span><b>SayVibe Console</b><span class="who">admin@sayvibe.app</span><span class="tag">Sign out</span>
+      </div>
+      <div class="split">
+       <div class="nav" style="display:flex; flex-direction:column;">
+        <div style="flex:1; overflow:hidden;">
+         <div>Configuration</div>
+         <div>Jobs</div>
+         <div>Uploads</div>
+         <div class="gap"></div>
+         <div>Moderation</div>
+         <div>Topics</div>
+         <div>Formulas</div>
+         <div>Money</div>
+         <div>Creator Pass</div>
+         <div class="on">Reports</div>
+        </div>
+        <div style="border-top:1px solid var(--thin); padding:9px 12px; display:flex; flex-direction:column; gap:6px;">
+         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+          <div style="line-height:1.2; white-space:nowrap;">
+           <div style="font-size:12px; color:var(--ink);">12:31 AM</div>
+           <div style="font-size:10.5px; color:var(--note);">Sep 08, 2026</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+           <span class="tag">☾</span><span class="tag">⚙</span>
+          </div>
+         </div>
+         <div style="font-size:10px; color:var(--note); white-space:nowrap;">v 1.4.0 · 266d6dae6298</div>
+        </div>
+       </div>
+       <div class="main">
+        <div class="tabs">
+         <span class="on">Funnel</span><span>Funnels</span><span>Catalogue</span><span>Usage</span><span>Audit log</span>
+        </div>
+        <div class="h">Funnel</div>
+        <div class="label">The core loop · a step counts only when it came after the one before</div>
+        <div class="toolbar">
+         <div class="sel" style="flex:none; width:110px;">Days: 30</div>
+         <div class="sel" style="flex:none; width:110px;">Weeks: 8</div>
+         <div class="sel" style="flex:none; width:130px;">Group: all</div>
+         <div class="sel" style="flex:none; width:130px;">Platform: any</div>
+         <div class="sel" style="flex:none; width:130px;">Version: any</div>
+         <div class="sel" style="flex:none; width:130px;">Country: any</div>
+         <div class="sel" style="flex:none; width:130px;">Network: any</div>
+        </div>
+        <div class="blk">
+         Steps<i>of 4 120 installations</i>
+        </div>
+        <div class="why">Installations whose first step of the chain fell in the last 30 days. A step counts only when it came after the one before it.</div>
+        <table>
+         <tbody>
+          <tr>
+           <th class="s">Step</th>
+           <th>Event</th>
+           <th>Installations</th>
+           <th>Of the first</th>
+           <th>Of the one before</th>
+          </tr>
+          <tr>
+           <td class="m">1</td>
+           <td>language_started</td>
+           <td class="m">4 120</td>
+           <td class="m">100 %</td>
+           <td class="m">100 %</td>
+          </tr>
+          <tr>
+           <td class="m">2</td>
+           <td>onboarding_finished</td>
+           <td class="m">3 048</td>
+           <td class="m">74 %</td>
+           <td class="m">74 %</td>
+          </tr>
+          <tr>
+           <td class="m">3</td>
+           <td>feed_opened</td>
+           <td class="m">2 704</td>
+           <td class="m">66 %</td>
+           <td class="m">89 %</td>
+          </tr>
+          <tr>
+           <td class="m">4</td>
+           <td>scene_opened</td>
+           <td class="m">2 210</td>
+           <td class="m">54 %</td>
+           <td class="m">82 %</td>
+          </tr>
+          <tr>
+           <td class="m">5</td>
+           <td>lesson_started</td>
+           <td class="m">1 204</td>
+           <td class="m">29 %</td>
+           <td class="m">54 %</td>
+          </tr>
+          <tr>
+           <td class="m">6</td>
+           <td>phrase_score_shown</td>
+           <td class="m">642</td>
+           <td class="m">16 %</td>
+           <td class="m">53 %</td>
+          </tr>
+         </tbody>
+        </table>
+        <div class="why">Networks these installations came from · M247 — 312, Comcast — 288, Vodafone — 214, Deutsche Telekom — 176, Orange — 154, 5 more</div>
+        <div class="blk">
+         Retention<i>7 weeks after the first one</i>
+        </div>
+        <div class="why">All 6 284 installations first seen in the last 8 weeks taken together: the share that came back in each of the 7 weeks after its own first week.</div>
+        <table>
+         <tbody>
+          <tr>
+           <th>Installations</th>
+           <th>W1</th>
+           <th>W2</th>
+           <th>W3</th>
+           <th>W4</th>
+           <th>W5</th>
+           <th>W6</th>
+           <th>W7</th>
+          </tr>
+          <tr>
+           <td class="m">6 284</td>
+           <td class="m">42 %</td>
+           <td class="m">28 %</td>
+           <td class="m">23 %</td>
+           <td class="m">19 %</td>
+           <td class="m">17 %</td>
+           <td class="m">16 %</td>
+           <td class="m">15 %</td>
+          </tr>
+         </tbody>
+        </table>
+        <div class="blk">
+         Cohorts<i>by the week of the first visit</i>
+        </div>
+        <div class="why">The same 7 weeks split by the week an installation was first seen. A dash means the week has not been lived through yet.</div>
+        <table>
+         <tbody>
+          <tr>
+           <th>First week</th>
+           <th>Installations</th>
+           <th>W1</th>
+           <th>W2</th>
+           <th>W3</th>
+           <th>W4</th>
+           <th>W5</th>
+           <th>W6</th>
+           <th>W7</th>
+          </tr>
+          <tr>
+           <td class="m">20.07.2026</td>
+           <td class="m">1 208</td>
+           <td class="m">40 %</td>
+           <td class="m">27 %</td>
+           <td class="m">21 %</td>
+           <td class="m">18 %</td>
+           <td class="m">16 %</td>
+           <td class="m">15 %</td>
+           <td class="m">14 %</td>
+          </tr>
+          <tr>
+           <td class="m">27.07.2026</td>
+           <td class="m">1 140</td>
+           <td class="m">43 %</td>
+           <td class="m">29 %</td>
+           <td class="m">23 %</td>
+           <td class="m">20 %</td>
+           <td class="m">18 %</td>
+           <td class="m">17 %</td>
+           <td class="m">—</td>
+          </tr>
+          <tr>
+           <td class="m">03.08.2026</td>
+           <td class="m">980</td>
+           <td class="m">41 %</td>
+           <td class="m">28 %</td>
+           <td class="m">22 %</td>
+           <td class="m">19 %</td>
+           <td class="m">18 %</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+          </tr>
+          <tr>
+           <td class="m">10.08.2026</td>
+           <td class="m">1 104</td>
+           <td class="m">44 %</td>
+           <td class="m">30 %</td>
+           <td class="m">24 %</td>
+           <td class="m">20 %</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+          </tr>
+          <tr>
+           <td class="m">17.08.2026</td>
+           <td class="m">1 032</td>
+           <td class="m">39 %</td>
+           <td class="m">26 %</td>
+           <td class="m">21 %</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+          </tr>
+          <tr>
+           <td class="m">24.08.2026</td>
+           <td class="m">918</td>
+           <td class="m">42 %</td>
+           <td class="m">28 %</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+          </tr>
+          <tr>
+           <td class="m">31.08.2026</td>
+           <td class="m">864</td>
+           <td class="m">45 %</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+          </tr>
+          <tr>
+           <td class="m">07.09.2026</td>
+           <td class="m">790</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+           <td class="m">—</td>
+          </tr>
+         </tbody>
+        </table>
+       </div>
+      </div>
+     </div>
+     <div class="meta">
+      <b>Что на экране</b>Воронка основного цикла, удержание и когорты недель. Только чтение. <b>Ручка</b><code>GET /analytics?days=&amp;weeks=&amp;group=</code> отдаёт воронку, удержание и когорты одним ответом. <b>Дни</b>Окно воронки. Установка попадает в неё, если первый шаг цепочки случился в эти дни. <b>Недели</b>Окно выборки. Первая неделя окна — неделя знакомства, остальные — недели, в которые можно вернуться, поэтому столбцов на один меньше выбранного числа. <b>Пояснение под названием</b>Стоит у каждой таблицы и называет выбранные числа. <b>Доли считает поверхность</b>«От первого» и «от предыдущего» приходят посчитанными. <b>Пустая клетка</b>Прочерк означает, что неделя ещё не прожита, а не нулевое удержание. <b>Отборы</b>Группа, платформа, версия, страна и сеть. Каждый показывается, только когда значений больше одного; список значений приходит с поверхности готовым. <b>Строка сетей</b>Стоит под воронкой и называет не более пяти самых крупных сетей выбранных установок с числом установок, по убыванию; хвост свёрнут в «ещё N». Подмена страны видна без отдельного запроса. <b>Значения отборов</b><code>GET /analytics/choices?days=</code> отдаёт группы, платформы, версии, страны и сети одним ответом.
+     </div>
+    </div>
+    <div class="unit">
+     <div class="num">
+      10.36.1 <span>Funnel · build</span><em>M11</em>
+     </div>
+     <div class="desk">
+      <div class="top">
+       <span>☰</span><b>SayVibe Console</b><span class="who">admin@sayvibe.app</span><span class="tag">Sign out</span>
+      </div>
+      <div class="split">
+       <div class="nav" style="display:flex; flex-direction:column;">
+        <div style="flex:1; overflow:hidden;">
+         <div>Configuration</div>
+         <div>Jobs</div>
+         <div>Uploads</div>
+         <div class="gap"></div>
+         <div>Moderation</div>
+         <div>Topics</div>
+         <div>Formulas</div>
+         <div>Money</div>
+         <div>Creator Pass</div>
+         <div class="on">Reports</div>
+        </div>
+        <div style="border-top:1px solid var(--thin); padding:9px 12px; display:flex; flex-direction:column; gap:6px;">
+         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+          <div style="line-height:1.2; white-space:nowrap;">
+           <div style="font-size:12px; color:var(--ink);">12:31 AM</div>
+           <div style="font-size:10.5px; color:var(--note);">Sep 08, 2026</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+           <span class="tag">☾</span><span class="tag">⚙</span>
+          </div>
+         </div>
+         <div style="font-size:10px; color:var(--note); white-space:nowrap;">v 1.4.0 · 266d6dae6298</div>
+        </div>
+       </div>
+       <div class="main">
+        <div class="tabs">
+         <span>Funnel</span><span class="on">Funnels</span><span>Catalogue</span><span>Usage</span><span>Audit log</span>
+        </div>
+        <div class="h">Funnels</div>
+        <div class="label">A funnel of one’s own · a step counts only when it came after the one before</div>
+        <div style="position:relative; border:1px dashed var(--line); border-radius:8px; padding:14px; margin-top:6px;">
+         <div style="font-size:11px; color:var(--note); margin-bottom:8px;">The screen stays behind the dialog</div>
+         <div class="side" style="max-width:560px; margin:0 auto; background:var(--card);">
+          <b>Funnel · build</b>
+          <div class="form" style="padding:11px 13px; max-width:none;">
+           <div class="inp">Name · Search to a scene</div>
+           <div style="font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--note);">Steps</div>
+           <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+            <span class="chip">⋮ feed_search_opened ×</span> <span class="chip">⋮ feed_search_submitted ×</span> <span class="chip">⋮ scene_opened ×</span>
+           </div>
+           <div class="sel">Add a step · from the catalogue</div>
+           <div style="font-size:11px; color:var(--note);">Drag to reorder · at least two steps · a step is named once</div>
+           <div class="sel" style="max-width:200px;">Days: 14</div>
+           <div style="display:flex; justify-content:space-between; gap:8px;">
+            <div class="btn ghost">Delete</div>
+            <div style="display:flex; gap:8px;">
+             <div class="btn ghost">Cancel</div>
+             <div class="btn">Save</div>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+       </div>
+      </div>
+     </div>
+     <div class="meta">
+      <b>Что на экране</b>Сборка воронки окном поверх списка, как на опорном кадре <code>10.0.5</code>. <b>Ручки</b><code>POST /funnels</code> заводит, <code>PUT /funnels/{funnelId}</code> правит, <code>DELETE /funnels/{funnelId}</code> снимает. <b>Шаги</b>Берутся из событий каталога, порядок правится перетаскиванием, лишний снимается крестиком. <b>Отказы</b>Имя не из контракта событий или шагов меньше двух — <code>400</code>; повтор шага в цепочке — <code>400</code>; воронка с таким именем уже стоит — <code>409</code>. <b>Несохранённая правка</b>Закрытие окна спрашивает подтверждение.
+     </div>
+    </div>
+   </div>
+  </div>
+ </body>
+</html>

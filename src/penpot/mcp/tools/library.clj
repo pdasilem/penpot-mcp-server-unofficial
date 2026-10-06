@@ -2,9 +2,11 @@
   (:require
    [clojure.string :as str]
    [penpot.mcp.penpot.file :as file]
+   [penpot.mcp.penpot.token :as cto]
    [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.common :as common]
+   [penpot.mcp.tools.large-result :as large-result]
    [penpot.mcp.tools.token-source :as token-source]))
 
 (defn- from-editor [ctx file-id body]
@@ -71,8 +73,23 @@
       (update :sets (fn [sets] (mapv (fn [s] (update s :tokens #(mapv display-token %))) sets)))
       (update :themes (fn [themes] (mapv (fn [t] (update t :sets #(vec (sort %)))) themes)))))
 
-(defn- design-tokens [ctx {:keys [file_id]}]
-  (tool/json-result (displayed (token-source/catalog ctx file_id))))
+(defn- token-filter [{:keys [set type query]}]
+  (cond-> {}
+    set (assoc :set set)
+    type (assoc :type (keyword type))
+    query (assoc :query query)))
+
+(defn- tokens-brief [full]
+  (fn []
+    {:sets (mapv (fn [s] (-> (select-keys s [:id :name :active]) (assoc :token_count (count (:tokens s))))) (:sets full))
+     :themes (:themes full)}))
+
+(defn- design-tokens [ctx {:keys [file_id] :as args}]
+  (let [full (displayed (token-source/catalog ctx file_id (token-filter args)))]
+    (large-result/result ctx {:full full :brief (tokens-brief full) :file-name "design-tokens.zip" :entry "design-tokens.json"})))
+
+(def ^:private token-type-names
+  (into [:enum] (sort (map name (keys cto/token-type->dtcg-token-type)))))
 
 (def ^:private file-only
   [:map {:closed true} common/file-id-param])
@@ -104,7 +121,11 @@
     :input-schema (into file-only common/page-params)
     :handler typographies}
    {:name "get_design_tokens"
-    :description "List the design token sets of the file and whether each is active, with every token's id, name, type, value and description, and the token themes with their id, group, name, whether each is active and the names of their sets. Token ids are used by set_token."
+    :description "List the design token sets of the file and whether each is active, with every token's id, name, type, value and description, and the token themes with their id, group, name, whether each is active and the names of their sets. Token ids are used by set_token. set, type and query narrow the tokens; sets without matching tokens are listed with no tokens. When the answer would be larger than 100 KB it lists the sets with token_count and the themes, and full_result holds a one-time download of the whole answer: Claude Code can fetch it with the curl command, other clients give it to the user."
     :annotations tool/read-only
-    :input-schema file-only
+    :input-schema [:map {:closed true}
+                   common/file-id-param
+                   [:set {:optional true :description "Only this token set"} [:string {:min 1}]]
+                   [:type {:optional true :description "Only tokens of this type"} token-type-names]
+                   [:query {:optional true :description "Only tokens whose name contains this text, ignoring case"} [:string {:min 1}]]]
     :handler design-tokens}])

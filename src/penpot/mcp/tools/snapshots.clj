@@ -1,20 +1,32 @@
 (ns penpot.mcp.tools.snapshots
   (:require
-   [app.common.features :as cfeat]
    [clojure.set :as set]
+   [penpot.mcp.penpot.contract :as cfeat]
    [penpot.mcp.penpot.file :as file]
+   [penpot.mcp.penpot.heavy :as heavy]
    [penpot.mcp.penpot.revision :as revision]
    [penpot.mcp.penpot.rpc :as rpc]
    [penpot.mcp.tool :as tool]
-   [penpot.mcp.tools.common :as common]))
+   [penpot.mcp.tools.common :as common]
+   [penpot.mcp.tools.large-result :as large-result]))
 
 (defn- list-snapshots [{:keys [rpc]} {:keys [file_id] :as args}]
   (tool/json-result
    (common/paged :snapshots (mapv #(select-keys % [:id :label :created-at :created-by :revn])
                                   (rpc/call rpc :get-file-snapshots {:file-id file_id})) args)))
 
-(defn- fetch-snapshot [rpc file-id snapshot-id]
-  (rpc/call rpc :get-file-snapshot {:file-id file-id :id snapshot-id :features cfeat/supported-features}))
+(defn- shape-count [f]
+  (reduce + (map #(max 0 (dec (count (:objects %)))) (vals (get-in f [:data :pages-index])))))
+
+(defn- fetch-snapshot [{:keys [rpc config]} file-id snapshot-id]
+  (heavy/enter!)
+  (let [snapshot (rpc/call rpc :get-file-snapshot {:file-id file-id :id snapshot-id :features cfeat/supported-features})
+        limit    (:full-file-shapes-max config)
+        shapes   (shape-count snapshot)]
+    (when (> shapes limit)
+      (throw (tool/user-error (str "Snapshot " snapshot-id " has " shapes " shapes, more than the " limit
+                                   " this server compares at once"))))
+    snapshot))
 
 (defn- shapes-by-id [page]
   (into {} (map (juxt :id identity)) (common/page-shapes page)))
@@ -56,13 +68,20 @@
                  (filter #(some seq [(:added %) (:removed %) (:modified %)]))
                  (vec))}))
 
-(defn- compare-snapshots [{:keys [rpc] :as ctx} {:keys [file_id from_snapshot_id to_snapshot_id]}]
+(defn- diff-brief [diff]
+  (assoc (select-keys diff [:added_pages :removed_pages])
+         :pages (mapv (fn [p] {:page_id (:page_id p) :name (:name p)
+                               :added (count (:added p)) :removed (count (:removed p)) :modified (count (:modified p))})
+                      (:pages diff))))
+
+(defn- compare-snapshots [ctx {:keys [file_id from_snapshot_id to_snapshot_id]}]
   (let [to   (if to_snapshot_id
                (do (file/check-whole! ctx file_id nil)
-                   (fetch-snapshot rpc file_id to_snapshot_id))
+                   (fetch-snapshot ctx file_id to_snapshot_id))
                (file/read-whole ctx file_id))
-        from (fetch-snapshot rpc file_id from_snapshot_id)]
-    (tool/json-result (diff-files from to))))
+        from (fetch-snapshot ctx file_id from_snapshot_id)
+        diff (diff-files from to)]
+    (large-result/result ctx {:full diff :brief #(diff-brief diff) :file-name "snapshot-diff.zip" :entry "snapshot-diff.json"})))
 
 (defn- create-snapshot [{:keys [rpc] :as ctx} {:keys [file_id label]}]
   (revision/await-clean! ctx file_id)
@@ -76,7 +95,7 @@
     :input-schema (into [:map {:closed true} common/file-id-param] common/page-params)
     :handler list-snapshots}
    {:name "compare_snapshots"
-    :description "Compare a saved version with another version or with the current file. Returns added and removed pages, and for each changed page the added, removed and modified shapes with the names of the changed attributes."
+    :description "Compare a saved version with another version or with the current file. Returns added and removed pages, and for each changed page the added, removed and modified shapes with the names of the changed attributes. When the answer would be larger than 100 KB, pages carry only the counts of added, removed and modified shapes, and full_result holds a one-time download of the whole comparison."
     :annotations tool/read-only
     :input-schema [:map {:closed true}
                    common/file-id-param

@@ -1,10 +1,10 @@
 (ns penpot.mcp.exports
+  (:require
+   [penpot.mcp.spool :as spool]
+   [penpot.mcp.sweeper :as sweeper])
   (:import
    (java.io ByteArrayOutputStream)
    (java.nio.charset StandardCharsets)
-   (java.security SecureRandom)
-   (java.util HexFormat)
-   (java.util.concurrent Executors ScheduledExecutorService ThreadFactory TimeUnit)
    (java.util.zip ZipEntry ZipOutputStream)))
 
 (def ttl-ms (* 60 60 1000))
@@ -15,21 +15,9 @@
 
 (def ^:private sweep-interval-s 60)
 
-(def ^:private random (SecureRandom.))
-
-(defn store [{:keys [now max-bytes]}]
-  {:entries (atom {}) :now now :max-bytes (or max-bytes default-max-bytes)})
-
-(defn- new-id []
-  (let [bytes (byte-array 16)]
-    (.nextBytes ^SecureRandom random bytes)
-    (.formatHex (HexFormat/of) bytes)))
-
-(defn- live [entries now-ms]
-  (into {} (remove (fn [[_ e]] (> (- now-ms (:created e)) ttl-ms))) entries))
-
-(defn- stored-bytes [entries]
-  (reduce + 0 (map (comp alength :bytes) (vals entries))))
+(defn store [{:keys [now max-bytes spool]}]
+  (let [sp (or spool (spool/create {:max-bytes (or max-bytes default-max-bytes) :now now}))]
+    {:spool sp :entries (:entries sp) :now now}))
 
 (defn zip [files]
   (let [out (ByteArrayOutputStream.)]
@@ -40,41 +28,32 @@
         (.closeEntry z)))
     (.toByteArray out)))
 
-(defn put! [{:keys [entries now max-bytes]} ^bytes data]
-  (if (> (alength data) max-export-bytes)
-    {:error :too-large}
-    (let [id     (new-id)
-          now-ms (now)
-          after  (swap! entries (fn [es]
-                                  (let [es (live es now-ms)]
-                                    (if (> (+ (stored-bytes es) (alength data)) max-bytes)
-                                      es
-                                      (assoc es id {:bytes data :created now-ms})))))]
-      (if (contains? after id) {:id id} {:error :full}))))
+(def ^:private default-name "design-system.zip")
 
-(defn sweep! [{:keys [entries now]}]
-  (let [now-ms (now)]
-    (swap! entries live now-ms)
-    nil))
+(defn put!
+  ([s data] (put! s data default-name))
+  ([{:keys [spool now]} ^bytes data file-name]
+   (if (> (alength data) max-export-bytes)
+     {:error :too-large}
+     (if-let [id (spool/put! spool data {:kind :export :name file-name :expires-at (+ (now) ttl-ms)})]
+       {:id id}
+       {:error :full}))))
 
-(def ^:private daemon-factory
-  (reify ThreadFactory
-    (newThread [_ runnable]
-      (doto (Thread. runnable "exports-sweeper") (.setDaemon true)))))
+(defn sweep! [{:keys [spool]}]
+  (spool/sweep! spool))
 
 (defn start! [opts]
-  (let [s       (store opts)
-        sweeper (Executors/newSingleThreadScheduledExecutor daemon-factory)]
-    (.scheduleAtFixedRate sweeper ^Runnable #(sweep! s) (long sweep-interval-s) (long sweep-interval-s) TimeUnit/SECONDS)
-    (assoc s :sweeper sweeper)))
+  (let [s (store opts)]
+    (assoc s :sweeper (sweeper/start! "exports-sweeper" sweep-interval-s #(sweep! s)))))
 
 (defn stop! [{:keys [sweeper]}]
-  (when sweeper
-    (.shutdownNow ^ScheduledExecutorService sweeper)))
+  (sweeper/stop! sweeper))
 
-(defn take! [{:keys [entries now]} id]
-  (let [now-ms (now)
-        [before _] (swap-vals! entries (fn [es] (dissoc (live es now-ms) id)))]
-    (when-let [e (get before id)]
-      (when (<= (- now-ms (:created e)) ttl-ms)
-        (:bytes e)))))
+(defn take-download! [{:keys [spool now]} id]
+  (when (= :export (:kind (spool/entry spool id)))
+    (when-let [{:keys [bytes expires-at name]} (spool/take! spool id)]
+      (when (<= (now) expires-at)
+        {:bytes bytes :name name}))))
+
+(defn take! [s id]
+  (:bytes (take-download! s id)))

@@ -27,12 +27,16 @@
 (def ^:private create-boolean
   (canvas/plugin-tool
    {:name "create_boolean"
-    :description "Combine shapes into one boolean shape, as Penpot's boolean operations do: union merges them, difference cuts the upper shapes out of the bottom one, intersection keeps the overlap, exclude keeps everything but the overlap. Returns the new boolean shape."
+    :description "Combine shapes into one boolean shape, as Penpot's boolean operations do: union merges them, difference cuts the upper shapes out of the bottom one, intersection keeps the overlap, exclude keeps everything but the overlap. Boards cannot be combined. Returns the new boolean shape."
     :annotations tool/additive
     :input-schema (schema (shapes-param 2)
                           [:operation {:description "union, difference, intersection or exclude"} [:enum "union" "difference" "intersection" "exclude"]])
     :body (str/join "\n" [create/collect-shapes
-                          "const s = penpot.createBoolean(args.operation, shapes) ?? fail('create-failed', 'boolean shape');"
+                          "const boards = shapes.filter((x) => x.type === 'board');"
+                          "if (boards.length) fail('boolean-of-boards', boards.map((x) => x.id).join(', '));"
+                          "const sourceId = shapes[0].id;"
+                          "penpot.createBoolean(args.operation, shapes) ?? fail('create-failed', 'boolean shape');"
+                          "const s = (await waitFor(() => { const src = penpot.currentPage.getShapeById(sourceId); const p = src && src.parent; return p && p.type === 'boolean' ? p : null; }, 5000)) ?? fail('create-failed', 'boolean shape');"
                           canvas/finish])
     :args #(hash-map :shape-ids (:shape_ids %) :operation (:operation %))}))
 

@@ -1,27 +1,34 @@
-FROM clojure:temurin-25-tools-deps-1.12.6.1673-trixie-slim@sha256:c36d56a5ae0bfda66847f3d0a0641f7b79ce2b90c9b745009a9a0bb57fafe384 AS build
+FROM bellsoft/liberica-runtime-container:jdk-all-25-musl@sha256:7d8158026556c15fa87d285f27c8f42e9fd8d4a8b29950bebbe03160ed11d0be AS build
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends git \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache bash curl \
+    && curl -fsSL https://github.com/clojure/brew-install/releases/download/1.12.6.1673/linux-install.sh -o /tmp/linux-install.sh \
+    && bash /tmp/linux-install.sh \
+    && rm /tmp/linux-install.sh
 
 WORKDIR /build
 
 COPY deps.edn build.clj ./
-RUN clojure -P && clojure -T:build compile-common
+COPY build build
+RUN clojure -P && clojure -P -T:build
 
 COPY src/penpot src/penpot
+COPY resources resources
 RUN clojure -T:build uber
 
-FROM eclipse-temurin:25-jre@sha256:15090d159279e5c158473eccb48cd87f57b3e3a47511a797eb5a7a7ea6f86b0f
+RUN jlink --add-modules java.base,java.desktop,java.management,java.naming,java.net.http,java.security.jgss,java.sql,jdk.unsupported \
+    --strip-debug --no-header-files --no-man-pages --compress zip-6 --output /jre
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && useradd --system --no-create-home --shell /usr/sbin/nologin penpot-mcp
+FROM bellsoft/alpaquita-linux-base:stream-musl@sha256:9c31d60aa6d12a472039d9486c6f7123f7d49a80265bcce0140b4609b0020813
 
+RUN adduser -S -H -s /sbin/nologin penpot-mcp \
+    && mkdir -p /var/spool/penpot-mcp \
+    && chown penpot-mcp /var/spool/penpot-mcp
+
+COPY --from=build /jre /opt/jre
 COPY --from=build /build/target/penpot-mcp.jar /opt/penpot-mcp/penpot-mcp.jar
 
-ENV MCP_HOST=0.0.0.0 \
+ENV PATH=/opt/jre/bin:$PATH \
+    MCP_HOST=0.0.0.0 \
     MCP_PORT=4401 \
     WS_HOST=0.0.0.0 \
     WS_PORT=4402
@@ -31,6 +38,6 @@ EXPOSE 4401 4402
 USER penpot-mcp
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${MCP_PORT}/mcp")" = "401" ] || exit 1
+    CMD wget -q -S -O /dev/null "http://127.0.0.1:${MCP_PORT}/mcp" 2>&1 | grep -q " 401 " || exit 1
 
-CMD ["java", "-XX:MaxRAMPercentage=75", "-jar", "/opt/penpot-mcp/penpot-mcp.jar"]
+CMD ["java", "-XX:+UseG1GC", "-XX:G1PeriodicGCInterval=30000", "-XX:MaxRAMPercentage=40", "-XX:MinHeapFreeRatio=10", "-XX:MaxHeapFreeRatio=30", "-XX:+UseCompactObjectHeaders", "-XX:TieredStopAtLevel=1", "-jar", "/opt/penpot-mcp/penpot-mcp.jar"]

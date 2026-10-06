@@ -22,52 +22,59 @@
         :when (seq refs)]
     {:name name :references (vec (sort refs)) :live (contains? live name)}))
 
-(defn- add-application [acc {:keys [name shape-id page-id page copy? attributes]}]
-  (-> acc
-      (update-in [name :shapes] (fnil conj #{}) shape-id)
-      (update-in [name :copies] (fnil into #{}) (when copy? [shape-id]))
-      (update-in [name :attributes] (fnil into #{}) attributes)
-      (update-in [name :pages page-id] (fn [p] (-> (or p {:id page-id :name page :order (count (get-in acc [name :pages])) :shapes #{}})
-                                                    (update :shapes conj shape-id))))))
+(defn- add-page-usage [acc {:keys [page-id page usage]}]
+  (reduce (fn [m [name {:keys [shapes copies attributes]}]]
+            (update m name (fn [u] (-> (or u {:shapes 0 :copies 0 :attributes #{} :pages []})
+                                       (update :shapes + shapes)
+                                       (update :copies + copies)
+                                       (update :attributes into attributes)
+                                       (update :pages conj {:id page-id :name page :shapes shapes})))))
+          acc
+          usage))
 
-(defn- usage-entry [[name {:keys [shapes copies attributes pages]}]]
-  {:name name
-   :shapes (count shapes)
-   :copies (count copies)
-   :attributes (vec (sort attributes))
-   :pages (mapv (fn [p] (-> p (dissoc :order) (update :shapes count))) (sort-by :order (vals pages)))})
+(defn- usage-entries [merged pred]
+  (into [] (comp (filter (comp pred key))
+                 (map (fn [[name u]] (assoc u :name name :attributes (vec (sort (:attributes u)))))))
+        (sort-by key merged)))
 
-(defn- usage [applications pred]
-  (->> (filter #(pred (:name %)) applications)
-       (reduce add-application {})
-       (sort-by key)
-       (mapv usage-entry)))
+(defn raw-window [offset limit page-id]
+  {:offset offset :limit limit :page-id page-id :count 0 :groups []})
 
-(defn with-matches [scale-tokens entries]
+(defn- add-group [{:keys [offset limit] :as window} group]
+  (let [values (:values group)
+        start  (:count window)
+        from   (max offset start)
+        to     (min (+ offset limit) (+ start (count values)))]
+    (cond-> (update window :count + (count values))
+      (< from to) (update :groups conj (assoc group :values (subvec values (- from start) (- to start)))))))
+
+(defn add-raw [window {:keys [page-id page raw]}]
+  (if (and (:page-id window) (not= page-id (:page-id window)))
+    window
+    (reduce add-group window (map #(assoc % :page-id page-id :page page) raw))))
+
+(defn with-matches [scale-tokens groups]
   (if scale-tokens
-    (mapv #(assoc % :matches (scale/matches scale-tokens %)) entries)
-    (vec entries)))
+    (mapv (fn [g] (update g :values (fn [vs] (mapv #(assoc % :matches (scale/matches scale-tokens %)) vs)))) groups)
+    (vec groups)))
 
 (defn report [{:keys [tokens facts]}]
   (let [names        (token-names tokens)
         graph        (references/graph tokens)
-        applications (mapcat :applications facts)
-        applied      (into (sorted-set) (comp (map :name) (filter names)) applications)
+        merged       (reduce add-page-usage {} facts)
+        applied      (into (sorted-set) (filter names) (keys merged))
         live         (references/live graph applied)
         dead         (into (sorted-set) (remove live) names)
         through-refs (into [] (comp (filter live) (remove applied)) names)
-        missing      (usage applications (complement names))
-        raw          (into [] (mapcat :raw-values) facts)]
+        missing      (usage-entries merged (complement names))]
     {:summary {:tokens (count names)
                :applied (count applied)
                :missing (count missing)
                :referenced-only (count through-refs)
                :unused (count dead)
-               :shapes (reduce + (map :shapes facts))
-               :raw-values (count raw)}
+               :shapes (reduce + (map :shapes facts))}
      :unused (vec (unused tokens dead))
      :referenced-only through-refs
      :references (vec (references graph live))
-     :usage (usage applications names)
-     :missing missing
-     :raw-values raw}))
+     :usage (usage-entries merged names)
+     :missing missing}))

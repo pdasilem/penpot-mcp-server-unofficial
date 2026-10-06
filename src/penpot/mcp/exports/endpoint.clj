@@ -9,21 +9,21 @@
 (defn- export-id [^HttpServletRequest req]
   (auth/query-param (.getQueryString req) "export"))
 
-(defn- send-zip [^HttpServletResponse res ^bytes data]
+(defn- send-zip [^HttpServletResponse res {:keys [^bytes bytes name]}]
   (doto res
     (.setStatus 200)
     (.setContentType "application/zip")
-    (.setHeader "Content-Disposition" "attachment; filename=\"design-system.zip\"")
+    (.setHeader "Content-Disposition" (str "attachment; filename=\"" name "\""))
     (.setHeader "Cache-Control" "no-store")
     (.setHeader "X-Content-Type-Options" "nosniff")
-    (.setContentLength (alength data)))
-  (.write (.getOutputStream res) data))
+    (.setContentLength (alength bytes)))
+  (.write (.getOutputStream res) bytes))
 
 (defn- handle [store id ^HttpServletRequest req ^HttpServletResponse res]
   (cond
     (not= "GET" (.getMethod req)) (.sendError res 405)
     (not (re-matches #"[0-9a-f]{32}" (str id))) (.sendError res 404)
-    :else (if-let [data (exports/take! store id)] (send-zip res data) (.sendError res 404))))
+    :else (if-let [download (exports/take-download! store id)] (send-zip res download) (.sendError res 404))))
 
 (defn export-filter [store]
   (reify Filter
