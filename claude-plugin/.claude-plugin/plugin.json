@@ -1,7 +1,7 @@
 {
   "name": "penpot",
   "description": "Penpot MCP server connection and a skill for working on Penpot files",
-  "version": "2.18.1.8",
+  "version": "2.18.1.9",
   "license": "MPL-2.0",
   "mcpServers": {
     "penpot": {
