@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf7b286205b5", "shape_ids" ["1af5d650-912d-8079-8008-bb4cf6d5b7c6"]}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:blob "babe290e71817c0544b628aef4eeb03ab6cb4d91b83597bcf352be9c9141fa5d"} {:blob "3f3345ca63e11cf31b97526ca058fd54c38b86e72e968a448eef34ea47ce8d9b"}], :tool "flatten", :scenario "edits/flatten"}

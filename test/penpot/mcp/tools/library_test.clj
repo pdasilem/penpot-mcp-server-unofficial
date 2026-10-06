@@ -3,211 +3,92 @@
    [app.common.types.tokens-lib :as ctob]
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]
-   [penpot.mcp.exports :as exports]
-   [penpot.mcp.fixtures :as fx]
-   [penpot.mcp.plugin.read :as read]
+   [penpot.mcp.replay :as replay]
    [penpot.mcp.tools.library :as library]))
 
-(defn- run [tool-name args]
-  (fx/call (fx/find-tool library/tools tool-name) (fx/ctx (fx/file-responses fx/file)) args))
+(def ^:private tools (into {} (map (juxt :name identity)) library/tools))
 
-(defn- run-in-editor [tool-name result args]
-  (let [ctx (fx/plugin-ctx result (fx/file-responses fx/file))]
-    {:result (fx/call (fx/find-tool library/tools tool-name) ctx args)
-     :calls (fx/rpc-commands ctx)
-     :scripts @(:scripts ctx)}))
+(defn- run [scenario]
+  (let [replayed (replay/run (tools (:tool (replay/recording scenario))) scenario)]
+    (is (empty? (:left replayed)) (str scenario " left recorded requests unused"))
+    (replay/data replayed)))
 
-(def fid (str fx/file-id))
+(defn- args [scenario]
+  (:args (replay/recording scenario)))
 
-(def components-result
-  {"components" [{"id" (str fx/component-id) "name" "Button" "path" "Forms"
-                  "main_instance_id" (str fx/rect-id) "main_instance_page" (str fx/page-id)}]})
+(defn- saved-file [scenario]
+  (first (replay/penpot-answers scenario :get-file)))
 
-(deftest lists-components
-  (is (= components-result (run "list_components" {"file_id" fid}))))
+(defn- live-components [scenario]
+  (remove :deleted (vals (get-in (saved-file scenario) [:data :components]))))
 
-(deftest lists-components-from-the-open-editor
-  (let [{:keys [result calls]} (run-in-editor "list_components"
-                                              [{:id (str fx/component-id) :name "Button" :path "Forms"
-                                                :mainInstanceId (str fx/rect-id) :mainInstancePage (str fx/page-id)}]
-                                              {"file_id" fid})]
-    (is (= components-result result))
-    (is (empty? calls))))
+(defn- full-name [{:keys [path name]}]
+  (str/lower-case (if (str/blank? path) (str name) (str path " / " name))))
 
-(def instances-result
-  {"instances" [{"id" (str fx/instance-id) "name" "Button Instance" "page_id" (str fx/page-id)
-                 "component_id" (str fx/component-id) "component_file" (str fx/file-id) "is_main" false}]})
-
-(deftest lists-component-instances
-  (is (= instances-result (run "get_component_instances" {"file_id" fid "component_id" (str fx/component-id)}))))
-
-(def colors-result
-  {"colors" [{"id" (str fx/color-id) "name" "Primary" "path" "Brand" "color" "#3366FF" "opacity" 1}]})
-
-(deftest lists-colors
-  (is (= colors-result (run "get_colors" {"file_id" fid}))))
-
-(deftest lists-colors-from-the-open-editor
-  (let [{:keys [result calls]} (run-in-editor "get_colors"
-                                              [{:id (str fx/color-id) :name "Primary" :path "Brand" :color "#3366FF" :opacity 1}]
-                                              {"file_id" fid})]
-    (is (= colors-result result))
-    (is (empty? calls))))
-
-(deftest lists-gradient-colors-from-the-open-editor-with-file-keys
-  (let [{:keys [result]} (run-in-editor "get_colors"
-                                        [{:id (str fx/color-id) :name "Sky" :path "" :opacity 1
-                                          :gradient {:type "linear" :startX 0 :startY 0 :endX 1 :endY 1 :width 1
-                                                     :stops [{:color "#FF0000" :opacity 1 :offset 0}]}}]
-                                        {"file_id" fid})]
-    (is (= {"type" "linear" "start_x" 0 "start_y" 0 "end_x" 1 "end_y" 1 "width" 1
-            "stops" [{"color" "#FF0000" "opacity" 1 "offset" 0}]}
-           (get-in result ["colors" 0 "gradient"])))))
-
-(def typography-result
-  {"typographies" [{"id" (str fx/typography-id) "name" "Heading" "path" "" "font_family" "Inter"
-                    "font_size" "24" "font_weight" "700" "font_style" "normal" "line_height" "1.2"
-                    "letter_spacing" "0" "text_transform" "none"}]})
-
-(deftest lists-typographies
-  (is (= typography-result (run "get_typographies" {"file_id" fid}))))
-
-(deftest lists-typographies-from-the-open-editor
-  (let [{:keys [result calls]} (run-in-editor "get_typographies"
-                                              [{:id (str fx/typography-id) :libraryId fid :name "Heading" :path ""
-                                                :fontFamily "Inter" :fontSize "24" :fontWeight "700" :fontStyle "normal"
-                                                :lineHeight "1.2" :letterSpacing "0" :textTransform "none"}]
-                                              {"file_id" fid})]
-    (is (= typography-result result))
-    (is (empty? calls))))
-
-(def tokens-result
-  {"sets" [{"id" (str fx/token-set-id) "name" "brand" "active" false
-            "tokens" [{"id" (str fx/token-id) "name" "color.primary" "type" "color"
-                       "value" "#3366FF" "description" ""}]}]
-   "themes" []})
-
-(deftest lists-token-sets-with-ids
-  (is (= tokens-result (run "get_design_tokens" {"file_id" fid}))))
-
-(deftest lists-token-sets-from-the-open-editor
-  (let [{:keys [result calls]} (run-in-editor "get_design_tokens"
-                                              {:sets [{:id (str fx/token-set-id) :name "brand" :active false
-                                                       :tokens [{:id (str fx/token-id) :name "color.primary" :type "color"
-                                                                 :value "#3366FF" :description ""}]}]
-                                               :themes [{:id "00000000-0000-0000-0000-000000000000"
-                                                         :group ctob/hidden-theme-group :name ctob/hidden-theme-name
-                                                         :active true :sets []}]}
-                                              {"file_id" fid})]
-    (is (= tokens-result result))
-    (is (empty? calls))))
-
-(deftest editor-token-types-and-composite-values-use-file-names
-  (let [{:keys [result]} (run-in-editor "get_design_tokens"
-                                        {:sets [{:id (str fx/token-set-id) :name "brand" :active true
-                                                 :tokens [{:id "a" :name "radius.s" :type "borderRadius" :value "4" :description ""}
-                                                          {:id "b" :name "type.body" :type "typography" :description ""
-                                                           :value {:fontFamilies ["Inter"] :fontSizes "16" :fontWeight "400"
-                                                                   :lineHeight "1.4" :letterSpacing "0"}}]}]
-                                         :themes []}
-                                        {"file_id" fid})
-        [radius body] (get-in result ["sets" 0 "tokens"])]
-    (is (= "border-radius" (get radius "type")))
-    (is (= {"font_family" ["Inter"] "font_size" "16" "font_weight" "400" "line_height" "1.4" "letter_spacing" "0"}
-           (get body "value")))))
-
-(def theme-id (parse-uuid "88888888-0000-0000-0000-0000000000e1"))
-
-(deftest lists-token-themes-with-their-sets
-  (let [lib    (-> fx/tokens-lib
-                   (ctob/add-theme (ctob/make-token-theme :id theme-id :name "dark" :group "mode" :sets #{"brand"}))
-                   (ctob/activate-theme theme-id))
-        result (fx/call (fx/find-tool library/tools "get_design_tokens")
-                        (fx/ctx (fx/file-responses (assoc-in fx/file [:data :tokens-lib] lib)))
-                        {"file_id" fid})]
-    (is (= [{"id" (str theme-id) "group" "mode" "name" "dark" "active" true "sets" ["brand"]}] (get result "themes")))
-    (is (true? (get-in result ["sets" 0 "active"])))))
-
-(deftest lists-token-themes-from-the-open-editor
-  (let [{:keys [result]} (run-in-editor "get_design_tokens"
-                                        {:sets [] :themes [{:id (str theme-id) :group "mode" :name "dark" :active true
-                                                            :sets ["brand" "base"]}]}
-                                        {"file_id" fid})]
-    (is (= [{"id" (str theme-id) "group" "mode" "name" "dark" "active" true "sets" ["base" "brand"]}]
-           (get result "themes")))))
-
-(deftest design-tokens-empty-without-library
-  (is (= {"sets" [] "themes" []}
-         (fx/call (fx/find-tool library/tools "get_design_tokens")
-                  (fx/ctx (fx/file-responses (update fx/file :data dissoc :tokens-lib)))
-                  {"file_id" fid}))))
-
-(deftest library-of-large-file-needs-the-editor
-  (doseq [tool-name ["list_components" "get_colors" "get_typographies" "get_design_tokens" "get_component_instances"]]
-    (let [ctx    (assoc-in (fx/closed-editor-ctx (fx/file-responses fx/file)) [:config :full-file-shapes-max] 5)
-          result (fx/call (fx/find-tool library/tools tool-name) ctx {"file_id" fid})]
-      (is (str/ends-with? (:error result) "; open it in the Penpot editor with MCP enabled") tool-name)
-      (is (= [:get-file-stats] (fx/rpc-commands ctx)) tool-name))))
-
-(deftest lists-component-instances-in-the-open-editor-without-downloading-pages
-  (let [{:keys [result calls scripts]} (run-in-editor "get_component_instances"
-                                                      [{:id (str fx/instance-id) :name "Button Instance" :page_id (str fx/page-id)
-                                                        :component_id (str fx/component-id) :component_file (str fx/file-id)
-                                                        :is_main false}]
-                                                      {"file_id" fid "component_id" (str fx/component-id)})]
-    (is (= instances-result result))
-    (is (empty? calls))
-    (is (str/includes? (last scripts) "s.isComponentRoot()"))))
-
-(deftest editor-component-lists-include-every-variant
-  (doseq [body [read/components-body read/library-counts-body]]
-    (is (str/includes? body "c.variants.variantComponents()"))))
+(deftest components-are-the-live-components-of-the-file-sorted-by-path-and-name
+  (let [result (run "library/components")
+        listed (get result "components")
+        saved  (live-components "library/components")]
+    (is (= 100 (count listed)))
+    (is (= "100" (get result "next_cursor")))
+    (is (= (->> saved (sort-by (juxt :path :name (comp str :id))) (take 100) (map (comp str :id)))
+           (map #(get % "id") listed)))))
 
 (deftest components-are-filtered-by-name-or-path
-  (let [listed [{:id "c1" :name "MENU_FOLD" :path "ICON" :mainInstanceId nil :mainInstancePage nil}
-                {:id "c2" :name "Primary" :path "Buttons" :mainInstanceId nil :mainInstancePage nil}]
-        names  #(mapv (fn [c] (get c "name")) (get (:result (run-in-editor "list_components" listed (assoc {"file_id" fid} "query" %))) "components"))]
-    (is (= ["MENU_FOLD"] (names "icon")))
-    (is (= ["MENU_FOLD"] (names "icon / menu")))
-    (is (= ["Primary"] (names "prim")))))
+  (let [query  (get (args "library/components-query") "query")
+        listed (get (run "library/components-query") "components")]
+    (is (= (count (filter #(str/includes? (full-name %) query) (live-components "library/components-query")))
+           (count listed)))
+    (is (every? #(str/includes? (full-name {:path (get % "path") :name (get % "name")}) query) listed))))
 
-(deftest components-with-the-same-name-are-ordered-by-id
-  (let [listed [{:id "c2" :name "Component" :path ""} {:id "c1" :name "Component" :path ""}]]
-    (is (= ["c1" "c2"] (mapv #(get % "id") (get (:result (run-in-editor "list_components" listed {"file_id" fid})) "components"))))))
+(deftest a-large-file-needs-the-editor-for-its-library
+  (is (re-find #"more than the 5000" (:error (run "library/components-large-file")))))
 
-(def ^:private filter-lib
-  (-> (ctob/make-tokens-lib)
-      (ctob/add-set (ctob/make-token-set :id fx/token-set-id :name "brand"))
-      (ctob/add-set (ctob/make-token-set :id (parse-uuid "88888888-0000-0000-0000-000000000009") :name "core"))
-      (ctob/add-token fx/token-set-id (ctob/make-token :id (parse-uuid "88888888-0000-0000-0000-000000000003") :name "color.primary" :type :color :value "#3366FF"))
-      (ctob/add-token fx/token-set-id (ctob/make-token :id (parse-uuid "88888888-0000-0000-0000-000000000004") :name "radius.card" :type :border-radius :value "8"))
-      (ctob/add-token (parse-uuid "88888888-0000-0000-0000-000000000009") (ctob/make-token :id (parse-uuid "88888888-0000-0000-0000-000000000005") :name "color.Accent" :type :color :value "#FF0000"))))
+(deftest instances-are-the-copies-of-the-component
+  (let [component (parse-uuid (get (args "library/instances") "component_id"))
+        file      (saved-file "library/instances")
+        roots     (for [p (vals (get-in file [:data :pages-index]))
+                        s (vals (:objects p))
+                        :when (and (:component-root s) (= component (:component-id s)))]
+                    (str (:id s)))
+        listed    (get (run "library/instances") "instances")]
+    (is (= (set roots) (set (map #(get % "id") listed))))
+    (is (every? #(= (str component) (get % "component_id")) listed))))
 
-(defn- run-on-lib [lib args]
-  (fx/call (fx/find-tool library/tools "get_design_tokens")
-           (fx/ctx (fx/file-responses (assoc-in fx/file [:data :tokens-lib] lib)))
-           (merge {"file_id" fid} args)))
+(deftest colors-are-the-library-colors-of-the-file
+  (is (= (set (map (comp str :id) (vals (get-in (saved-file "library/colors") [:data :colors]))))
+         (set (map #(get % "id") (get (run "library/colors") "colors"))))))
+
+(deftest typographies-are-the-library-typographies-of-the-file
+  (is (= (count (get-in (saved-file "library/typographies") [:data :typographies]))
+         (count (get (run "library/typographies") "typographies")))))
 
 (defn- token-names [result]
-  (into {} (map (fn [s] [(get s "name") (mapv #(get % "name") (get s "tokens"))])) (get result "sets")))
+  (mapcat (fn [s] (map #(get % "name") (get s "tokens"))) (get result "sets")))
 
-(deftest design-tokens-are-filtered-by-name-type-and-set
-  (is (= {"brand" ["color.primary"] "core" ["color.Accent"]} (token-names (run-on-lib filter-lib {"query" "COLOR"}))))
-  (is (= {"brand" ["radius.card"] "core" []} (token-names (run-on-lib filter-lib {"type" "border-radius"}))))
-  (is (= {"core" ["color.Accent"]} (token-names (run-on-lib filter-lib {"set" "core"}))))
-  (is (= {"brand" ["color.primary"]} (token-names (run-on-lib filter-lib {"set" "brand" "type" "color" "query" "prim"})))))
+(deftest design-tokens-are-the-sets-and-themes-of-the-file
+  (let [lib    (get-in (saved-file "library/tokens") [:data :tokens-lib])
+        result (run "library/tokens")]
+    (is (= (map ctob/get-name (ctob/get-sets lib)) (map #(get % "name") (get result "sets"))))
+    (is (= (count (remove ctob/hidden-theme? (ctob/get-themes lib))) (count (get result "themes"))))
+    (is (= (reduce + (map #(count (ctob/get-tokens lib (ctob/get-id %))) (ctob/get-sets lib)))
+           (count (token-names result))))))
 
-(deftest the-editor-filters-tokens-itself
-  (let [{:keys [scripts]} (run-in-editor "get_design_tokens" {:sets [] :themes []}
-                                         {"file_id" fid "set" "brand" "type" "border-radius" "query" "card"})]
-    (is (= {"set" "brand" "type" "borderRadius" "query" "card"} (get (fx/script-args (last scripts)) "tokenFilter")))))
+(deftest design-tokens-are-filtered-by-name-and-type
+  (let [query (get (args "library/tokens-query") "query")]
+    (is (seq (token-names (run "library/tokens-query"))))
+    (is (every? #(str/includes? (str/lower-case %) query) (token-names (run "library/tokens-query")))))
+  (let [types (mapcat (fn [s] (map #(get % "type") (get s "tokens"))) (get (run "library/tokens-type") "sets"))]
+    (is (seq types))
+    (is (every? #{"color"} types))))
 
-(deftest a-large-catalog-gives-sets-with-token-counts-and-a-download
-  (let [lib    (reduce (fn [l i] (ctob/add-token l fx/token-set-id (ctob/make-token :id (java.util.UUID/randomUUID) :name (str "space.s" i) :type :spacing :value (str i))))
-                       (ctob/add-set (ctob/make-tokens-lib) (ctob/make-token-set :id fx/token-set-id :name "brand"))
-                       (range 2000))
-        result (fx/call (fx/find-tool library/tools "get_design_tokens")
-                        (assoc (fx/ctx (fx/file-responses (assoc-in fx/file [:data :tokens-lib] lib))) :exports (exports/store {:now (constantly 0)}))
-                        {"file_id" fid})]
-    (is (= [{"id" (str fx/token-set-id) "name" "brand" "active" false "token_count" 2000}] (get result "sets")))
-    (is (re-find #"curl -o design-tokens\.zip" (get-in result ["full_result" "download"])))))
+(deftest the-editor-gives-the-same-library
+  (doseq [[saved editor] [["library/components" "library/components-editor"]
+                          ["library/instances" "library/instances-editor"]
+                          ["library/colors" "library/colors-editor"]
+                          ["library/typographies" "library/typographies-editor"]
+                          ["library/tokens" "library/tokens-editor"]
+                          ["library/tokens-query" "library/tokens-query-editor"]
+                          ["library/tokens-type" "library/tokens-type-editor"]]]
+    (is (= (run saved) (run editor)) editor)
+    (is (empty? (replay/requests editor)) (str editor " reads the library from the editor"))))

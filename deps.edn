@@ -30,9 +30,10 @@
   org.eclipse.jetty.websocket/jetty-websocket-jetty-server {:mvn/version "12.1.13"}
   jakarta.servlet/jakarta.servlet-api {:mvn/version "6.1.0"}
   org.jsoup/jsoup {:mvn/version "1.23.2"}
-  com.helger/ph-css {:mvn/version "8.2.2"}}
+  com.helger/ph-css {:mvn/version "8.2.2"}
+  com.twelvemonkeys.imageio/imageio-webp {:mvn/version "3.13.0"}}
  :aliases
- {:test {:extra-paths ["test"]
+ {:test {:extra-paths ["test" "test/resources"]
          :extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}}
          :main-opts ["-m" "kaocha.runner"]}
   :build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.14"}}

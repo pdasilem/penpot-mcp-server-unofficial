@@ -24,7 +24,9 @@
     "  return { shape: info(s), componentId: c ? c.id : null, variantProperties: c && c.isVariant() ? c.variantProps : null };"
     "};"
     "const variantOf = (c) => (c.isVariant() && c.variants) ? c.variants : fail('not-a-variant', c.id);"
-    "const propertyPos = (v, name) => { const pos = v.properties.indexOf(name); return pos >= 0 ? pos : fail('property-not-found', name + ' (properties: ' + v.properties.join(', ') + ')'); };"
+    "const propertyNames = (c) => Object.keys(c.variantProps ?? {});"
+    "const propertyPos = (c, name) => { const pos = propertyNames(c).indexOf(name); return pos >= 0 ? pos : fail('property-not-found', name + ' (properties: ' + propertyNames(c).join(', ') + ')'); };"
+    "const openMain = async (c) => { const m = c.mainInstance(); if (m) await focusShape(m.id); };"
     "const copyRoot = async (id) => {"
     "  const s = await focusShape(id);"
     "  if (!s.isComponentCopyInstance() || !s.isComponentRoot()) fail('not-a-copy', id);"
@@ -130,15 +132,16 @@
     :input-schema (schema component-param property-param value-param)
     :body (body "const c = findComponent(args.componentId);"
                 "const v = variantOf(c);"
-                "let pos = v.properties.indexOf(args.property);"
+                "await openMain(c);"
+                "let pos = propertyNames(c).indexOf(args.property);"
                 "if (pos < 0) {"
-                "  const count = v.properties.length;"
+                "  const count = propertyNames(c).length;"
                 "  v.addProperty();"
                 "  markChanged();"
-                "  if (!(await waitFor(() => v.properties.length > count))) fail('variant-not-updated', args.property);"
-                "  pos = v.properties.length - 1;"
+                "  if (!(await waitFor(() => propertyNames(c).length > count))) fail('variant-not-updated', args.property);"
+                "  pos = propertyNames(c).length - 1;"
                 "  v.renameProperty(pos, args.property);"
-                "  if (!(await waitFor(() => v.properties[pos] === args.property))) fail('variant-not-updated', args.property);"
+                "  if (!(await waitFor(() => propertyNames(c)[pos] === args.property))) fail('variant-not-updated', args.property);"
                 "}"
                 "if (c.variantProps[args.property] !== args.value) {"
                 "  c.setVariantProperty(pos, args.value);"
@@ -155,13 +158,15 @@
     :description "Rename a property of the variant set a component belongs to; the values stay. Returns the variant set."
     :annotations tool/overwrite
     :input-schema (schema component-param property-param [:new_name {:description "New property name"} property-name])
-    :body (body "const v = variantOf(findComponent(args.componentId));"
+    :body (body "const c = findComponent(args.componentId);"
+                "const v = variantOf(c);"
                 "if (args.property !== args.newName) {"
-                "  if (v.properties.includes(args.newName)) fail('property-exists', args.newName);"
-                "  const pos = propertyPos(v, args.property);"
+                "  if (propertyNames(c).includes(args.newName)) fail('property-exists', args.newName);"
+                "  const pos = propertyPos(c, args.property);"
+                "  await openMain(c);"
                 "  v.renameProperty(pos, args.newName);"
                 "  markChanged();"
-                "  if (!(await waitFor(() => v.properties[pos] === args.newName))) fail('variant-not-updated', args.property);"
+                "  if (!(await waitFor(() => propertyNames(c)[pos] === args.newName))) fail('variant-not-updated', args.property);"
                 "}"
                 "return variantState(v);")
     :args #(hash-map :component-id (:component_id %) :property (:property %) :new-name (:new_name %))
@@ -173,11 +178,13 @@
     :description "Remove a property from the variant set a component belongs to, with its values in every variant. Returns the variant set."
     :annotations tool/overwrite
     :input-schema (schema component-param property-param)
-    :body (body "const v = variantOf(findComponent(args.componentId));"
-                "const pos = propertyPos(v, args.property);"
+    :body (body "const c = findComponent(args.componentId);"
+                "const v = variantOf(c);"
+                "const pos = propertyPos(c, args.property);"
+                "await openMain(c);"
                 "v.removeProperty(pos);"
                 "markChanged();"
-                "if (!(await waitFor(() => !v.properties.includes(args.property)))) fail('variant-not-updated', args.property);"
+                "if (!(await waitFor(() => !propertyNames(c).includes(args.property)))) fail('variant-not-updated', args.property);"
                 "return variantState(v);")
     :args #(hash-map :component-id (:component_id %) :property (:property %))
     :result-key :variants}))
@@ -191,7 +198,7 @@
     :body (body "let s = await copyRoot(args.shapeId);"
                 "const c = s.component() ?? fail('not-a-copy', args.shapeId);"
                 "const v = variantOf(c);"
-                "const pos = propertyPos(v, args.property);"
+                "const pos = propertyPos(c, args.property);"
                 "if (!v.currentValues(args.property).includes(args.value)) fail('value-not-found', args.value + ' (values: ' + v.currentValues(args.property).join(', ') + ')');"
                 "if (c.variantProps[args.property] !== args.value) {"
                 "  const parent = s.parent;"

@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf7b286205b5", "name" "Recorded typography", "font_family" "Work Sans", "font_size" 16}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:blob "c735b29d5d24ea8458988b54b169d9c21758868abdf4973a6530f586385b4789"}], :tool "create_library_typography", :scenario "edits/create-library-typography"}

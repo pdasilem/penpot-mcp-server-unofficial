@@ -1,0 +1,1 @@
+{:args {"team_id" "65b34a75-eca9-8129-8008-bdc1f8d6a653"}, :unsaved [], :entries [{:kind :rpc, :cmd :get-webhooks, :status 200, :body "[]", :params "[\"^ \",\"~:team-id\",\"~u65b34a75-eca9-8129-8008-bdc1f8d6a653\"]"}], :tool "list_webhooks", :scenario "manage/webhooks"}

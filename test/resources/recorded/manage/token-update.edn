@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf7b286205b5", "token_id" "8d364592-097e-807e-8008-bf7b9f4386db", "description" "Recorded description"}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:blob "58ae5c00ec6aff1bea44451ba0d7909f531b0487d92647052fd1a65a1f82308b"}], :tool "update_token", :scenario "manage/token-update"}

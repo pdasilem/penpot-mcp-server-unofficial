@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf50af1e536f", "shape_id" "de7fa3b6-06a7-8039-8008-aaebf707f364", "format" "svg"}, :unsaved [], :entries [{:blob "c9a5fc290f640cdfec51690dd07e831d32276f10afa2fcf2edd9f6b5ed19c513"} {:blob "9b4cde51982c910fe046812bd94058c24057170bc8a0a3b3fa0dac0b7348b02f"}], :tool "export_shape", :scenario "export/svg-board"}

@@ -9,13 +9,13 @@
 (def ^:private golden-dir "test/penpot/mcp/design/render/golden")
 
 (def ^:private variants
-  {"css" [:css {:prefix "sv" :color-scheme-group "mode"}]
+  {"css" [:css {:prefix "sv" :color-scheme-group "Scheme"}]
    "scss" [:scss {:prefix "sv"}]
-   "tailwind-4" [:tailwind {:prefix "sv" :color-scheme-group "mode"}]
+   "tailwind-4" [:tailwind {:prefix "sv" :color-scheme-group "Scheme"}]
    "tailwind-3" [:tailwind {:version 3 :prefix "sv"}]
    "typescript" [:typescript {}]
    "dtcg" [:dtcg {}]
-   "kotlin" [:kotlin {:package "com.acme.tokens" :type-name "Tokens"}]
+   "kotlin" [:kotlin {:package "com.recorded.design" :type-name "Tokens"}]
    "swiftui" [:swiftui {:type-name "Tokens"}]})
 
 (defn- golden-files [dir]
@@ -24,6 +24,14 @@
           (comp (filter #(.isFile ^java.io.File %))
                 (map (fn [^java.io.File f] [(str/replace (subs (.getPath f) (inc (count (.getPath root)))) "\\" "/") (slurp f)])))
           (file-seq root))))
+
+(defn write-golden! []
+  (let [model (fixture/model)]
+    (doseq [[dir [platform options]] variants
+            {:keys [path content]} (:files (render/render model platform options))]
+      (let [f (io/file golden-dir dir path)]
+        (io/make-parents f)
+        (spit f content)))))
 
 (deftest every-platform-matches-its-golden-output
   (let [model (fixture/model)]

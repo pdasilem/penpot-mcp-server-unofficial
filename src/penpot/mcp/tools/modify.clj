@@ -8,13 +8,13 @@
 (defn- schema [& params]
   (into [:map {:closed true} common/file-id-param common/shape-id-param] params))
 
-(defn- shape-tool [{:keys [name description annotations params op args]}]
+(defn- shape-tool [{:keys [name description annotations params op args finish]}]
   (canvas/plugin-tool
    {:name name
     :description description
     :annotations annotations
     :input-schema (apply schema params)
-    :body (str canvas/focus-shape canvas/track-change op "\n" canvas/finish-tracked)
+    :body (str canvas/focus-shape canvas/track-change op "\n" (or finish canvas/finish-tracked))
     :args #(common/compact (merge {:shape-id (:shape_id %)} (args %)))}))
 
 (def ^:private radius
@@ -94,11 +94,20 @@
              [:bottom_right {:optional true :description "Radius in pixels of the bottom-right corner"} radius]
              [:bottom_left {:optional true :description "Radius in pixels of the bottom-left corner"} radius]]
     :op (str/join "\n"
-                  ["if (args.radius !== undefined) s.borderRadius = args.radius;"
+                  ["const radii = (x) => ({ borderRadiusTopLeft: x.borderRadiusTopLeft, borderRadiusTopRight: x.borderRadiusTopRight,"
+                   "  borderRadiusBottomRight: x.borderRadiusBottomRight, borderRadiusBottomLeft: x.borderRadiusBottomLeft });"
+                   "const beforeRadii = radii(s);"
+                   "if (args.radius !== undefined) s.borderRadius = args.radius;"
                    "if (args.topLeft !== undefined) s.borderRadiusTopLeft = args.topLeft;"
                    "if (args.topRight !== undefined) s.borderRadiusTopRight = args.topRight;"
                    "if (args.bottomRight !== undefined) s.borderRadiusBottomRight = args.bottomRight;"
                    "if (args.bottomLeft !== undefined) s.borderRadiusBottomLeft = args.bottomLeft;"])
+    :finish (str/join "\n"
+                      ["await settle();"
+                       "if (fingerprint(s) !== before) markChanged();"
+                       "const result = changes(beforeInfo, s);"
+                       "Object.assign(result.changed, diff(s.id, beforeRadii, radii(s)).changed);"
+                       "return result;"])
     :args (fn [p]
             (when (empty? (select-keys p [:radius :top_left :top_right :bottom_right :bottom_left]))
               (throw (tool/user-error "Give radius or at least one corner")))
@@ -135,12 +144,14 @@
 (def ^:private move-to-parent
   (shape-tool
    {:name "move_to_parent"
-    :description "Move a shape into another board or group, on top of its children or at the given stacking index. The shape keeps its canvas position unless the new parent has a layout. Returns the changes."
+    :description "Move a shape into another board or group on the same page, on top of its children or at the given stacking index. The shape keeps its canvas position unless the new parent has a layout. Returns the changes."
     :annotations tool/overwrite
     :params [[:parent_id {:description "Target board or group"} :uuid]
              [:index {:optional true :description "Stacking index inside the parent; 0 is the bottom"} [:int {:min 0}]]]
     :op (str/join "\n"
-                  ["const parent = await focusShape(args.parentId);"
+                  ["const target = locateShape(args.parentId) ?? fail('shape-not-found', args.parentId);"
+                   "if (target.page.id !== penpot.currentPage.id) fail('parent-on-other-page', args.parentId);"
+                   "const parent = await focusShape(args.parentId);"
                    "if (!['board', 'group'].includes(parent.type)) fail('not-a-container', args.parentId);"
                    "if (args.index !== undefined) parent.insertChild(args.index, s); else parent.appendChild(s);"])
     :args #(hash-map :parent-id (:parent_id %) :index (:index %))}))

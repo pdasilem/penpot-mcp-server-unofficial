@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf7b286205b5", "shape_id" "1673b4f9-5b86-8073-8008-b5ee763d489c"}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:blob "128e6dc9dd8e22ce63bb7a9797efdb91560cbc01ac008ccc49f72c851a084a8d"} {:blob "ef1ce861e4d17f651f069d35bc395246b277e17bbd066f22be00acb6490f5e58"}], :tool "duplicate_shape", :scenario "edits/duplicate"}

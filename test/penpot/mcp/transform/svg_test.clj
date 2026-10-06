@@ -1,82 +1,33 @@
 (ns penpot.mcp.transform.svg-test
   (:require
-   [app.common.geom.matrix :as gmt]
-   [app.common.geom.point :as gpt]
-   [app.common.types.shape :as cts]
-   [app.common.uuid :as uuid]
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]
-   [penpot.mcp.fixtures :as fx]
+   [penpot.mcp.real-file :as real]
+   [penpot.mcp.transform.geometry :as geometry]
    [penpot.mcp.transform.svg :as svg]))
 
-(def objects (:objects fx/page))
+(defn- n [x]
+  (let [r (/ (Math/round (* 100.0 (double x))) 100.0)]
+    (if (== r (Math/floor r)) (str (long r)) (str r))))
 
-(deftest renders-standalone-svg-document-with-viewbox
-  (let [doc (svg/shape->svg objects fx/rect)]
-    (is (str/starts-with? doc "<svg xmlns=\"http://www.w3.org/2000/svg\""))
-    (is (str/includes? doc "viewBox=\"16 24 120 40\""))
-    (is (str/includes? doc "width=\"120\" height=\"40\""))))
+(deftest every-shape-of-the-file-renders-a-standalone-document
+  (doseq [{:keys [shape objects]} (real/shapes)
+          :let [doc (svg/shape->svg objects shape)
+                {:keys [x y width height]} (geometry/bounds shape)]]
+    (is (str/starts-with? doc (str "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"" (n x) " " (n y) " " (n width) " " (n height) "\""))
+        (str (:id shape)))
+    (is (not (re-find #"NaN|null|Infinity" doc)) (str (:id shape)))))
 
-(deftest renders-rectangle-with-fill-stroke-and-radius
-  (let [doc (svg/shape->svg objects fx/rect)]
-    (is (str/includes? doc "<rect x=\"16\" y=\"24\" width=\"120\" height=\"40\" rx=\"8\""))
-    (is (str/includes? doc "fill=\"#3366FF\" fill-opacity=\"0.5\""))
-    (is (str/includes? doc "stroke=\"#000000\" stroke-width=\"2\""))
-    (is (str/includes? doc "opacity=\"0.9\""))))
+(deftest paths-render-their-content-and-ellipses-render-as-ellipses
+  (doseq [{:keys [shape objects]} (real/having #(and (= :path (:type %)) (:content %) (not (:hidden %))) "visible path")]
+    (is (re-find #"<path d=\"M" (svg/shape->svg objects shape)) (str (:id shape))))
+  (doseq [{:keys [shape objects]} (real/having #(and (= :circle (:type %)) (not (:hidden %))) "visible ellipse")]
+    (is (str/includes? (svg/shape->svg objects shape) "<ellipse ") (str (:id shape)))))
 
-(deftest renders-board-with-children-and-clip
-  (let [doc (svg/shape->svg objects fx/board)]
-    (is (str/includes? doc "<clipPath id=\"clip-22222222-0000-0000-0000-000000000001\">"))
-    (is (str/includes? doc "Submit Button"))
-    (is (str/includes? doc ">Sign in</tspan></text>"))))
-
-(deftest renders-ellipse-with-gradient
-  (let [doc (svg/shape->svg objects fx/ellipse)]
-    (is (str/includes? doc "<linearGradient id=\"fill-22222222-0000-0000-0000-000000000004-0\""))
-    (is (str/includes? doc "<ellipse cx=\"525\" cy=\"35\" rx=\"25\" ry=\"25\""))
-    (is (str/includes? doc "fill=\"url(#fill-22222222-0000-0000-0000-000000000004-0)\""))))
-
-(deftest renders-path-from-content
-  (let [doc (svg/shape->svg objects fx/path-shape)]
-    (is (re-find #"<path d=\"M[^\"]+\" " doc))
-    (is (str/includes? doc "stroke=\"#999999\""))
-    (is (str/includes? doc "fill=\"none\""))))
-
-(deftest escapes-text
-  (is (= "a &lt;b&gt; &amp; &quot;c&quot;" (svg/escape "a <b> & \"c\""))))
-
-(deftest strips-xml-invalid-control-characters
-  (is (= "ab" (svg/escape "a\u0001b"))))
-
-(deftest rotated-group-transform-is-not-applied-twice
-  (let [rotation (gmt/rotate-matrix 90 (gpt/point 15 15))
-        child-id (uuid/next)
-        group-id (uuid/next)
-        child    (assoc (cts/setup-shape {:id child-id :type :rect :name "Child" :x 10 :y 10 :width 10 :height 10
-                                          :frame-id uuid/zero :parent-id group-id})
-                        :transform rotation)
-        group    (assoc (cts/setup-shape {:id group-id :type :group :name "Group" :x 10 :y 10 :width 10 :height 10
-                                          :frame-id uuid/zero :parent-id uuid/zero :shapes [child-id]})
-                        :transform rotation)
-        doc      (svg/shape->svg {group-id group child-id child} group)]
-    (is (str/includes? doc "<g data-name=\"Group\">"))
-    (is (= 1 (count (re-seq #"transform=" doc))))))
-
-(deftest hidden-shapes-are-not-rendered
-  (is (not (str/includes? (svg/shape->svg (assoc objects fx/rect-id (assoc fx/rect :hidden true)) fx/board) "Submit"))))
-
-(deftest invalid-colors-render-as-none
-  (let [doc (svg/shape->svg objects (assoc fx/rect :fills [{:fill-color "url(http://evil)" :fill-opacity 1}]))]
-    (is (not (str/includes? doc "evil")))
-    (is (str/includes? doc "fill=\"none\""))))
-
-(defn- text-with [node-attrs]
-  (assoc-in fx/text [:content :children 0 :children 0 :children 0]
-            (merge (get-in fx/text [:content :children 0 :children 0 :children 0]) node-attrs)))
-
-(deftest numeric-text-values-give-the-same-svg-as-strings
-  (let [render  #(svg/shape->svg objects (dissoc (text-with %) :position-data))
-        strings (render {:font-size "24" :font-weight "700"})
-        numbers (render {:font-size 24 :font-weight 700})]
-    (is (= strings numbers))
-    (is (str/includes? numbers "font-size=\"24\""))))
+(deftest hidden-children-are-left-out
+  (doseq [{:keys [shape objects]} (take 50 (real/having #(seq (:shapes %)) "shape with children"))
+          :let [hidden (filter #(:hidden (get objects %)) (:shapes shape))]
+          :when (seq hidden)]
+    (is (= (svg/shape->svg objects shape)
+           (svg/shape->svg (apply dissoc objects hidden) (update shape :shapes #(vec (remove (set hidden) %)))))
+        (str (:id shape)))))

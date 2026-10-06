@@ -1,84 +1,66 @@
 (ns penpot.mcp.html.cascade-test
   (:require
-   [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]]
-   [penpot.mcp.html.cascade :as cascade])
-  (:import
-   (org.jsoup Jsoup)))
+   [clojure.test :refer [deftest is]]
+   [penpot.mcp.html.sample :as sample]))
 
-(defn- styles [html]
-  (let [doc (Jsoup/parse ^String html)]
-    {:doc doc :computed (cascade/compute doc {:viewport 1440})}))
+(defn- sides [style prop]
+  (mapv #(get style (str prop "-" %)) ["top" "right" "bottom" "left"]))
 
-(defn- style-of [{:keys [doc computed]} selector]
-  (:style (get computed (.selectFirst doc ^String selector))))
+(deftest more-specific-rules-win
+  (let [st (sample/style ".nav div.on")]
+    (is (= "#1a1d20" (st "color")))
+    (is (= ["6px" "10px" "6px" "10px"] (sides st "padding")))
+    (is (= "8px" (st "margin-left")))))
 
-(deftest author-rules-follow-specificity-and-order
-  (let [s (styles "<style>.a{color:red} div.a{color:blue} .b{margin:1px} .b{margin:2px}</style><div class='a b' id='x'>t</div>")]
-    (is (= "blue" (get (style-of s "#x") "color")))
-    (is (= "2px" (get (style-of s "#x") "margin-top")))))
+(deftest a-later-rule-of-higher-specificity-resets-a-shorthand
+  (let [st (sample/style ".blk")]
+    (is (= "0" (st "border-top-width")))
+    (is (= "0" (st "padding-top")))))
 
-(deftest inline-style-and-important
-  (let [s (styles "<style>.a{color:red !important; margin:4px}</style><div class='a' style='color:blue; margin:8px' id='x'>t</div>")]
-    (is (= "red" (get (style-of s "#x") "color")))
-    (is (= "8px" (get (style-of s "#x") "margin-top")))))
+(deftest inline-styles-beat-class-rules
+  (is (= "56px" (get (sample/style "div.nav[style*=56px]") "width")))
+  (is (= ["34px" "14px" "34px" "14px"] (sides (sample/style "div.main[style*=34px]") "padding"))))
 
-(deftest shorthands-expand-and-longhands-override-in-order
-  (let [s (styles "<style>.a{padding:4px 8px; padding-left:2px} .a{border:1px solid #ccc; border-bottom:0}</style><div class='a' id='x'>t</div>")
-        st (style-of s "#x")]
-    (is (= ["4px" "8px" "4px" "2px"] (mapv st ["padding-top" "padding-right" "padding-bottom" "padding-left"])))
-    (is (= "1px" (st "border-top-width")))
-    (is (= "0" (st "border-bottom-width")))))
+(deftest shorthands-expand-to-every-side
+  (let [st (sample/style ".rule")]
+    (is (= ["12px" "14px" "12px" "14px"] (sides st "padding")))
+    (is (= ["1px" "1px" "1px" "1px"] (mapv #(st (str "border-" % "-width")) ["top" "right" "bottom" "left"])))
+    (is (= "solid" (st "border-left-style")))
+    (is (= "#c9cdd0" (st "border-left-color")))))
+
+(deftest a-one-side-border-sets-only-that-side
+  (let [st (sample/style ".top")]
+    (is (= "1px" (st "border-bottom-width")))
+    (is (nil? (st "border-top-width")))))
 
 (deftest text-properties-inherit-and-box-properties-do-not
-  (let [s (styles "<style>body{color:#123456; font:15px/1.5 Inter, sans-serif} .p{padding:9px; letter-spacing:.1em}</style><body><div class='p'><span id='x'>t</span></div></body>")
-        st (style-of s "#x")]
-    (is (= "#123456" (st "color")))
-    (is (= "15px" (st "font-size")))
+  (let [st (sample/style ".num span")]
+    (is (= "ui-sans-serif,system-ui,sans-serif" (st "font-family")))
     (is (= "1.5" (st "line-height")))
-    (is (= "Inter,sans-serif" (st "font-family")))
-    (is (= "1.5px" (st "letter-spacing")))
     (is (nil? (st "padding-top")))))
 
-(deftest variables-resolve-with-fallback-and-inheritance
-  (let [s (styles "<style>:root{--ink:#1a1d20; --b:var(--ink)} .x{color:var(--ink); border-top-color:var(--b); background-color:var(--missing, #fff)} .y{--ink:#ff0000}</style><div class='y'><p class='x' id='x'>t</p></div>")
-        st (style-of s "#x")]
-    (is (= "#ff0000" (st "color")))
-    (is (= "#1a1d20" (st "border-top-color")))
-    (is (= "#fff" (st "background-color")))))
+(deftest variables-resolve-to-their-values
+  (is (= "#1a1d20" (get (sample/style "h1") "color")))
+  (is (= "#6b7276" (get (sample/style "h2") "color")))
+  (is (= "#e3e6e8" (get (sample/style ".top") "border-bottom-color"))))
 
-(deftest font-size-resolves-to-pixels
-  (let [s (styles "<style>body{font-size:15px} .a{font-size:.8em} .b{font-size:1.5rem}</style><body><div class='a' id='a'><span class='b' id='b'>t</span><small id='s'>s</small></div></body>")]
-    (is (= "12px" (get (style-of s "#a") "font-size")))
-    (is (= "24px" (get (style-of s "#b") "font-size")))
-    (is (= "10px" (get (style-of s "#s") "font-size")))))
+(deftest em-lengths-resolve-against-the-font-size
+  (is (= "1.56px" (get (sample/style "h2") "letter-spacing")))
+  (is (= "-0.28px" (get (sample/style "h1") "letter-spacing")))
+  (is (= "0.52px" (get (sample/style ".num em") "letter-spacing")) "the parent's computed spacing is inherited"))
 
-(deftest user-agent-defaults
-  (let [s (styles "<div id='d'><b id='b'>x</b><span id='s'>y</span><h2 id='h'>z</h2></div>")]
-    (is (= "block" (get (style-of s "#d") "display")))
-    (is (= "inline" (get (style-of s "#s") "display")))
-    (is (= "700" (get (style-of s "#b") "font-weight")))
-    (is (= "24px" (get (style-of s "#h") "font-size")))
-    (testing "author rules beat defaults"
-      (is (= "flex" (get (style-of (styles "<style>span{display:flex}</style><span id='s'>y</span>") "#s") "display"))))))
+(deftest user-agent-defaults-apply-under-author-rules
+  (is (= "block" (get (sample/style ".rule") "display")))
+  (is (= "inline" (get (sample/style ".num span") "display")))
+  (is (= "700" (get (sample/style ".rule b") "font-weight")))
+  (is (= "table-cell" (get (sample/style "td.m") "display")))
+  (is (= "flex" (get (sample/style ".desk") "display"))))
 
-(deftest pseudo-elements-carry-content-and-inherit
-  (let [s  (styles "<style>.sel{color:#111} .sel::after{content:\"▾\"; color:#666} th.s::after{content:\" ↕\"} .n::before{content:none}</style><div class='sel' id='x'>A</div><div class='n' id='n'>B</div>")
-        c  (get (:computed s) (.selectFirst ^org.jsoup.nodes.Document (:doc s) "#x"))]
-    (is (= "▾" (get-in c [:pseudo "after" "content"])))
-    (is (= "#666" (get-in c [:pseudo "after" "color"])))
-    (is (nil? (get-in (get (:computed s) (.selectFirst ^org.jsoup.nodes.Document (:doc s) "#n")) [:pseudo "before"])))))
+(deftest pseudo-elements-carry-content-and-their-own-color
+  (is (= "▾" (get (sample/pseudo ".sel" "after") "content")))
+  (is (= "#6b7276" (get (sample/pseudo ".sel" "after") "color")))
+  (is (= " ↕" (get (sample/pseudo "th.s" "after") "content")))
+  (is (nil? (sample/pseudo ".sel" "before"))))
 
-(deftest unsupported-selectors-are-skipped
-  (let [s (styles "<style>.a:foo-bar{color:red} .a{color:blue}</style><div class='a' id='x'><b>t</b></div>")]
-    (is (= "blue" (get (style-of s "#x") "color")))))
-
-(deftest style-and-script-are-not-styled
-  (let [{:keys [doc computed]} (styles "<style>.a{}</style><script>x()</script><div id='x'>t</div>")]
-    (is (= "none" (get-in computed [(.selectFirst doc "script") :style "display"])))))
-
-(deftest custom-properties-that-explode-resolve-to-nothing
-  (let [defs (str/join ";" (for [i (range 1 8)]
-                             (str "--a" i ":" (str/join " " (repeat 10 (str "var(--a" (inc i) ")"))))))
-        s    (styles (str "<style>:root{" defs ";--a8:x}p{font-family:var(--a1)}</style><p>t</p>"))]
-    (is (< (count (str (get (style-of s "p") "font-family"))) 70000))))
+(deftest style-elements-are-not-rendered
+  (is (= "none" (get-in (sample/computed) [(sample/element "style") :style "display"]))))

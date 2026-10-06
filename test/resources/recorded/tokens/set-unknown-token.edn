@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf7b286205b5", "shape_id" "206a9d97-d92e-8059-8008-aa6e9b61a0e1", "token_id" "2e6bc573-d73a-8024-8008-b443bbeac9b4"}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:blob "7ac83a7ccc18fc393eadc192ae435f780172b81bee202770e2f0f628668da2dc"}], :tool "set_token", :scenario "tokens/set-unknown-token"}

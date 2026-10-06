@@ -3,7 +3,7 @@
    [clojure.data.json]
    [clojure.test :refer [deftest is use-fixtures]]
    [penpot.mcp.exports]
-   [penpot.mcp.fixtures]
+   [penpot.mcp.replay]
    [penpot.mcp.tools.design-system]
    [penpot.mcp.html.upload-endpoint]
    [penpot.mcp.html.uploads]
@@ -201,14 +201,11 @@
 
 (deftest an-exported-design-system-downloads-through-the-mcp-address
   (let [store  (penpot.mcp.exports/store {:now #(System/currentTimeMillis)})
-        editor {:tokens {:sets [{:id "s" :name "core" :active true :tokens [{:id "t" :name "space.base" :type "spacing" :value "4"}]}]
-                         :themes []}
-                :colors [] :typographies [] :fileName "Kit"}
-        ctx    (assoc (penpot.mcp.fixtures/plugin-ctx editor) :version-error (constantly nil) :exports store)
+        ctx    (assoc (penpot.mcp.replay/context "design-system/css") :exports store)
         s      (server/start! {:host "127.0.0.1" :port 0 :mcp-key mcp-key :tools penpot.mcp.tools.design-system/tools :ctx ctx})]
     (try
       (let [c      (client/connect (str "http://127.0.0.1:" (:port s) "/mcp?userToken=" mcp-key))
-            result (clojure.data.json/read-str (get-in (client/call-tool c "export_design_system" {:file_id (str penpot.mcp.fixtures/file-id) :platform "css"})
+            result (clojure.data.json/read-str (get-in (client/call-tool c "export_design_system" (:args (penpot.mcp.replay/recording "design-system/css")))
                                                        [:content 0 :text]))
             id     (get result "export_id")
             get-zip (fn [] (let [http (java.net.http.HttpClient/newHttpClient)

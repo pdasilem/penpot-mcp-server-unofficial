@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf7b286205b5", "group_id" "1673b4f9-5b86-8073-8008-b5ed7ec56913"}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:blob "665eff771da34b0c6f2798b6dd46819103cfa514fde8b867c9afda756b5d9632"} {:blob "d5b8259f5fc08365dac876f5084607b778b04a0d68d1b8aa52abc63eddb975e1"}], :tool "ungroup", :scenario "edits/ungroup"}

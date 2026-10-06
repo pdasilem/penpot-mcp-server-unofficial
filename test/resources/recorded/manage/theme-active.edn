@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf7b286205b5", "theme_id" "8d364592-097e-807e-8008-bf7ba6d9f53a", "active" true}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:blob "768d13dd2ef61168a8d07d04a71a1a1fa325434fa8eb9bab6e1b9004a2dbcc7a"}], :tool "set_token_theme_active", :scenario "manage/theme-active"}

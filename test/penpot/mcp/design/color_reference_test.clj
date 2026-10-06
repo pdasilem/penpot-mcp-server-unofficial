@@ -4,6 +4,7 @@
    [clojure.test :refer [deftest is]]
    [penpot.mcp.design.color :as color]
    [penpot.mcp.design.color.tinycolor :as tinycolor]
+   [penpot.mcp.design.fixture :as fixture]
    [penpot.mcp.design.js.number :as jsnum]
    [penpot.mcp.design.reference :as reference])
   (:import
@@ -123,8 +124,17 @@
    "rgba(#00000000, 0)" "rgba(#fff,0.5)" "rgba(  #fff  ,  0.5  )" "rgba(#f#f, 0.5)" "rgba(#fff , 0.5)"
    " red " "red\u0085" "#fff\u0085" "rgba(#fff, 0.5)\u0085" "﻿blue" "#FFF" "İ" "rgb(1,2,3)\u0085"])
 
+(def ^:private edge-inputs
+  ["red" "RED" " Blue " "transparent" "#abc" "#abcd" "#aabbcc80" "#abcdefg" "ff0000" "rgb(255, 0, 0)" "rgb 255 0 0" "rgb(300, -20, 128)" "rgb(50%, 50%, 50%)" "rgb(1.0, 0, 0)" "rgb(0.5, 0.5, 0.5)" "rgba(255, 0, 0, 0.5)" "rgba(255,0,0,0.555)" "rgba(255,0,0,0.994)" "rgba(255,0,0,-0)" "hsl(120, 100%, 50%)" "hsl(10, 20%, 30%)" "hsla(200, 30%, 60%, 0.25)" "hsv(200, 0.3, 0.7)" "linear-gradient(hsl(1,2,3))" "repeating-radial-gradient(red, blue)" "not a color" "" "rgba(#ff0000, 0.5)" "rgba(#fff, 1)" "rgba(#abc, 50%)" "rgba(#1234567, .5)" "rgba(#zzz, 0.5)" "rgba(#ff0000, )" "rgba(#f00, 1) x rgba(#0f0, 0.2)" "rgba(#3b82f6, 0.15)" "rgba(#12345, 1)" "rgba(#fff 0.5)" "rgb(1, 2, 3)" "rgb(1%, 2%, 3%)" "hsl(1, 2%, 3%)" "hsv(1, 2%, 3%)" " #fff" "nope" "rgba(#aabbcc80, 0.5)" "#3366FF" "3366FF" "notacolor"])
+
 (deftest ^:reference fixed-inputs-match-the-libraries
-  (is (= [] (mismatches fixed-inputs))))
+  (is (= [] (mismatches fixed-inputs)))
+  (is (= [] (mismatches edge-inputs))))
+
+(deftest ^:reference real-token-colors-match-the-libraries
+  (let [inputs (vec (distinct (for [s (:sets (fixture/catalog)) t (:tokens s) :when (and (= :color (:type t)) (string? (:value t)))] (:value t))))]
+    (is (seq inputs))
+    (is (= [] (mismatches inputs)))))
 
 (deftest ^:reference numeric-grid-matches-the-libraries
   (let [values ["0" "1" "1.0" "0.5" "50%" "100%" "255" "-1" "360" "127.5" "0.001%"]

@@ -1,0 +1,1 @@
+{:args {"upload_id" "045df68c-1270-44c7-af15-9669a602366f", "file_id" "4c1c501c-ee3b-8136-8008-bf818ce0fa76", "frame_selector" ".absent"}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf818ce0fa76"], :entries [{:blob "07352bc7da4766a46292e26cc79f7f0a79be8cf32e8a2dd8210c1dcd1ac438fe"}], :tool "import_html", :scenario "import/no-match"}

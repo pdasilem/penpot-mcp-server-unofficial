@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SayVibe — каркасы: админ-панель</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #f4f5f6; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    #__bundler_loading { position: fixed; bottom: 20px; right: 20px; font: 13px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; color: #666; background: #fff; padding: 8px 14px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.12); z-index: 10000; }
+    #__bundler_thumbnail { position: fixed; inset: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #f4f5f6; z-index: 9999; }
+    #__bundler_thumbnail svg { width: 100%; height: 100%; object-fit: contain; }
+    #__bundler_placeholder { color: #999; font-size: 14px; }
+  </style>
+  <noscript>
+    <style>#__bundler_loading { display: none; }</style>
+    <div style="position:fixed;bottom:12px;left:12px;font:13px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;color:#999;background:rgba(255,255,255,0.9);padding:6px 12px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,0.08);z-index:10000;">
+      This page requires JavaScript to display.
+    </div>
+  </noscript>
+</head>
+<body>
+  <div id="__bundler_thumbnail">
+<svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg"><rect width="1200" height="800" fill="#f4f5f6"></rect><rect x="250" y="190" width="700" height="420" rx="20" fill="#fff" stroke="#c9cdd0" stroke-width="6"></rect><rect x="250" y="190" width="170" height="420" rx="20" fill="#e3e6e8"></rect><rect x="460" y="240" width="300" height="22" rx="11" fill="#c9cdd0"></rect><rect x="460" y="300" width="440" height="16" rx="8" fill="#e3e6e8"></rect><rect x="460" y="340" width="440" height="16" rx="8" fill="#e3e6e8"></rect><rect x="460" y="380" width="440" height="16" rx="8" fill="#e3e6e8"></rect></svg>
+</div>
+  <div id="__bundler_loading">Unpacking...</div>
+
+  <script>
+    
+document.addEventListener('DOMContentLoaded', async function() {
+  const loading = document.getElementById('__bundler_loading');
+  function setStatus(msg) { if (loading) loading.textContent = msg; }
+
+  const FONT_MIME = /^(font[/]|application[/](x-)?font-|application[/]vnd\.ms-fontobject)/i;
+  const MIME_TOKEN = /^[\w.+-]+[/][\w.+-]+$/;
+  function toBase64(bytes) {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(bin);
+  }
+
+  // Error sink persists across replaceWith since it's on window, not the DOM.
+  window.addEventListener('error', function(e) {
+    // Failed resource loads (CSP-blocked links, scripts, images) fire plain
+    // events at the element — warn only; real JS errors carry message/error.
+    if (!e.message && !e.error && e.target && e.target !== window) {
+      console.warn('[bundle] resource failed to load:',
+        e.target.tagName, String(e.target.src || e.target.href || ''));
+      return;
+    }
+    var p = document.body || document.documentElement;
+    var d = document.getElementById('__bundler_err') || p.appendChild(document.createElement('div'));
+    d.id = '__bundler_err';
+    d.style.cssText = 'position:fixed;bottom:12px;left:12px;right:12px;font:12px/1.4 ui-monospace,monospace;background:#2a1215;color:#ff8a80;padding:10px 14px;border-radius:8px;border:1px solid #5c2b2e;z-index:99999;white-space:pre-wrap;max-height:40vh;overflow:auto';
+    d.textContent = (d.textContent ? d.textContent + String.fromCharCode(10) : '') +
+      '[bundle] ' + (e.message || e.type) +
+      (e.filename ? ' (' + e.filename.slice(0, 60) + ':' + e.lineno + ')' : '');
+  }, true);
+
+  try {
+    const manifestEl = document.querySelector('script[type="__bundler/manifest"]');
+    const templateEl = document.querySelector('script[type="__bundler/template"]');
+    if (!manifestEl || !templateEl) {
+      setStatus('Error: missing bundle data');
+      console.error('[bundler] Missing script tags — manifestEl:', !!manifestEl, 'templateEl:', !!templateEl);
+      return;
+    }
+
+    const manifest = JSON.parse(manifestEl.textContent);
+    let template = JSON.parse(templateEl.textContent);
+
+    // Nested page bundles (iframe targets). Each ships ONCE, in the ROOT
+    // document's manifest; frame srcs carry an about:blank#<uuid> marker
+    // instead of a substitutable uuid. Every document mints the blobs for
+    // its OWN frames — from local text at the root, or text obtained from
+    // its DIRECT parent over the relay protocol below — so each frame
+    // navigation stays same-origin with its initiator and a deduped page
+    // loads at any depth on any host, including a file:// download's
+    // opaque origins (where a blob minted by one document cannot be
+    // navigated to by another).
+    const pageOrderEl = document.querySelector('script[type="__bundler/page_order"]');
+    const pageOrder = pageOrderEl ? JSON.parse(pageOrderEl.textContent) : [];
+    const pageSet = new Set(pageOrder);
+    const pageTexts = {};
+
+    // ── Nested-page text protocol (parent-chain relay) ──
+    // Page bundles ship once, in the ROOT document's manifest. Every
+    // document mints the blobs for its OWN frames, obtaining page text
+    // through a strict parent-chain relay: a document only ever SENDS to
+    // its direct parent (which, for every document the publisher's own
+    // runtime minted, is another publisher document) and only ACCEPTS
+    // text from that direct parent; requests from below are honored only
+    // for the document's own child frames, and the ROOT never sends
+    // upward at all. That last rule is load-bearing: the artifact host's
+    // frame-ancestors allows claude.ai (and friends) to frame an
+    // artifact, so window.top can be a FOREIGN document — a top-addressed
+    // protocol would hand page uuids to that ancestor and accept forged
+    // "page text" from it, minting attacker HTML as an artifact-origin
+    // blob document. The chain never touches the ancestor: requests stop
+    // at the root, replies are origin-addressed per hop (never '*' when
+    // an origin exists), and both directions are origin-gated (on https
+    // a foreign sender's origin can never equal this document's; in
+    // opaque contexts — file:// — everything serializes as 'null', where
+    // an embedded EXTERNAL frame still fails the gate by carrying its
+    // own real origin, and a sandboxed child of such a frame is excluded
+    // by the own-child-frames check plus uuid unguessability). Shape is
+    // deny-by-default: one request form, one reply form, no error
+    // replies.
+    // window.origin is the SERIALIZED SECURITY origin ('null' in opaque
+    // contexts such as a sandboxed preview iframe) — location.origin is
+    // computed from the URL and stays 'https://…' even when the document
+    // is sandboxed, which would misgate every opaque chain.
+    const OWN_TARGET = /^https?:[/][/]/.test(window.origin || '')
+      ? window.origin
+      : '*';
+    function trustedOrigin(e) {
+      if (e.origin === window.origin) return true; // https chains; opaque==opaque
+      // file:// trees: Chrome serializes the file document's origin as
+      // 'file://' while the blob: documents it mints serialize as 'null',
+      // so the two legitimate shapes can never string-match — accept the
+      // pair in both directions. https origins never serialize as either,
+      // and sender identity (own child frame / direct parent) is checked
+      // separately.
+      return (
+        (e.origin === 'null' &&
+          (window.origin === 'file://' ||
+            window.location.protocol === 'file:')) ||
+        (/^file:/.test(e.origin) && window.origin === 'null')
+      );
+    }
+    // Non-empty only in the root document (nested bundles ship an empty
+    // island), so it doubles as the root marker: the root answers from
+    // local text and treats a miss as authoritative — never relaying to
+    // its (possibly foreign) parent.
+    const isPageRoot = pageOrder.length > 0;
+    const blobUrls = {};
+    const resourceBlobs = {};
+    const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    const pendingFrames = {}; // uuid -> [{el, frag}] awaiting text for own frames
+    const pendingRelays = {}; // uuid -> [childWindow] awaiting text to pass down
+    function mountPage(el, frag, text) {
+      const pageBlob = new Blob([text], { type: 'text/html' });
+      const u = URL.createObjectURL(pageBlob);
+      resourceBlobs[u] = pageBlob;
+      el.src = u + frag;
+    }
+    function deliverPage(uuid, text) {
+      const frames = pendingFrames[uuid];
+      delete pendingFrames[uuid];
+      if (frames) for (const f of frames) mountPage(f.el, f.frag, text);
+      const relays = pendingRelays[uuid];
+      delete pendingRelays[uuid];
+      if (relays) {
+        for (const cw of relays) {
+          try { cw.postMessage({ __bundler_page: uuid, __bundler_text: text }, OWN_TARGET); } catch (err) { /* gone */ }
+        }
+      }
+    }
+    function ownFrameWindows() {
+      const out = [];
+      for (const f of Array.from(document.querySelectorAll('iframe'))) {
+        try { if (f.contentWindow) out.push(f.contentWindow); } catch (err) { /* detached */ }
+      }
+      return out;
+    }
+    window.addEventListener('message', function (e) {
+      const d = e.data;
+      if (!d || typeof d !== 'object' || !e.source) return;
+      // Origin gate first; the structural checks below (own-child-frames
+      // for requests, direct-parent + solicited-uuid for replies, the
+      // root's never-relay rule) are what hold in fully opaque chains
+      // where origin strings can't discriminate — a sandboxed root's
+      // FOREIGN wrapper still fails all three even though both serialize
+      // as real-vs-'null' rather than matching.
+      if (!trustedOrigin(e)) return;
+      if (typeof d.__bundler_need === 'string' && UUID_SHAPE.test(d.__bundler_need)) {
+        // Requests are honored only for this document's own child frames.
+        if (ownFrameWindows().indexOf(e.source) < 0) return;
+        const uuid = d.__bundler_need;
+        const text = pageTexts[uuid];
+        if (typeof text === 'string') {
+          try { e.source.postMessage({ __bundler_page: uuid, __bundler_text: text }, OWN_TARGET); } catch (err) { /* gone */ }
+          return;
+        }
+        if (isPageRoot || window.parent === window) return; // authoritative miss
+        const waiting = pendingRelays[uuid];
+        if (waiting) {
+          if (waiting.indexOf(e.source) < 0) waiting.push(e.source);
+          return;
+        }
+        // Never-answered uuids would otherwise accumulate forever under a
+        // request spray; past the cap (far above any real page count) new
+        // relays are dropped rather than remembered.
+        if (Object.keys(pendingRelays).length >= 128) return;
+        pendingRelays[uuid] = [e.source];
+        window.parent.postMessage({ __bundler_need: uuid }, OWN_TARGET);
+      } else if (
+        typeof d.__bundler_page === 'string' &&
+        UUID_SHAPE.test(d.__bundler_page) &&
+        typeof d.__bundler_text === 'string'
+      ) {
+        // The shape test is load-bearing beyond tidiness: the solicited
+        // check below uses the in operator, which matches prototype keys
+        // ('__proto__', 'constructor') — an unshaped key would reach
+        // deliverPage and throw, painting the error banner.
+        // Text is accepted only from the direct parent — the document
+        // that minted this one.
+        if (e.source !== window.parent || window.parent === window) return;
+        if (!(d.__bundler_page in pendingFrames) && !(d.__bundler_page in pendingRelays)) return;
+        deliverPage(d.__bundler_page, d.__bundler_text);
+      }
+    });
+
+    const uuids = Object.keys(manifest);
+    setStatus('Unpacking ' + uuids.length + ' assets...');
+
+    await Promise.all(uuids.map(async (uuid) => {
+      const entry = manifest[uuid];
+      try {
+        const binaryStr = atob(entry.data);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+
+        let finalBytes = bytes;
+        if (entry.compressed) {
+          if (typeof DecompressionStream !== 'undefined') {
+            const ds = new DecompressionStream('gzip');
+            const writer = ds.writable.getWriter();
+            const reader = ds.readable.getReader();
+            writer.write(bytes);
+            writer.close();
+            const chunks = [];
+            let totalLen = 0;
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              chunks.push(value);
+              totalLen += value.length;
+            }
+            finalBytes = new Uint8Array(totalLen);
+            let offset = 0;
+            for (const chunk of chunks) { finalBytes.set(chunk, offset); offset += chunk.length; }
+          } else {
+            console.warn('DecompressionStream not available, asset ' + uuid + ' may not render');
+          }
+        }
+
+        if (pageSet.has(uuid)) {
+          pageTexts[uuid] = new TextDecoder().decode(finalBytes);
+          return;
+        }
+        if (FONT_MIME.test(entry.mime) && MIME_TOKEN.test(entry.mime)) {
+          // Strict artifact hosts allow font-src data: but not blob:.
+          blobUrls[uuid] = 'data:' + entry.mime + ';base64,' +
+            (entry.compressed ? toBase64(finalBytes) : entry.data);
+        } else {
+          const blob = new Blob([finalBytes], { type: entry.mime });
+          blobUrls[uuid] = URL.createObjectURL(blob);
+          resourceBlobs[blobUrls[uuid]] = blob;
+        }
+      } catch (err) {
+        console.error('Failed to decode asset ' + uuid + ':', err);
+        const blob = new Blob([], { type: entry.mime });
+        blobUrls[uuid] = URL.createObjectURL(blob);
+        resourceBlobs[blobUrls[uuid]] = blob;
+      }
+    }));
+
+    const extResEl = document.querySelector('script[type="__bundler/ext_resources"]');
+    const extResources = extResEl ? JSON.parse(extResEl.textContent) : [];
+    const resourceMap = {};
+    for (const entry of extResources) {
+      if (blobUrls[entry.uuid]) resourceMap[entry.id] = blobUrls[entry.uuid];
+    }
+
+    // Artifact-host CSP (connect-src 'self') refuses fetch() of blob: URLs —
+    // consumers read these Blobs directly. Survives the swap like the error sink.
+    window.__resourceBlobs = resourceBlobs;
+
+    setStatus('Rendering...');
+    // Page uuids have no blob here — they ride inside about:blank#<uuid>
+    // frame markers the pass below resolves after the swap.
+    for (const uuid of uuids) {
+      if (pageSet.has(uuid)) continue;
+      template = template.split(uuid).join(blobUrls[uuid]);
+    }
+
+    // Strip integrity + crossorigin — blob URLs from a file:// document inherit
+    // a null origin, so crossorigin forces a CORS fetch that SRI then rejects.
+    // The manifest bytes are ours; SRI protects against CDN compromise, not this.
+    template = template.replace(/\s+integrity="[^"]*"/gi, '').replace(/\s+crossorigin="[^"]*"/gi, '');
+
+    const resourceScript = '<script>window.__resources = ' +
+      JSON.stringify(resourceMap).replace(/<\//g, '<\\/') +
+      ';</' + 'script>';
+    // Inject after <head> so the DOCTYPE stays first; prepending the script
+    // would push the parser into quirks mode. DOMParser always emits a <head>
+    // (synthesizing one if the source HTML omitted it) but may carry
+    // attributes through, so match the full opening tag. slice() rather than
+    // replace() keeps us clear of $-pattern substitution in resourceScript.
+    const headOpen = template.match(/<head[^>]*>/i);
+    if (headOpen) {
+      const i = headOpen.index + headOpen[0].length;
+      template = template.slice(0, i) + resourceScript + template.slice(i);
+    }
+
+    // Parse the template and swap the root element. Scripts inserted via
+    // DOMParser/replaceWith are inert per spec — re-create each with
+    // createElement so they execute, awaiting onload for src scripts to
+    // preserve ordering (React before ReactDOM before Babel before text/babel).
+    const doc = new DOMParser().parseFromString(template, 'text/html');
+    document.documentElement.replaceWith(doc.documentElement);
+
+    // Resolve page-frame markers: mint this document's own blob for each
+    // framed page — from local text when this is the root, otherwise by
+    // asking the direct parent over the relay protocol above. An
+    // unanswered request leaves the frame on about:blank, the same
+    // degraded state as a refused embed.
+    {
+      const MARKER = /^about:blank#([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(#.*)?$/;
+      const needed = [];
+      for (const el of Array.from(document.querySelectorAll('iframe'))) {
+        const m = MARKER.exec(el.getAttribute('src') || '');
+        if (!m) continue;
+        const text = pageTexts[m[1]];
+        if (typeof text === 'string') {
+          mountPage(el, m[2] || '', text);
+        } else if (window.parent !== window && !isPageRoot) {
+          const had = pendingFrames[m[1]];
+          (pendingFrames[m[1]] = had || []).push({ el: el, frag: m[2] || '' });
+          if (!had) needed.push(m[1]);
+        }
+      }
+      for (const uuid of needed) {
+        window.parent.postMessage({ __bundler_need: uuid }, OWN_TARGET);
+      }
+    }
+
+    const dead = Array.from(document.scripts);
+    for (const old of dead) {
+      const s = document.createElement('script');
+      for (const a of old.attributes) s.setAttribute(a.name, a.value);
+      s.textContent = old.textContent;
+      // text/babel scripts with a src: read and inline. transformScriptTags
+      // does XHR against the src, but blob:null/ from a file:// origin is
+      // silently dropped. Inlining makes it a plain inline babel script,
+      // which transformScriptTags handles unconditionally.
+      if ((s.type === 'text/babel' || s.type === 'text/jsx') && s.src) {
+        const pre = resourceBlobs[s.src.split('#')[0]];
+        s.textContent = pre ? await pre.text() : await (await fetch(s.src)).text();
+        s.removeAttribute('src');
+      }
+      const p = s.src ? new Promise(function(r) { s.onload = s.onerror = r; }) : null;
+      old.replaceWith(s);
+      if (p) await p;
+    }
+    // Babel standalone auto-transforms type=text/babel on DOMContentLoaded,
+    // which fired before we swapped the document. Trigger manually if present.
+    if (window.Babel && typeof window.Babel.transformScriptTags === 'function') {
+      window.Babel.transformScriptTags();
+    }
+  } catch (err) {
+    setStatus('Error unpacking: ' + err.message);
+    console.error('Bundle unpack error:', err);
+  }
+});
+
+  </script>
+
+  <script type="__bundler/manifest">
+{}
+  </script>
+
+  <script type="__bundler/ext_resources">
+[]
+  </script>
+
+  <script type="__bundler/page_order">
+[]
+  </script>
+
+  <script type="__bundler/template">
+"<html>\n <head>\n  <title>SayVibe — каркасы: админ-панель<\u002Ftitle>\n  <style>\n  :root { --ink:#1a1d20; --mid:#6b7276; --line:#c9cdd0; --thin:#e3e6e8;\n          --paper:#f4f5f6; --card:#fff; --note:#8a9196; --fill:#e9ecee; --accent:#5a6167; }\n  body { margin:0; background:var(--paper); color:var(--ink);\n         font:15px/1.5 ui-sans-serif, system-ui, sans-serif; }\n  .wrap { max-width:1560px; margin:0 auto; padding:40px 24px 80px; }\n  h1 { font-size:28px; margin:0 0 6px; letter-spacing:-.01em; }\n  .sub { color:var(--mid); margin:0 0 20px; max-width:74ch; }\n  .rule { border:1px solid var(--line); border-radius:8px; background:var(--card);\n          padding:12px 14px; font-size:13px; color:var(--mid); margin:0 0 28px; max-width:74ch; }\n  h2 { font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--mid);\n       margin:40px 0 14px; font-weight:600; }\n  .grid { display:flex; flex-wrap:wrap; gap:28px; }\n  .unit { width:100%; max-width:1440px; }\n  .num { font-size:13px; font-weight:700; color:var(--ink); margin:0 0 7px; letter-spacing:.04em; }\n  .num span { font-weight:400; color:var(--note); margin-left:8px; letter-spacing:0; }\n  .num em { font-style:normal; color:var(--note); font-weight:400; margin-left:8px;\n            border:1px solid var(--thin); border-radius:4px; padding:1px 6px; font-size:11px; }\n  .desk { border:1px solid var(--line); border-radius:10px; background:var(--card);\n          overflow:hidden; display:flex; flex-direction:column; aspect-ratio:16/10; }\n  .top { height:38px; border-bottom:1px solid var(--thin); display:flex; align-items:center;\n         padding:0 12px; gap:10px; font-size:12px; color:var(--mid); flex:none; }\n  .top b { color:var(--ink); font-size:13px; }\n  .top .who { margin-left:auto; }\n  .split { display:flex; flex:1; min-height:0; }\n  .nav { width:210px; border-right:1px solid var(--thin); padding:14px 0; flex:none;\n         display:flex; flex-direction:column; gap:1px; }\n  .nav div { padding:6px 12px; font-size:12.5px; color:var(--mid); }\n  .nav div.on { color:var(--ink); font-weight:600; background:var(--fill);\n                border-radius:6px; margin:0 8px; padding:6px 10px; }\n  .tabs { display:flex; gap:20px; align-items:center; border-bottom:1px solid var(--thin);\n          overflow:hidden; }\n  .tabs span { font-size:12.5px; color:var(--mid); padding:8px 0; white-space:nowrap; }\n  .tabs span.on { color:var(--ink); font-weight:600; box-shadow:inset 0 -2px 0 var(--accent); }\n  .nav .gap { height:8px; padding:0; }\n  .main { flex:1; padding:18px 20px; display:flex; flex-direction:column; gap:12px;\n         min-width:0; overflow:auto; }\n  .h { font-size:16px; font-weight:600; }\n  .label { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--note); }\n  .blk { font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink);\n         font-weight:700; border-top:1px solid var(--line); padding-top:9px; margin-top:4px; }\n  .blk:first-child { border-top:0; padding-top:0; margin-top:0; }\n  .blk i { font-style:normal; font-weight:400; color:var(--note); letter-spacing:0;\n           text-transform:none; margin-left:8px; font-size:11px; }\n  .why { font-size:11.5px; color:var(--mid); line-height:1.45; margin-top:-6px; }\n  .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }\n  .inp { border:1px solid var(--thin); border-radius:6px; padding:7px 10px; font-size:12.5px;\n         color:var(--note); flex:1; }\n  .sel { border:1px solid var(--line); border-radius:6px; padding:7px 10px; font-size:12.5px;\n         color:var(--ink); flex:1; background:var(--fill); display:flex;\n         justify-content:space-between; align-items:center; gap:8px; }\n  .sel::after { content:\"▾\"; color:var(--mid); font-size:11px; }\n  .tgl { border:1px solid var(--line); border-radius:20px; padding:5px 10px; font-size:12px;\n         color:var(--ink); background:var(--fill); flex:none; }\n  .ta { border:1px solid var(--line); border-radius:6px; padding:9px 11px; font-size:12.5px;\n        color:var(--ink); min-height:104px; line-height:1.5; }\n  .chips { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }\n  .chip { border:1px solid var(--accent); border-radius:14px; padding:3px 9px; font-size:11.5px;\n          background:var(--fill); }\n  .chip.add { border-style:dashed; border-color:var(--line); background:transparent;\n              color:var(--mid); }\n  th.s { cursor:default; }\n  th.s::after { content:\" ↕\"; color:var(--note); font-weight:400; }\n  th.s.up::after { content:\" ↑\"; color:var(--ink); }\n  th.s.down::after { content:\" ↓\"; color:var(--ink); }\n  .btn { border:1px solid var(--accent); border-radius:6px; padding:7px 12px; font-size:12.5px;\n         font-weight:600; background:var(--fill); flex:none; }\n  .btn.ghost { border-color:var(--thin); background:transparent; font-weight:400; color:var(--mid); }\n  .btn.off { border-color:var(--thin); background:transparent; font-weight:400; color:var(--note);\n             opacity:.55; }\n  table { border-collapse:collapse; width:100%; font-size:12.5px; }\n  th { text-align:left; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase;\n       color:var(--note); font-weight:600; padding:6px 8px; border-bottom:1px solid var(--line); }\n  td { padding:7px 8px; border-bottom:1px solid var(--thin); color:var(--ink); }\n  td.m { color:var(--mid); }\n  .tag { border:1px solid var(--thin); border-radius:4px; padding:1px 6px; font-size:11px;\n         color:var(--mid); display:inline-block; }\n  .tag.on { border-color:var(--accent); color:var(--ink); background:var(--fill); }\n  .row { border:1px solid var(--thin); border-radius:7px; padding:9px 11px;\n         display:flex; justify-content:space-between; align-items:center; font-size:13px; gap:8px; }\n  .row small { display:block; font-weight:400; color:var(--mid); font-size:11px; margin-top:2px; }\n  .row .val { color:var(--mid); font-size:12px; flex:none; }\n  .form { display:flex; flex-direction:column; gap:8px; max-width:420px; }\n  .pair { display:flex; gap:16px; align-items:flex-start; }\n  .pair .form { flex:none; }\n  .side { flex:1; border:1px solid var(--thin); border-radius:7px; padding:10px 12px;\n          font-size:12px; color:var(--mid); min-width:0; }\n  .side b { display:block; color:var(--ink); font-size:10.5px; letter-spacing:.09em;\n            text-transform:uppercase; margin:0 0 6px; font-weight:700; }\n  .side table { font-size:11.5px; }\n  .side th { font-size:10px; padding:4px 6px; }\n  .side td { padding:4px 6px; }\n  .side p { margin:8px 0 0; }\n  .btn.ic { display:flex; align-items:center; justify-content:center; gap:8px; }\n  .btn.ic svg { width:17px; height:17px; flex:none; }\n  .meta { border:1px solid var(--thin); border-radius:8px; background:var(--card);\n          padding:11px 13px; font-size:12.5px; line-height:1.45; color:var(--mid);\n          margin-top:9px; max-width:96ch; }\n  .meta b { display:block; color:var(--ink); font-size:10.5px; letter-spacing:.1em;\n            text-transform:uppercase; margin:8px 0 3px; font-weight:700; }\n  .meta b:first-child { margin-top:0; }\n  code { font:12px ui-monospace, monospace; background:var(--fill); border-radius:3px;\n         padding:1px 4px; }\n<\u002Fstyle>\n <\u002Fhead>\n <body>\n  <div class=\"wrap\">\n   <h1>Админ-панель<\u002Fh1>\n   <p class=\"sub\">Внутренний интерфейс управления. Vaadin внутри бэкенда, наружу не публикуется, доступ по правам консоли. Это не приложение пользователя: кадры в пропорции монитора 16:10, плотность выше, украшений нет. Подписи на английском — <a href=\"../../../sayvibe-docs/docs/02-stack/adr/0013-english-is-the-source.md\">ADR-0013<\u002Fa>.<\u002Fp>\n   <div class=\"rule\">\n    <b>Статус: черновик.<\u002Fb> Каркасы показывают состав разделов и то, что в них управляется, — не проработанный интерфейс. Расхождения в подписях, колонках и переходах ожидаемы и правятся по мере реализации: панель внутренняя, приоритет её UI ниже клиентского. Пометка справа от номера — веха, на которой раздел появляется.\n   <\u002Fdiv>\n   <h2>Оболочка — M11<\u002Fh2>\n   <div class=\"grid\">\n    <div class=\"unit\">\n     <div class=\"num\">\n      10.0.1 <span>Shell · menu unfolded<\u002Fspan><em>M11<\u002Fem>\n     <\u002Fdiv>\n     <div class=\"desk\">\n      <div class=\"top\">\n       <span>☰<\u002Fspan><b>SayVibe Console<\u002Fb><span class=\"who\">admin@sayvibe.app<\u002Fspan><span class=\"tag\">Sign out<\u002Fspan>\n      <\u002Fdiv>\n      <div class=\"split\">\n       <div class=\"nav\" style=\"display:flex; flex-direction:column;\">\n        <div style=\"flex:1; overflow:hidden;\">\n         <div class=\"on\">Configuration<\u002Fdiv>\n         <div>Jobs<\u002Fdiv>\n         <div>Uploads<\u002Fdiv>\n         <div class=\"gap\"><\u002Fdiv>\n         <div>Moderation<\u002Fdiv>\n         <div>Topics<\u002Fdiv>\n         <div>Formulas<\u002Fdiv>\n         <div>Money<\u002Fdiv>\n         <div>Creator Pass<\u002Fdiv>\n         <div>Reports<\u002Fdiv>\n        <\u002Fdiv>\n        <div style=\"border-top:1px solid var(--thin); padding:9px 12px; display:flex; flex-direction:column; gap:6px;\">\n         <div style=\"display:flex; align-items:center; justify-content:space-between; gap:8px;\">\n          <div style=\"line-height:1.2; white-space:nowrap;\">\n           <div style=\"font-size:12px; color:var(--ink);\">12:31 AM<\u002Fdiv>\n           <div style=\"font-size:10.5px; color:var(--note);\">Sep 08, 2026<\u002Fdiv>\n          <\u002Fdiv>\n          <div style=\"display:flex; gap:6px;\">\n           <span class=\"tag\">☾<\u002Fspan><span class=\"tag\">⚙<\u002Fspan>\n          <\u002Fdiv>\n         <\u002Fdiv>\n         <div style=\"font-size:10px; color:var(--note); white-space:nowrap;\">v 1.4.0 · 266d6dae6298<\u002Fdiv>\n        <\u002Fdiv>\n       <\u002Fdiv>\n       <div class=\"main\">\n        <div class=\"toolbar\">\n         <span class=\"tag on\">Connections<\u002Fspan><span class=\"tag\">Adapters<\u002Fspan><span class=\"tag\">Bindings<\u002Fspan><span class=\"tag\">Prices<\u002Fspan><span class=\"tag\">Prompts<\u002Fspan><span class=\"tag\">Languages<\u002Fspan><span class=\"tag\">Level tasks<\u002Fspan><span class=\"tag\">Exercises<\u002Fspan><span class=\"tag\">Parameters<\u002Fspan><span class=\"tag\">Translations<\u002Fspan><span class=\"tag\">Orphaned scenes<\u002Fspan><span class=\"tag\">Voice samples<\u002Fspan><span class=\"tag\">Roles<\u002Fspan>\n        <\u002Fdiv>\n        <div class=\"h\">Connections<\u002Fdiv>\n        <div class=\"toolbar\">\n         <span class=\"tag on\">Connections<\u002Fspan><span class=\"tag\">Adapters<\u002Fspan><span class=\"tag\">Bindings<\u002Fspan><span class=\"tag\">Prices<\u002Fspan><span class=\"tag\">Prompts<\u002Fspan><span class=\"tag\">Languages<\u002Fspan><span class=\"tag\">Level tasks<\u002Fspan><span class=\"tag\">Exercises<\u002Fspan><span class=\"tag\">Parameters<\u002Fspan><span class=\"tag\">Translations<\u002Fspan><span class=\"tag\">Orphaned scenes<\u002Fspan><span class=\"tag\">Voice samples<\u002Fspan><span class=\"tag\">Roles<\u002Fspan>\n        <\u002Fdiv>\n        <div class=\"toolbar\">\n         <div class=\"inp\">Search<\u002Fdiv>\n         <div class=\"sel\">Adapter: any<\u002Fdiv>\n         <div class=\"btn\">Add<\u002Fdiv>\n        <\u002Fdiv>\n        <table>\n         <tbody>\n          <tr>\n           <th class=\"s\">Code<\u002Fth>\n           <th>Adapter<\u002Fth>\n           <th>Model<\u002Fth>\n           <th>State<\u002Fth>\n           <th><\u002Fth>\n          <\u002Ftr>\n          <tr>\n           <td>gemini.flash.first<\u002Ftd>\n           <td class=\"m\">gemini<\u002Ftd>\n           <td class=\"m\">gemini-3.1-flash<\u002Ftd>\n           <td><span class=\"tag on\">on<\u002Fspan><\u002Ftd>\n           <td><span class=\"tag\">Open<\u002Fspan><\u002Ftd>\n          <\u002Ftr>\n          <tr>\n           <td>veo.lite.first<\u002Ftd>\n           <td class=\"m\">veo<\u002Ftd>\n           <td class=\"m\">veo-3.1-lite<\u002Ftd>\n           <td><span class=\"tag\">off<\u002Fspan><\u002Ftd>\n           <td><span class=\"tag\">Open<\u002Fspan><\u002Ftd>\n          <\u002Ftr>\n         <\u002Ftbody>\n        <\u002Ftable>\n       <\u002Fdiv>\n      <\u002Fdiv>\n     <\u002Fdiv>\n     <div class=\"meta\">\n      <b>Что задаёт кадр<\u002Fb>Раскладку всех экранов панели: шапка, меню слева, рабочая область справа. Остальные кадры разделов повторяют её и не переопределяют. <b>Меню<\u002Fb>Состав приходит с поверхности — <code>GET /console/sections<\u002Fcode>. В меню стоят разделы верхнего уровня; разделы с родителем показываются вкладками над рабочей областью. Раздела, на который нет права, в ответе нет и в меню тоже. <b>Подвал меню<\u002Fb>Время и дата браузера слева, тема и настройки справа, под ними версия сборки и хеш образа. Шестерёнка — заглушка до появления экрана настроек. <b>Элементы<\u002Fb>Ant Design. Своего в экране не рисуется.\n     <\u002Fdiv>\n    <\u002Fdiv>\n    <div class=\"unit\">\n     <div class=\"num\">\n      10.0.2 <span>Shell · menu folded<\u002Fspan><em>M11<\u002Fem>\n     <\u002Fdiv>\n     <div class=\"desk\">\n      <div class=\"top\">\n       <span>☰<\u002Fspan><b>SayVibe Console<\u002Fb><span class=\"who\">admin@sayvibe.app<\u002Fspan><span class=\"tag\">Sign out<\u002Fspan>\n      <\u002Fdiv>\n      <div class=\"split\">\n       <div class=\"nav\" style=\"width:56px; display:flex; flex-direction:column; align-items:center;\">\n        <div style=\"flex:1; width:100%; text-align:center;\">\n         <div class=\"on\" style=\"border-left:0; padding:6px 0;\">C<\u002Fdiv>\n         <div style=\"padding:6px 0;\">J<\u002Fdiv>\n         <div style=\"padding:6px 0;\">U<\u002Fdiv>\n         <div style=\"padding:6px 0;\">M<\u002Fdiv>\n         <div style=\"padding:6px 0;\">M<\u002Fdiv>\n         <div style=\"padding:6px 0;\">A<\u002Fdiv>\n        <\u002Fdiv>\n        <div style=\"border-top:1px solid var(--thin); padding:10px 0; width:100%; text-align:center;\">\n         <span class=\"tag\">⚙<\u002Fspan>\n        <\u002Fdiv>\n       <\u002Fdiv>\n       <div class=\"main\">\n        <div class=\"h\">Connections<\u002Fdiv>\n        <div class=\"toolbar\">\n         <div class=\"inp\">Search<\u002Fdiv>\n         <div class=\"sel\">Adapter: any<\u002Fdiv>\n         <div class=\"btn\">Add<\u002Fdiv>\n        <\u002Fdiv>\n        <table>\n         <tbody>\n          <tr>\n           <th class=\"s\">Code<\u002Fth>\n           <th>Adapter<\u002Fth>\n           <th>Model<\u002Fth>\n           <th>State<\u002Fth>\n           <th><\u002Fth>\n          <\u002Ftr>\n          <tr>\n           <td>gemini.flash.first<\u002Ftd>\n           <td class=\"m\">gemini<\u002Ftd>\n           <td class=\"m\">gemini-3.1-flash<\u002Ftd>\n           <td><span class=\"tag on\">on<\u002Fspan><\u002Ftd>\n           <td><span class=\"tag\">Open<\u002Fspan><\u002Ftd>\n          <\u002Ftr>\n         <\u002Ftbody>\n        <\u002Ftable>\n       <\u002Fdiv>\n      <\u002Fdiv>\n     <\u002Fdiv>\n     <div class=\"meta\">\n      <b>Свёрнутое меню<\u002Fb>Полоса 56 пикселей, разделы — первыми буквами названий: значков поверхность не отдаёт. Выбор свёрнутого состояния запоминается. <b>Наведение накрывает, а не двигает<\u002Fb>Развёрнутое указателем меню ложится поверх рабочей области с тенью: содержимое не сдвигается ни на пиксель. Сдвигает только закрепление меню кнопкой в шапке. <b>Подвал<\u002Fb>Остаётся одна шестерёнка. Часы, тема и версия скрыты. <b>Буквы совпадают<\u002Fb>Moderation и Money дают одну и ту же «M». Значков поверхность не отдаёт и заводить их сейчас не будем: свёрнутое меню разворачивается наведением, и полное название видно в один жест.\n     <\u002Fdiv>\n    <\u002Fdiv>\n    <div class=\"unit\">\n     <div class=\"num\">\n      10.0.3 <span>Sign in<\u002Fspan><em>M11<\u002Fem>\n     <\u002Fdiv>\n     <div class=\"desk\">\n      <div class=\"top\">\n       <b>SayVibe Console<\u002Fb>\n      <\u002Fdiv>\n      <div class=\"split\">\n       <div class=\"main\" style=\"align-items:center; padding:34px 14px;\">\n        <div class=\"form\" style=\"width:300px;\">\n         <div class=\"h\">SayVibe Console<\u002Fdiv>\n         <div class=\"label\">Email<\u002Fdiv>\n         <div class=\"inp\">admin@sayvibe.app<\u002Fdiv>\n         <div class=\"label\">Password<\u002Fdiv>\n         <div class=\"inp\">••••••••<\u002Fdiv>\n         <div class=\"btn\" style=\"text-align:center;\">Sign in<\u002Fdiv>\n         <div class=\"row\">\n          <div>\n           Wrong email or password<small>The same answer for a wrong password and for an account with no console right<\u002Fsmall>\n          <\u002Fdiv>\n          <span class=\"val\">401<\u002Fspan>\n         <\u002Fdiv>\n        <\u002Fdiv>\n       <\u002Fdiv>\n      <\u002Fdiv>\n     <\u002Fdiv>\n     <div class=\"meta\">\n      <b>Заменяет 10.1<\u002Fb>Тот кадр рисовался под Vaadin и снимается при пересогласовании. <b>Вход<\u002Fb>Почта и пароль, <code>POST /auth/login<\u002Fcode>, ответ без тела. Личность и права панель берёт следующим вызовом <code>GET /auth/me<\u002Fcode>. <b>Отказ<\u002Fb>Один и тот же текст на неверный пароль и на учётную запись без права консоли: разные тексты превратили бы форму в оракул. <b>Ссылки «Забыли пароль» нет<\u002Fb>Администраторов единицы, сброс делается руками.\n     <\u002Fdiv>\n    <\u002Fdiv>\n    <div class=\"unit\">\n     <div class=\"num\">\n      10.0.4 <span>List<\u002Fspan><em>M11<\u002Fem>\n     <\u002Fdiv>\n     <div class=\"desk\">\n      <div class=\"top\">\n       <span>☰<\u002Fspan><b>SayVibe Console<\u002Fb><span class=\"who\">admin@sayvibe.app<\u002Fspan>\n      <\u002Fdiv>\n      <div class=\"split\">\n       <div class=\"nav\">\n        <div>Configuration<\u002Fdiv>\n        <div class=\"on\">Word lists<\u002Fdiv>\n        <div>Topics<\u002Fdiv>\n        <div>Money<\u002Fdiv>\n       <\u002Fdiv>\n       <div class=\"main\">\n        <div class=\"h\">Word lists<\u002Fdiv>\n        <div class=\"toolbar\">\n         <div class=\"inp\">Search a word<\u002Fdiv>\n         <div class=\"sel\">Language: en<\u002Fdiv>\n         <div class=\"sel\">Kind: any<\u002Fdiv>\n         <div class=\"btn\">Add<\u002Fdiv>\n        <\u002Fdiv>\n        <table>\n         <tbody>\n          <tr>\n           <th class=\"s down\">Word<\u002Fth>\n           <th>Language<\u002Fth>\n           <th>Kind<\u002Fth>\n           <th>Added<\u002Fth>\n           <th><\u002Fth>\n          <\u002Ftr>\n          <tr>\n           <td>bloody<\u002Ftd>\n           <td class=\"m\">en<\u002Ftd>\n           <td><span class=\"tag\">profanity<\u002Fspan><\u002Ftd>\n           <td class=\"m\">05.09 09:15<\u002Ftd>\n           <td><span class=\"tag\">Remove<\u002Fspan><\u002Ftd>\n          <\u002Ftr>\n          <tr>\n           <td>damn<\u002Ftd>\n           <td class=\"m\">en<\u002Ftd>\n           <td><span class=\"tag\">profanity<\u002Fspan><\u002Ftd>\n           <td class=\"m\">04.09 10:40<\u002Ftd>\n           <td><span class=\"tag\">Remove<\u002Fspan><\u002Ftd>\n          <\u002Ftr>\n          <tr>\n           <td>bribe<\u002Ftd>\n           <td class=\"m\">en<\u002Ftd>\n           <td><span class=\"tag\">sensitive<\u002Fspan><\u002Ftd>\n           <td class=\"m\">01.09 11:20<\u002Ftd>\n           <td><span class=\"tag\">Remove<\u002Fspan><\u002Ftd>\n          <\u002Ftr>\n         <\u002Ftbody>\n        <\u002Ftable>\n        <div class=\"toolbar\" style=\"justify-content:flex-end; color:var(--note); font-size:12px;\">\n         <span>1–3 of 128<\u002Fspan><span class=\"tag\">‹<\u002Fspan><span class=\"tag on\">1<\u002Fspan><span class=\"tag\">2<\u002Fspan><span class=\"tag\">3<\u002Fspan><span class=\"tag\">›<\u002Fspan>\n        <\u002Fdiv>\n       <\u002Fdiv>\n      <\u002Fdiv>\n     <\u002Fdiv>\n     <div class=\"meta\">\n      <b>Что задаёт кадр<\u002Fb>Вид любого списка панели: отбор строкой и выпадающими списками над таблицей, сортировка по заголовку, страничная выдача под таблицей, действие над строкой последним столбцом. <b>Отбирает сервер, листает панель<\u002Fb>Отбор уходит в запрос вместе с пределом строк; своей выборки панель не держит, а полученное листает у себя. Предел один на все списки — пятьсот строк. <b>Подписи значений<\u002Fb>Виды и состояния приходят подписями из <code>GET /console/words<\u002Fcode>; машинный код показывается только там, где он и есть опознаватель строки.\n     <\u002Fdiv>\n    <\u002Fdiv>\n    <div class=\"unit\">\n     <div class=\"num\">\n      10.0.5 <span>Form in a dialog<\u002Fspan><em>M11<\u002Fem>\n     <\u002Fdiv>\n     <div class=\"desk\">\n      <div class=\"top\">\n       <span>☰<\u002Fspan><b>SayVibe Console<\u002Fb><span class=\"who\">admin@sayvibe.app<\u002Fspan>\n      <\u002Fdiv>\n      <div class=\"split\" style=\"position:relative;\">\n       <div class=\"nav\">\n        <div>Configuration<\u002Fdiv>\n        <div class=\"on\">Word lists<\u002Fdiv>\n        <div>Topics<\u002Fdiv>\n       <\u002Fdiv>\n       <div class=\"main\" style=\"opacity:.45;\">\n        <div class=\"h\">Word lists<\u002Fdiv>\n        <div class=\"toolbar\">\n         <div class=\"inp\">Search a word<\u002Fdiv>\n         <div class=\"sel\">Language: en<\u002Fdiv>\n         <div class=\"btn\">Add<\u002Fdiv>\n        <\u002Fdiv>\n        <table>\n         <tbody>\n          <tr>\n           <th>Word<\u002Fth>\n           <th>Language<\u002Fth>\n           <th>Kind<\u002Fth>\n           <th>Added<\u002Fth>\n          <\u002Ftr>\n          <tr>\n           <td>bloody<\u002Ftd>\n           <td class=\"m\">en<\u002Ftd>\n           <td><span class=\"tag\">profanity<\u002Fspan><\u002Ftd>\n           <td class=\"m\">05.09 13:05<\u002Ftd>\n          <\u002Ftr>\n          <tr>\n           <td>damn<\u002Ftd>\n           <td class=\"m\">en<\u002Ftd>\n           <td><span class=\"tag\">profanity<\u002Fspan><\u002Ftd>\n           <td class=\"m\">04.09 14:35<\u002Ftd>\n          <\u002Ftr>\n         <\u002Ftbody>\n        <\u002Ftable>\n       <\u002Fdiv>\n       <div style=\"position:absolute; inset:0; display:flex; align-items:center; justify-content:center;\">\n        <div class=\"form\" style=\"width:420px; border:1px solid var(--line); border-radius:10px; padding:16px; background:var(--card); box-shadow:0 8px 28px rgba(0,0,0,.12);\">\n         <div class=\"h\">Add a word<\u002Fdiv>\n         <div class=\"label\">Word<\u002Fdiv>\n         <div class=\"inp\">bribe<\u002Fdiv>\n         <div class=\"row\">\n          <div>\n           Length<small>The bound comes from the contract, the panel keeps none of its own<\u002Fsmall>\n          <\u002Fdiv>\n          <span class=\"val\">5 / 64<\u002Fspan>\n         <\u002Fdiv>\n         <div class=\"label\">Language<\u002Fdiv>\n         <div class=\"sel\">en<\u002Fdiv>\n         <div class=\"label\">Kind<\u002Fdiv>\n         <div class=\"sel\">sensitive<\u002Fdiv>\n         <div class=\"row\">\n          <div>\n           This word is already on the list<small>The refusal of the surface, shown as it came<\u002Fsmall>\n          <\u002Fdiv>\n          <span class=\"val\">409<\u002Fspan>\n         <\u002Fdiv>\n         <div class=\"toolbar\" style=\"justify-content:flex-end;\">\n          <div class=\"btn ghost\">Cancel<\u002Fdiv>\n          <div class=\"btn\">Save<\u002Fdiv>\n         <\u002Fdiv>\n        <\u002Fdiv>\n       <\u002Fdiv>\n      <\u002Fdiv>\n     <\u002Fdiv>\n     <div class=\"meta\">\n      <b>Что задаёт кадр<\u002Fb>Вид правки: диалог поверх списка, поля сверху вниз, действия справа внизу, отказ поверхности над действиями. <b>Границы полей<\u002Fb>Берутся из спеки — <code>maxLength<\u002Fcode>, <code>minimum<\u002Fcode>, <code>maximum<\u002Fcode>. Своих чисел панель не держит, проверка на стороне браузера серверную не заменяет. <b>Отказ<\u002Fb>Показывается текст поверхности, а не свой. Экран остаётся открытым, введённое не теряется.\n     <\u002Fdiv>\n    <\u002Fdiv>\n    <div class=\"unit\">\n     <div class=\"num\">\n      10.0.6 <span>States<\u002Fspan><em>M11<\u002Fem>\n     <\u002Fdiv>\n     <div class=\"desk\">\n      <div class=\"top\">\n       <span>☰<\u002Fspan><b>SayVibe Console<\u002Fb><span class=\"who\">admin@sayvibe.app<\u002Fspan>\n      <\u002Fdiv>\n      <div class=\"split\">\n       <div class=\"nav\">\n        <div>Configuration<\u002Fdiv>\n        <div class=\"on\">Word lists<\u002Fdiv>\n        <div>Topics<\u002Fdiv>\n       <\u002Fdiv>\n       <div class=\"main\">\n        <div class=\"blk\">Loading<\u002Fdiv>\n        <div class=\"row\">\n         <div style=\"color:var(--note);\">The list is on its way<\u002Fdiv>\n         <span class=\"val\">spinner<\u002Fspan>\n        <\u002Fdiv>\n        <div class=\"blk\">Empty<\u002Fdiv>\n        <div class=\"row\">\n         <div>\n          Nothing on this list yet<small>The filter is named and can be dropped in one press<\u002Fsmall>\n         <\u002Fdiv>\n         <span class=\"val\">Drop the filter<\u002Fspan>\n        <\u002Fdiv>\n        <div class=\"blk\">The surface refuses<\u002Fdiv>\n        <div class=\"row\">\n         <div>\n          This resource is not available<small>403 · the right is missing, the session stays<\u002Fsmall>\n         <\u002Fdiv>\n         <span class=\"val\">403<\u002Fspan>\n        <\u002Fdiv>\n        <div class=\"row\">\n         <div>\n          A console session is required<small>401 · the panel goes to the sign in and keeps the address it was on<\u002Fsmall>\n         <\u002Fdiv>\n         <span class=\"val\">401<\u002Fspan>\n        <\u002Fdiv>\n        <div class=\"blk\">A newer build waits<\u002Fdiv>\n        <div class=\"row\">\n         <div>\n          The server carries a newer build<small>Shown under the version in the foot of the menu, one press reloads<\u002Fsmall>\n         <\u002Fdiv>\n         <span class=\"val\">Reload<\u002Fspan>\n        <\u002Fdiv>\n       <\u002Fdiv>\n      <\u002Fdiv>\n     <\u002Fdiv>\n     <div class=\"meta\">\n      <b>Что задаёт кадр<\u002Fb>Четыре состояния, которые встречаются на каждом экране, и вид каждого. Разделы их не переопределяют. <b>401 и 403 различаются<\u002Fb><code>401<\u002Fcode> уводит на вход с сохранением адреса, <code>403<\u002Fcode> показывает отказ и из сессии не выходит. <b>Сессия перепроверяется<\u002Fb>Раз в минуту, при возврате окна в фокус и при восстановлении связи: панель не верит своему кэшу.\n     <\u002Fdiv>\n    <\u002Fdiv>\n   <\u002Fdiv>\n   <h2>Конфигурация — M1<\u002Fh2>\n   <div class=\"grid\">\n    <div class=\"unit\">\n     <div class=\"num\">\n      10.2.1 <span>Connection · editor<\u002Fspan><em>M1<\u002Fem>\n     <\u002Fdiv>\n     <div class=\"desk\">\n      <div class=\"top\">\n       <span>☰<\u002Fspan><b>SayVibe Console<\u002Fb><span class=\"who\">admin@sayvibe.app<\u002Fspan><span class=\"tag\">Sign out<\u002Fspan>\n      <\u002Fdiv>\n      <div class=\"split\">\n       <div class=\"nav\" style=\"display:flex; flex-direction:column;\">\n        <div style=\"flex:1; overflow:hidden;\">\n         <div class=\"on\">Configuration<\u002Fdiv>\n         <div>Jobs<\u002Fdiv>\n         <div>Uploads<\u002Fdiv>\n         <div class=\"gap\"><\u002Fdiv>\n         <div>Moderation<\u002Fdiv>\n         <div>Topics<\u002Fdiv>\n         <div>Formulas<\u002Fdiv>\n         <div>Money<\u002Fdiv>\n         <div>Creator Pass<\u002Fdiv>\n         <div>Reports<\u002Fdiv>\n        <\u002Fdiv>\n        <div style=\"border-top:1px solid var(--thin); padding:9px 12px; display:flex; flex-direction:column; gap:6px;\">\n         <div style=\"display:flex; align-items:center; justify-content:space-between; gap:8px;\">\n          <div style=\"line-height:1.2; white-space:nowrap;\">\n           <div style=\"font-size:12px; color:var(--ink);\">12:31 AM<\u002Fdiv>\n           <div style=\"font-size:10.5px; color:var(--note);\">Sep 08, 2026<\u002Fdiv>\n          <\u002Fdiv>\n          <div style=\"display:flex; gap:6px;\">\n           <span class=\"tag\">☾<\u002Fspan><span class=\"tag\">⚙<\u002Fspan>\n          <\u002Fdiv>\n         <\u002Fdiv>\n         <div style=\"font-size:10px; color:var(--note); white-space:nowrap;\">v 1.4.0 · 266d6dae6298<\u002Fdiv>\n        <\u002Fdiv>\n       <\u002Fdiv>\n       <div class=\"main\">\n        <div class=\"toolbar\">\n         <span class=\"tag on\">Connections<\u002Fspan><span class=\"tag\">Adapters<\u002Fspan><span class=\"tag\">Bindings<\u002Fspan><span class=\"tag\">Prices<\u002Fspan><span class=\"tag\">Prompts<\u002Fspan><span class=\"tag\">Languages<\u002Fspan><span class=\"tag\">Level tasks<\u002Fspan><span class=\"tag\">Exercises<\u002Fspan><span class=\"tag\">Parameters<\u002Fspan><span class=\"tag\">Translations<\u002Fspan><span class=\"tag\">Orphaned scenes<\u002Fspan><span class=\"tag\">Voice samples<\u002Fspan><span class=\"tag\">Roles<\u002Fspan>\n        <\u002Fdiv>\n        <div class=\"h\">Connection · gemini.video.veo-3.1-fast.eight-seconds<\u002Fdiv>\n        <div class=\"toolbar\">\n         <span class=\"tag on\">Connections<\u002Fspan><span class=\"tag\">Adapters<\u002Fspan><span class=\"tag\">Bindings<\u002Fspan><span class=\"tag\">Prices<\u002Fspan><span class=\"tag\">Prompts<\u002Fspan><span class=\"tag\">Languages<\u002Fspan><span class=\"tag\">Level tasks<\u002Fspan><span class=\"tag\">Exercises<\u002Fspan><span class=\"tag\">Parameters<\u002Fspan><span class=\"tag\">Translations<\u002Fspan><span class=\"tag\">Orphaned scenes<\u002Fspan><span class=\"tag\">Voice samples<\u002Fspan><span class=\"tag\">Roles<\u002Fspan>\n        <\u002Fdiv>\n        <div class=\"pair\">\n         <div class=\"form\" style=\"width:430px;\">\n          <div class=\"label\">Code · formed by the surface, read only<\u002Fdiv>\n          <div class=\"inp\">gemini.video.veo-3.1-fast.eight-seconds<\u002Fdiv>\n          <div class=\"label\">Adapter · fixed after saving<\u002Fdiv>\n          <div class=\"sel\">gemini.video<\u002Fdiv>\n          <div class=\"label\">Model · fixed after saving<\u002Fdiv>\n          <div class=\"sel\">veo-3.1-fast<\u002Fdiv>\n          <div class=\"label\">Purpose · fixed after saving<\u002Fdiv>\n          <div class=\"inp\">eight-seconds<\u002Fdiv>\n          <div class=\"label\">Parameters<\u002Fdiv>\n          <div class=\"ta\">{ \"aspectRatio\": \"16:9\", \"resolution\": \"720p\", \"durationSeconds\": 8 }<\u002Fdiv>\n          <div class=\"label\">Key variable<\u002Fdiv>\n          <div class=\"inp\">SAYVIBE_PROVIDER_GEMINI_KEY<\u002Fdiv>\n          <div class=\"label\">Health check<\u002Fdiv>\n          <div class=\"sel\">manual<\u002Fdiv>\n          <div class=\"row\">\n           <div>Enabled<\u002Fdiv>\n           <span class=\"val\">yes<\u002Fspan>\n          <\u002Fdiv>\n          <div class=\"toolbar\" style=\"justify-content:flex-end;\">\n           <div class=\"btn ghost\">Cancel<\u002Fdiv>\n           <div class=\"btn\">Save<\u002Fdiv>\n          <\u002Fdiv>\n         <\u002Fdiv>\n         <div class=\"side\">\n          <b>Parameters the adapter declares<\u002Fb>\n          <table>\n           <tbody>\n            <tr>\n             <th>Key<\u002Fth>\n             <th>Type<\u002Fth>\n             <th>Default<\u002Fth>\n            <\u002Ftr>\n            <tr>\n             <td>aspectRatio<\u002Ftd>\n             <td class=\"m\">text<\u002Ftd>\n             <td class=\"m\">16:9<\u002Ftd>\n            <\u002Ftr>\n            <tr>\n             <td>resolution<\u002Ftd>\n             <td class=\"m\">text<\u002Ftd>\n             <td class=\"m\">720p<\u002Ftd>\n            <\u002Ftr>\n            <tr>\n             <td>durationSeconds<\u002Ftd>\n             <td class=\"m\">number<\u002Ftd>\n             <td class=\"m\">8<\u002Ftd>\n            <\u002Ftr>\n           <\u002Ftbody>\n          <\u002Ftable>\n          <p>A key the adapter does not declare is refused. The value of the key variable is never shown here and never entered here.<\u002Fp>\n         <\u002Fdiv>\n        <\u002Fdiv>\n       <\u002Fdiv>\n      <\u002Fdiv>\n     <\u002Fdiv>\n     <div class=\"meta\">\n      <b>Что правится<\u002Fb>У сохранённого подключения меняются параметры, режим проверки и признак «включено». Адаптер, модель и дополнение закрыты: подключение — это «эта модель этого провайдера», на нём висит цена. Нужна другая модель — новое подключение. <b>Границы полей<\u002Fb>Из спеки. Своих чисел экран не держит. <b>Набор параметров<\u002Fb>Объявляет адаптер, поверхность отдаёт его вместе с типом и значением по умолчанию. Неизвестный ключ отклоняет сервер, а не панель.\n     <\u002Fdiv>\n    <\u002Fdiv>\n   <\u002Fdiv>\n   <h2>Модерация и право — M4<\u002Fh2>\n   <div class=\"grid\">\n    <div class=\"unit\">\n     <div class=\"num\">\n      10.27 <span>Adapters<\u002Fspan><em>M11<\u002Fem>\n     <\u002Fdiv>\n     <div class=\"desk\">\n      <div class=\"top\">\n       <span>☰<\u002Fspan><b>SayVibe Console<\u002Fb><span class=\"who\">admin@sayvibe.app<\u002Fspan><span class=\"tag\">Sign out<\u002Fspan>\n      <\u002Fdiv>\n      <div class=\"split\">\n       <div class=\"nav\" style=\"display:flex; flex-direction:column;\">\n        <div style=\"flex:1; overflow:hidden;\">\n         <div class=\"on\">Configuration<\u002Fdiv>\n         <div>Jobs<\u002Fdiv>\n         <div>Uploads<\u002Fdiv>\n         <div class=\"gap\"><\u002Fdiv>\n         <div>Moderation<\u002Fdiv>\n         <div>Topics<\u002Fdiv>\n         <div>Formulas<\u002Fdiv>\n         <div>Money<\u002Fdiv>\n         <div>Creator Pass<\u002Fdiv>\n         <div>Reports<\u002Fdiv>\n        <\u002Fdiv>\n        <div style=\"border-top:1px solid var(--thin); padding:9px 12px; display:flex; flex-direction:column; gap:6px;\">\n         <div style=\"display:flex; align-items:center; justify-content:space-between; gap:8px;\">\n          <div style=\"line-height:1.2; white-space:nowrap;\">\n           <div style=\"font-size:12px; color:var(--ink);\">12:31 AM<\u002Fdiv>\n           <div style=\"font-size:10.5px; color:var(--note);\">Sep 08, 2026<\u002Fdiv>\n          <\u002Fdiv>\n          <div style=\"display:flex; gap:6px;\">\n           <span class=\"tag\">☾<\u002Fspan><span class=\"tag\">⚙<\u002Fspan>\n          <\u002Fdiv>\n         <\u002Fdiv>\n         <div style=\"font-size:10px; color:var(--note); white-space:nowrap;\">v 1.4.0 · 266d6dae6298<\u002Fdiv>\n        <\u002Fdiv>\n       <\u002Fdiv>\n       <div class=\"main\">\n        <div class=\"h\">Adapters<\u002Fdiv>\n        <div class=\"tabs\">\n         <span>Connections<\u002Fspan><span class=\"on\">Adapters<\u002Fspan><span>Bindings<\u002Fspan><span>Prices<\u002Fspan><span>Prompts<\u002Fspan><span>Languages<\u002Fspan><span>Level tasks<\u002Fspan><span>Exercises<\u002Fspan><span>Parameters<\u002Fspan><span>Translations<\u002Fspan><span>Orphaned scenes<\u002Fspan><span>Voice samples<\u002Fspan><span>Roles<\u002Fspan>\n        <\u002Fdiv>\n        <div class=\"label\">The list is fixed by the build · an adapter is read here, a connection to it is made on the previous tab<\u002Fdiv>\n        <div class=\"toolbar\">\n         <div class=\"sel\" style=\"flex:none; width:190px;\">Kind: any<\u002Fdiv>\n        <\u002Fdiv>\n        <table>\n         <tbody>\n          <tr>\n           <th class=\"s\"><\u002Fth>\n           <th>Code<\u002Fth>\n           <th>Kind<\u002Fth>\n           <th>Address by default<\u002Fth>\n           <th>Model<\u002Fth>\n           <th>Price units<\u002Fth>\n           <th>Documentation<\u002Fth>\n           <th>Checked<\u002Fth>\n          <\u002Ftr>\n          <tr>\n           <td class=\"m\">›<\u002Ftd>\n           <td>gemini<\u002Ftd>\n           <td class=\"m\">TEXT<\u002Ftd>\n           <td class=\"m\">https://generativelanguage.googleapis.com/v1beta<\u002Ftd>\n           <td><span class=\"tag on\">needed<\u002Fspan><\u002Ftd>\n           <td class=\"m\">TOKENS<\u002Ftd>\n           <td class=\"m\">ai.google.dev ↗<\u002Ftd>\n           <td class=\"m\">08.08.2026<\u002Ftd>\n          <\u002Ftr>\n          <tr>\n           <td class=\"m\">›<\u002Ftd>\n           <td>llamaswap.text<\u002Ftd>\n           <td class=\"m\">TEXT<\u002Ftd>\n           <td class=\"m\">http://sayvibe-runner:8080/v1<\u002Ftd>\n           <td><span class=\"tag on\">needed<\u002Fspan><\u002Ftd>\n           <td class=\"m\">TOKENS<\u002Ftd>\n           <td class=\"m\">github.com/mostlygeek ↗<\u002Ftd>\n           <td class=\"m\">20.08.2026<\u002Ftd>\n          <\u002Ftr>\n          <tr>\n           <td class=\"m\">∨<\u002Ftd>\n           <td>qwen.align<\u002Ftd>\n           <td class=\"m\">ALIGNMENT<\u002Ftd>\n           <td class=\"m\">http://sayvibe-aligner:8391<\u002Ftd>\n           <td><span class=\"tag on\">needed<\u002Fspan><\u002Ftd>\n           <td class=\"m\">SECONDS<\u002Ftd>\n           <td class=\"m\">huggingface.co/Qwen ↗<\u002Ftd>\n           <td class=\"m\">15.08.2026<\u002Ftd>\n          <\u002Ftr>\n         <\u002Ftbody>\n        <\u002Ftable>\n        <div class=\"side\" style=\"margin-top:12px;\">\n         <b>qwen.align · parameters<\u002Fb>\n         <div style=\"padding:6px 9px; font-size:11px; color:var(--note);\">Undeclared parameters are refused by this adapter<\u002Fdiv>\n         <table>\n          <tbody>\n           <tr>\n            <th>Name<\u002Fth>\n            <th>Type<\u002Fth>\n            <th>Default<\u002Fth>\n            <th>Bound to the model<\u002Fth>\n            <th>What it does<\u002Fth>\n           <\u002Ftr>\n           <tr>\n            <td class=\"m\">device<\u002Ftd>\n            <td class=\"m\">ENUM<\u002Ftd>\n            <td class=\"m\">cpu<\u002Ftd>\n            <td class=\"m\">no<\u002Ftd>\n            <td>Where the alignment runs: cpu or cuda<\u002Ftd>\n           <\u002Ftr>\n           <tr>\n            <td class=\"m\">threads<\u002Ftd>\n            <td class=\"m\">INTEGER<\u002Ftd>\n            <td class=\"m\">10<\u002Ftd>\n            <td class=\"m\">no<\u002Ftd>\n            <td>Cores given to the model<\u002Ftd>\n           <\u002Ftr>\n          <\u002Ftbody>\n         <\u002Ftable>\n        <\u002Fdiv>\n       <\u002Fdiv>\n      <\u002Fdiv>\n     <\u002Fdiv>\n     <div class=\"meta\">\n      <b>Что на экране<\u002Fb>Все адаптеры сборки с их профилями. Только чтение: кнопок, меняющих состояние, нет. <b>Ручка<\u002Fb><code>GET /adapters<\u002Fcode> одним запросом отдаёт весь список. <b>Адрес по умолчанию<\u002Fb>Куда адаптер стучит, когда у подключения свой адрес не задан. У локальных служб он приходит из окружения. <b>Раскрытие строки<\u002Fb>Параметры адаптера и признак необъявленных параметров. <b>Отбор<\u002Fb>По виду работы; названия видов и единиц цены приходят словами поверхности.\n     <\u002Fdiv>\n    <\u002Fdiv>\n    <div class=\"unit\">\n     <div class=\"num\">\n      10.33 <span>Reports · funnel<\u002Fspan><em>M11<\u002Fem>\n     <\u002Fdiv>\n     <div class=\"desk\">\n      <div class=\"top\">\n       <span>☰<\u002Fspan><b>SayVibe Console<\u002Fb><span class=\"who\">admin@sayvibe.app<\u002Fspan><span class=\"tag\">Sign out<\u002Fspan>\n      <\u002Fdiv>\n      <div class=\"split\">\n       <div class=\"nav\" style=\"display:flex; flex-direction:column;\">\n        <div style=\"flex:1; overflow:hidden;\">\n         <div>Configuration<\u002Fdiv>\n         <div>Jobs<\u002Fdiv>\n         <div>Uploads<\u002Fdiv>\n         <div class=\"gap\"><\u002Fdiv>\n         <div>Moderation<\u002Fdiv>\n         <div>Topics<\u002Fdiv>\n         <div>Formulas<\u002Fdiv>\n         <div>Money<\u002Fdiv>\n         <div>Creator Pass<\u002Fdiv>\n         <div class=\"on\">Reports<\u002Fdiv>\n        <\u002Fdiv>\n        <div style=\"border-top:1px solid var(--thin); padding:9px 12px; display:flex; flex-direction:column; gap:6px;\">\n         <div style=\"display:flex; align-items:center; justify-content:space-between; gap:8px;\">\n          <div style=\"line-height:1.2; white-space:nowrap;\">\n           <div style=\"font-size:12px; color:var(--ink);\">12:31 AM<\u002Fdiv>\n           <div style=\"font-size:10.5px; color:var(--note);\">Sep 08, 2026<\u002Fdiv>\n          <\u002Fdiv>\n          <div style=\"display:flex; gap:6px;\">\n           <span class=\"tag\">☾<\u002Fspan><span class=\"tag\">⚙<\u002Fspan>\n          <\u002Fdiv>\n         <\u002Fdiv>\n         <div style=\"font-size:10px; color:var(--note); white-space:nowrap;\">v 1.4.0 · 266d6dae6298<\u002Fdiv>\n        <\u002Fdiv>\n       <\u002Fdiv>\n       <div class=\"main\">\n        <div class=\"tabs\">\n         <span class=\"on\">Funnel<\u002Fspan><span>Funnels<\u002Fspan><span>Catalogue<\u002Fspan><span>Usage<\u002Fspan><span>Audit log<\u002Fspan>\n        <\u002Fdiv>\n        <div class=\"h\">Funnel<\u002Fdiv>\n        <div class=\"label\">The core loop · a step counts only when it came after the one before<\u002Fdiv>\n        <div class=\"toolbar\">\n         <div class=\"sel\" style=\"flex:none; width:110px;\">Days: 30<\u002Fdiv>\n         <div class=\"sel\" style=\"flex:none; width:110px;\">Weeks: 8<\u002Fdiv>\n         <div class=\"sel\" style=\"flex:none; width:130px;\">Group: all<\u002Fdiv>\n         <div class=\"sel\" style=\"flex:none; width:130px;\">Platform: any<\u002Fdiv>\n         <div class=\"sel\" style=\"flex:none; width:130px;\">Version: any<\u002Fdiv>\n         <div class=\"sel\" style=\"flex:none; width:130px;\">Country: any<\u002Fdiv>\n         <div class=\"sel\" style=\"flex:none; width:130px;\">Network: any<\u002Fdiv>\n        <\u002Fdiv>\n        <div class=\"blk\">\n         Steps<i>of 4 120 installations<\u002Fi>\n        <\u002Fdiv>\n        <div class=\"why\">Installations whose first step of the chain fell in the last 30 days. A step counts only when it came after the one before it.<\u002Fdiv>\n        <table>\n         <tbody>\n          <tr>\n           <th class=\"s\">Step<\u002Fth>\n           <th>Event<\u002Fth>\n           <th>Installations<\u002Fth>\n           <th>Of the first<\u002Fth>\n           <th>Of the one before<\u002Fth>\n          <\u002Ftr>\n          <tr>\n           <td class=\"m\">1<\u002Ftd>\n           <td>language_started<\u002Ftd>\n           <td class=\"m\">4 120<\u002Ftd>\n           <td class=\"m\">100 %<\u002Ftd>\n           <td class=\"m\">100 %<\u002Ftd>\n          <\u002Ftr>\n          <tr>\n           <td class=\"m\">2<\u002Ftd>\n           <td>onboarding_finished<\u002Ftd>\n           <td class=\"m\">3 048<\u002Ftd>\n           <td class=\"m\">74 %<\u002Ftd>\n           <td class=\"m\">74 %<\u002Ftd>\n          <\u002Ftr>\n          <tr>\n           <td class=\"m\">3<\u002Ftd>\n           <td>feed_opened<\u002Ftd>\n           <td class=\"m\">2 704<\u002Ftd>\n           <td class=\"m\">66 %<\u002Ftd>\n           <td class=\"m\">89 %<\u002Ftd>\n          <\u002Ftr>\n          <tr>\n           <td class=\"m\">4<\u002Ftd>\n           <td>scene_opened<\u002Ftd>\n           <td class=\"m\">2 210<\u002Ftd>\n           <td class=\"m\">54 %<\u002Ftd>\n           <td class=\"m\">82 %<\u002Ftd>\n          <\u002Ftr>\n          <tr>\n           <td class=\"m\">5<\u002Ftd>\n           <td>lesson_started<\u002Ftd>\n           <td class=\"m\">1 204<\u002Ftd>\n           <td class=\"m\">29 %<\u002Ftd>\n           <td class=\"m\">54 %<\u002Ftd>\n          <\u002Ftr>\n          <tr>\n           <td class=\"m\">6<\u002Ftd>\n           <td>phrase_score_shown<\u002Ftd>\n           <td class=\"m\">642<\u002Ftd>\n           <td class=\"m\">16 %<\u002Ftd>\n           <td class=\"m\">53 %<\u002Ftd>\n          <\u002Ftr>\n         <\u002Ftbody>\n        <\u002Ftable>\n        <div class=\"why\">Networks these installations came from · M247 — 312, Comcast — 288, Vodafone — 214, Deutsche Telekom — 176, Orange — 154, 5 more<\u002Fdiv>\n        <div class=\"blk\">\n         Retention<i>7 weeks after the first one<\u002Fi>\n        <\u002Fdiv>\n        <div class=\"why\">All 6 284 installations first seen in the last 8 weeks taken together: the share that came back in each of the 7 weeks after its own first week.<\u002Fdiv>\n        <table>\n         <tbody>\n          <tr>\n           <th>Installations<\u002Fth>\n           <th>W1<\u002Fth>\n           <th>W2<\u002Fth>\n           <th>W3<\u002Fth>\n           <th>W4<\u002Fth>\n           <th>W5<\u002Fth>\n           <th>W6<\u002Fth>\n           <th>W7<\u002Fth>\n          <\u002Ftr>\n          <tr>\n           <td class=\"m\">6 284<\u002Ftd>\n           <td class=\"m\">42 %<\u002Ftd>\n           <td class=\"m\">28 %<\u002Ftd>\n           <td class=\"m\">23 %<\u002Ftd>\n           <td class=\"m\">19 %<\u002Ftd>\n           <td class=\"m\">17 %<\u002Ftd>\n           <td class=\"m\">16 %<\u002Ftd>\n           <td class=\"m\">15 %<\u002Ftd>\n          <\u002Ftr>\n         <\u002Ftbody>\n        <\u002Ftable>\n        <div class=\"blk\">\n         Cohorts<i>by the week of the first visit<\u002Fi>\n        <\u002Fdiv>\n        <div class=\"why\">The same 7 weeks split by the week an installation was first seen. A dash means the week has not been lived through yet.<\u002Fdiv>\n        <table>\n         <tbody>\n          <tr>\n           <th>First week<\u002Fth>\n           <th>Installations<\u002Fth>\n           <th>W1<\u002Fth>\n           <th>W2<\u002Fth>\n           <th>W3<\u002Fth>\n           <th>W4<\u002Fth>\n           <th>W5<\u002Fth>\n           <th>W6<\u002Fth>\n           <th>W7<\u002Fth>\n          <\u002Ftr>\n          <tr>\n           <td class=\"m\">20.07.2026<\u002Ftd>\n           <td class=\"m\">1 208<\u002Ftd>\n           <td class=\"m\">40 %<\u002Ftd>\n           <td class=\"m\">27 %<\u002Ftd>\n           <td class=\"m\">21 %<\u002Ftd>\n           <td class=\"m\">18 %<\u002Ftd>\n           <td class=\"m\">16 %<\u002Ftd>\n           <td class=\"m\">15 %<\u002Ftd>\n           <td class=\"m\">14 %<\u002Ftd>\n          <\u002Ftr>\n          <tr>\n           <td class=\"m\">27.07.2026<\u002Ftd>\n           <td class=\"m\">1 140<\u002Ftd>\n           <td class=\"m\">43 %<\u002Ftd>\n           <td class=\"m\">29 %<\u002Ftd>\n           <td class=\"m\">23 %<\u002Ftd>\n           <td class=\"m\">20 %<\u002Ftd>\n           <td class=\"m\">18 %<\u002Ftd>\n           <td class=\"m\">17 %<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n          <\u002Ftr>\n          <tr>\n           <td class=\"m\">03.08.2026<\u002Ftd>\n           <td class=\"m\">980<\u002Ftd>\n           <td class=\"m\">41 %<\u002Ftd>\n           <td class=\"m\">28 %<\u002Ftd>\n           <td class=\"m\">22 %<\u002Ftd>\n           <td class=\"m\">19 %<\u002Ftd>\n           <td class=\"m\">18 %<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n          <\u002Ftr>\n          <tr>\n           <td class=\"m\">10.08.2026<\u002Ftd>\n           <td class=\"m\">1 104<\u002Ftd>\n           <td class=\"m\">44 %<\u002Ftd>\n           <td class=\"m\">30 %<\u002Ftd>\n           <td class=\"m\">24 %<\u002Ftd>\n           <td class=\"m\">20 %<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n          <\u002Ftr>\n          <tr>\n           <td class=\"m\">17.08.2026<\u002Ftd>\n           <td class=\"m\">1 032<\u002Ftd>\n           <td class=\"m\">39 %<\u002Ftd>\n           <td class=\"m\">26 %<\u002Ftd>\n           <td class=\"m\">21 %<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n          <\u002Ftr>\n          <tr>\n           <td class=\"m\">24.08.2026<\u002Ftd>\n           <td class=\"m\">918<\u002Ftd>\n           <td class=\"m\">42 %<\u002Ftd>\n           <td class=\"m\">28 %<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n          <\u002Ftr>\n          <tr>\n           <td class=\"m\">31.08.2026<\u002Ftd>\n           <td class=\"m\">864<\u002Ftd>\n           <td class=\"m\">45 %<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n          <\u002Ftr>\n          <tr>\n           <td class=\"m\">07.09.2026<\u002Ftd>\n           <td class=\"m\">790<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n           <td class=\"m\">—<\u002Ftd>\n          <\u002Ftr>\n         <\u002Ftbody>\n        <\u002Ftable>\n       <\u002Fdiv>\n      <\u002Fdiv>\n     <\u002Fdiv>\n     <div class=\"meta\">\n      <b>Что на экране<\u002Fb>Воронка основного цикла, удержание и когорты недель. Только чтение. <b>Ручка<\u002Fb><code>GET /analytics?days=&amp;weeks=&amp;group=<\u002Fcode> отдаёт воронку, удержание и когорты одним ответом. <b>Дни<\u002Fb>Окно воронки. Установка попадает в неё, если первый шаг цепочки случился в эти дни. <b>Недели<\u002Fb>Окно выборки. Первая неделя окна — неделя знакомства, остальные — недели, в которые можно вернуться, поэтому столбцов на один меньше выбранного числа. <b>Пояснение под названием<\u002Fb>Стоит у каждой таблицы и называет выбранные числа. <b>Доли считает поверхность<\u002Fb>«От первого» и «от предыдущего» приходят посчитанными. <b>Пустая клетка<\u002Fb>Прочерк означает, что неделя ещё не прожита, а не нулевое удержание. <b>Отборы<\u002Fb>Группа, платформа, версия, страна и сеть. Каждый показывается, только когда значений больше одного; список значений приходит с поверхности готовым. <b>Строка сетей<\u002Fb>Стоит под воронкой и называет не более пяти самых крупных сетей выбранных установок с числом установок, по убыванию; хвост свёрнут в «ещё N». Подмена страны видна без отдельного запроса. <b>Значения отборов<\u002Fb><code>GET /analytics/choices?days=<\u002Fcode> отдаёт группы, платформы, версии, страны и сети одним ответом.\n     <\u002Fdiv>\n    <\u002Fdiv>\n    <div class=\"unit\">\n     <div class=\"num\">\n      10.36.1 <span>Funnel · build<\u002Fspan><em>M11<\u002Fem>\n     <\u002Fdiv>\n     <div class=\"desk\">\n      <div class=\"top\">\n       <span>☰<\u002Fspan><b>SayVibe Console<\u002Fb><span class=\"who\">admin@sayvibe.app<\u002Fspan><span class=\"tag\">Sign out<\u002Fspan>\n      <\u002Fdiv>\n      <div class=\"split\">\n       <div class=\"nav\" style=\"display:flex; flex-direction:column;\">\n        <div style=\"flex:1; overflow:hidden;\">\n         <div>Configuration<\u002Fdiv>\n         <div>Jobs<\u002Fdiv>\n         <div>Uploads<\u002Fdiv>\n         <div class=\"gap\"><\u002Fdiv>\n         <div>Moderation<\u002Fdiv>\n         <div>Topics<\u002Fdiv>\n         <div>Formulas<\u002Fdiv>\n         <div>Money<\u002Fdiv>\n         <div>Creator Pass<\u002Fdiv>\n         <div class=\"on\">Reports<\u002Fdiv>\n        <\u002Fdiv>\n        <div style=\"border-top:1px solid var(--thin); padding:9px 12px; display:flex; flex-direction:column; gap:6px;\">\n         <div style=\"display:flex; align-items:center; justify-content:space-between; gap:8px;\">\n          <div style=\"line-height:1.2; white-space:nowrap;\">\n           <div style=\"font-size:12px; color:var(--ink);\">12:31 AM<\u002Fdiv>\n           <div style=\"font-size:10.5px; color:var(--note);\">Sep 08, 2026<\u002Fdiv>\n          <\u002Fdiv>\n          <div style=\"display:flex; gap:6px;\">\n           <span class=\"tag\">☾<\u002Fspan><span class=\"tag\">⚙<\u002Fspan>\n          <\u002Fdiv>\n         <\u002Fdiv>\n         <div style=\"font-size:10px; color:var(--note); white-space:nowrap;\">v 1.4.0 · 266d6dae6298<\u002Fdiv>\n        <\u002Fdiv>\n       <\u002Fdiv>\n       <div class=\"main\">\n        <div class=\"tabs\">\n         <span>Funnel<\u002Fspan><span class=\"on\">Funnels<\u002Fspan><span>Catalogue<\u002Fspan><span>Usage<\u002Fspan><span>Audit log<\u002Fspan>\n        <\u002Fdiv>\n        <div class=\"h\">Funnels<\u002Fdiv>\n        <div class=\"label\">A funnel of one’s own · a step counts only when it came after the one before<\u002Fdiv>\n        <div style=\"position:relative; border:1px dashed var(--line); border-radius:8px; padding:14px; margin-top:6px;\">\n         <div style=\"font-size:11px; color:var(--note); margin-bottom:8px;\">The screen stays behind the dialog<\u002Fdiv>\n         <div class=\"side\" style=\"max-width:560px; margin:0 auto; background:var(--card);\">\n          <b>Funnel · build<\u002Fb>\n          <div class=\"form\" style=\"padding:11px 13px; max-width:none;\">\n           <div class=\"inp\">Name · Search to a scene<\u002Fdiv>\n           <div style=\"font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--note);\">Steps<\u002Fdiv>\n           <div style=\"display:flex; flex-wrap:wrap; gap:6px; align-items:center;\">\n            <span class=\"chip\">⋮ feed_search_opened ×<\u002Fspan> <span class=\"chip\">⋮ feed_search_submitted ×<\u002Fspan> <span class=\"chip\">⋮ scene_opened ×<\u002Fspan>\n           <\u002Fdiv>\n           <div class=\"sel\">Add a step · from the catalogue<\u002Fdiv>\n           <div style=\"font-size:11px; color:var(--note);\">Drag to reorder · at least two steps · a step is named once<\u002Fdiv>\n           <div class=\"sel\" style=\"max-width:200px;\">Days: 14<\u002Fdiv>\n           <div style=\"display:flex; justify-content:space-between; gap:8px;\">\n            <div class=\"btn ghost\">Delete<\u002Fdiv>\n            <div style=\"display:flex; gap:8px;\">\n             <div class=\"btn ghost\">Cancel<\u002Fdiv>\n             <div class=\"btn\">Save<\u002Fdiv>\n            <\u002Fdiv>\n           <\u002Fdiv>\n          <\u002Fdiv>\n         <\u002Fdiv>\n        <\u002Fdiv>\n       <\u002Fdiv>\n      <\u002Fdiv>\n     <\u002Fdiv>\n     <div class=\"meta\">\n      <b>Что на экране<\u002Fb>Сборка воронки окном поверх списка, как на опорном кадре <code>10.0.5<\u002Fcode>. <b>Ручки<\u002Fb><code>POST /funnels<\u002Fcode> заводит, <code>PUT /funnels/{funnelId}<\u002Fcode> правит, <code>DELETE /funnels/{funnelId}<\u002Fcode> снимает. <b>Шаги<\u002Fb>Берутся из событий каталога, порядок правится перетаскиванием, лишний снимается крестиком. <b>Отказы<\u002Fb>Имя не из контракта событий или шагов меньше двух — <code>400<\u002Fcode>; повтор шага в цепочке — <code>400<\u002Fcode>; воронка с таким именем уже стоит — <code>409<\u002Fcode>. <b>Несохранённая правка<\u002Fb>Закрытие окна спрашивает подтверждение.\n     <\u002Fdiv>\n    <\u002Fdiv>\n   <\u002Fdiv>\n  <\u002Fdiv>\n <\u002Fbody>\n<\u002Fhtml>"
+  </script>
+</body>
+</html>

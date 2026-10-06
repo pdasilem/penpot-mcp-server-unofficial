@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf50af1e536f", "shape_id" "de7fa3b6-06a7-8039-8008-aaebf707f364", "max_size" 300}, :unsaved [], :entries [{:blob "c9a5fc290f640cdfec51690dd07e831d32276f10afa2fcf2edd9f6b5ed19c513"} {:blob "f12479a09d6f58a47f7482eafc517e8abff7b14d37fdbf0956fe4c377d348222"}], :tool "export_shape", :scenario "export/png-small"}

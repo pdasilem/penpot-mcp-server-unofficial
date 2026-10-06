@@ -1,33 +1,41 @@
 (ns penpot.mcp.image-test
   (:require
    [clojure.test :refer [deftest is]]
-   [penpot.mcp.image :as image])
+   [penpot.mcp.image :as image]
+   [penpot.mcp.replay :as replay])
   (:import
-   (java.awt.image BufferedImage)
-   (java.io ByteArrayInputStream ByteArrayOutputStream)
+   (java.io ByteArrayInputStream)
+   (java.util Base64)
    (javax.imageio ImageIO)))
 
-(defn- encoded [w h fmt]
-  (let [img (BufferedImage. w h BufferedImage/TYPE_INT_RGB)
-        out (ByteArrayOutputStream.)]
-    (ImageIO/write img ^String fmt out)
-    (.toByteArray out)))
+(defn- recorded-bytes [scenario]
+  (let [answer (some #(when (= "base64" (get-in % [:result :__type])) (:result %)) (replay/editor-answers scenario))]
+    (.decode (Base64/getDecoder) ^String (:data answer))))
 
 (defn- size-of [^bytes data]
   (let [img (ImageIO/read (ByteArrayInputStream. data))]
     [(.getWidth img) (.getHeight img)]))
 
-(deftest the-longer-side-is-scaled-to-the-limit
-  (is (= [768 384] (size-of (:bytes (image/fit (encoded 4000 2000 "png") 768)))))
-  (is (= [400 768] (size-of (:bytes (image/fit (encoded 1000 1920 "jpg") 768))))))
+(deftest the-fill-image-penpot-stores-can-be-read
+  (is (some? (ImageIO/read (ByteArrayInputStream. (recorded-bytes "export/fill-image"))))))
 
-(deftest a-scaled-image-is-a-png
-  (is (= "image/png" (:mime-type (image/fit (encoded 2000 1000 "jpg") 768)))))
+(deftest a-fill-image-larger-than-the-limit-becomes-a-smaller-png
+  (let [data  (recorded-bytes "export/fill-image")
+        limit (dec (apply max (size-of data)))
+        {:keys [bytes mime-type]} (image/fit data limit)]
+    (is (= "image/png" mime-type))
+    (is (= limit (apply max (size-of bytes))))))
 
 (deftest an-image-within-the-limit-is-returned-as-it-is
-  (let [data (encoded 300 200 "jpg")]
-    (is (= {:bytes data :mime-type "image/jpeg"} (update (image/fit data 768) :bytes #(if (identical? data %) data %))))))
+  (let [data (recorded-bytes "export/fill-image")
+        {:keys [bytes mime-type]} (image/fit data (apply max (size-of data)))]
+    (is (identical? data bytes))
+    (is (= "image/webp" mime-type))))
+
+(deftest an-exported-png-is-scaled-to-the-limit
+  (let [{:keys [bytes]} (image/fit (recorded-bytes "export/png-board") 100)]
+    (is (= 100 (apply max (size-of bytes))))))
 
 (deftest data-that-is-not-an-image-is-returned-as-it-is
-  (let [data (.getBytes "not an image")]
-    (is (= {:bytes data :mime-type nil} (image/fit data 768)))))
+  (let [data (recorded-bytes "export/svg-board")]
+    (is (= {:bytes data :mime-type nil} (image/fit data 100)))))

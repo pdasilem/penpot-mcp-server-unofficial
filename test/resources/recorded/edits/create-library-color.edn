@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf7b286205b5", "name" "Recorded color", "path" "Recorded", "color" "#9A650F"}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:blob "97ec2a4cab2372ed4b87ac9ff0062a938e58336d6b7a28015e9d5f9bfa3b4433"}], :tool "create_library_color", :scenario "edits/create-library-color"}

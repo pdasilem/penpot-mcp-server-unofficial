@@ -1,0 +1,1 @@
+{:args {"name" "Recorded project", "project_id" "4c1c501c-ee3b-8136-8008-bf7bc40e1312"}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:kind :rpc, :cmd :rename-project, :status 204, :body "", :params "[\"^ \",\"~:id\",\"~u4c1c501c-ee3b-8136-8008-bf7bc40e1312\",\"~:name\",\"Recorded project\"]"}], :tool "rename_project", :scenario "manage/project-rename"}

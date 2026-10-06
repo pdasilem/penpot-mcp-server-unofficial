@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf50af1e536f", "shape_id" "1673b4f9-5b86-8073-8008-b5ecade1f19b", "token_id" "4c1c501c-ee3b-8136-8008-bf2ef25b738e"}, :unsaved [], :entries [{:blob "2bd8296886858d758f512d79b444e193b78fe4e40f682cc15fa6e870f011e197"}], :tool "set_token", :scenario "tokens/set-closed-editor"}

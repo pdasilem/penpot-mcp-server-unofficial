@@ -47,7 +47,7 @@
     "  return (await waitFor(() => penpot.currentPage.getShapeById(id))) ?? fail('shape-not-found', id);"
     "};"
     "const defaults = { rotation: 0, opacity: 1, visible: true, blocked: false };"
-    "const withoutDefaults = (o) => { for (const [k, v] of Object.entries(defaults)) if (o[k] === v) delete o[k]; return o; };"
+    "const withoutDefaults = (o) => { for (const [k, v] of Object.entries(defaults)) if (o[k] === v || o[k] == null) delete o[k]; return o; };"
     "const info = (s) => withoutDefaults({"
     "  id: s.id, name: s.name, type: s.type, pageId: penpot.currentPage.id,"
     "  parentId: s.parent ? s.parent.id : null, parentIndex: s.parentIndex,"
@@ -121,6 +121,7 @@
     "token-not-applied" (str "Penpot did not apply the token to " detail "; check that the attribute fits the token type")
     "token-not-removed" (str "Penpot did not remove the token from " detail)
     "mixed-pages" (str "All shapes must be on the same page; " detail " is on another page")
+    "parent-on-other-page" (str "Board or group " detail " is on another page; a shape moves only to a parent on its own page")
     "create-failed" (str "Penpot could not create the " detail)
     "component-not-found" (str "Component " detail " not found in the library")
     "library-not-connected" (str "Library " detail " is not connected to the open file; see get_file_libraries")

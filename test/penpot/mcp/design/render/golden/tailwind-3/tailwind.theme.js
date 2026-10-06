@@ -2,37 +2,187 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        "bg": "var(--sv-color-bg)",
-        "text": "var(--sv-color-text)",
-        "accent": "var(--sv-color-accent)",
-        "brand": {
-          "primary": "var(--sv-library-color-brand-primary)"
+        "surface-variant": "var(--sv-surface-variant)",
+        "on-band-muted": "var(--sv-on-band-muted)",
+        "word-extra": "var(--sv-word-extra)",
+        "word-missed": "var(--sv-word-missed)",
+        "band-variant": "var(--sv-band-variant)",
+        "on-accent": "var(--sv-on-accent)",
+        "error": "var(--sv-error)",
+        "outline": "var(--sv-outline)",
+        "band": "var(--sv-band)",
+        "word-matched": "var(--sv-word-matched)",
+        "surface": "var(--sv-surface)",
+        "text-secondary": "var(--sv-text-secondary)",
+        "word-partial": "var(--sv-word-partial)",
+        "accent": "var(--sv-accent)",
+        "text-primary": "var(--sv-text-primary)",
+        "background": "var(--sv-background)",
+        "on-band": "var(--sv-on-band)",
+        "band-outline": "var(--sv-band-outline)",
+        "outline-variant": "var(--sv-outline-variant)",
+        "scrim": "var(--sv-scrim)",
+        "link": {
+          "DEFAULT": "var(--sv-library-color-link)",
+          "colour": "var(--sv-link-colour)"
         }
       },
       spacing: {
-        "base": "var(--sv-space-base)"
+        "page": "var(--sv-page)",
+        "gap": "var(--sv-gap)",
+        "corner": "var(--sv-corner)",
+        "9": "var(--sv-space-9)",
+        "72": "var(--sv-size-72)",
+        "4": "var(--sv-size-4)",
+        "150": "var(--sv-size-150)",
+        "45": "var(--sv-size-45)",
+        "20": "var(--sv-size-20)",
+        "56": "var(--sv-size-56)",
+        "space-tiny": "var(--sv-space-tiny)",
+        "space-small": "var(--sv-space-small)",
+        "48": "var(--sv-size-48)",
+        "600": "var(--sv-size-600)",
+        "12": "var(--sv-size-12)",
+        "glyph-small": "var(--sv-glyph-small)",
+        "11": "var(--sv-space-11)",
+        "110": "var(--sv-size-110)",
+        "space-micro": "var(--sv-space-micro)",
+        "40": "var(--sv-space-40)",
+        "64": "var(--sv-size-64)",
+        "88": "var(--sv-size-88)",
+        "70": "var(--sv-size-70)",
+        "5": "var(--sv-space-5)",
+        "6": "var(--sv-size-6)",
+        "glyph": "var(--sv-glyph)",
+        "60": "var(--sv-size-60)",
+        "8": "var(--sv-size-8)",
+        "160": "var(--sv-size-160)",
+        "15": "var(--sv-space-15)",
+        "glyph-huge": "var(--sv-glyph-huge)",
+        "96": "var(--sv-size-96)",
+        "80": "var(--sv-size-80)",
+        "27": "var(--sv-size-27)",
+        "42": "var(--sv-size-42)",
+        "16": "var(--sv-size-16)",
+        "32": "var(--sv-size-32)",
+        "space-medium": "var(--sv-space-medium)",
+        "space-big": "var(--sv-space-big)",
+        "200": "var(--sv-size-200)",
+        "glyph-big": "var(--sv-glyph-big)",
+        "2": "var(--sv-size-2)",
+        "340": "var(--sv-size-340)",
+        "13": "var(--sv-space-13)",
+        "1": "var(--sv-size-1)",
+        "24": "var(--sv-size-24)",
+        "space-super-big": "var(--sv-space-super-big)",
+        "34": "var(--sv-size-34)",
+        "28": "var(--sv-size-28)"
       },
       borderRadius: {
-        "card": "var(--sv-radius-card)"
+        "12": "var(--sv-radius-12)",
+        "full": "var(--sv-radius-full)",
+        "4": "var(--sv-radius-4)",
+        "radius-round": "var(--sv-radius-round)",
+        "radius": "var(--sv-radius)"
       },
       fontFamily: {
-        "type": {
-          "body": "var(--sv-type-body-font-family)"
-        }
+        "body-small-regular": "var(--sv-body-small-regular-font-family)",
+        "body-small-loose-regular": "var(--sv-body-small-loose-regular-font-family)",
+        "display-medium": "var(--sv-display-medium-font-family)",
+        "body-small-tracked-regular": "var(--sv-body-small-tracked-regular-font-family)",
+        "body-large-medium": "var(--sv-body-large-medium-font-family)",
+        "body-large-semi-bold": "var(--sv-body-large-semi-bold-font-family)",
+        "display-semi-bold": "var(--sv-display-semi-bold-font-family)",
+        "body-large-regular": "var(--sv-body-large-regular-font-family)",
+        "mono": "var(--sv-mono)",
+        "display-regular": "var(--sv-display-regular-font-family)",
+        "body-semi-bold": "var(--sv-body-semi-bold-font-family)",
+        "title-regular": "var(--sv-title-regular-font-family)",
+        "body-small-loose-semi-bold": "var(--sv-body-small-loose-semi-bold-font-family)",
+        "hero-semi-bold": "var(--sv-hero-semi-bold-font-family)",
+        "label-tracked-regular": "var(--sv-label-tracked-regular-font-family)",
+        "label-loose-semi-bold": "var(--sv-label-loose-semi-bold-font-family)",
+        "body-small-semi-bold": "var(--sv-body-small-semi-bold-font-family)",
+        "title-semi-bold": "var(--sv-title-semi-bold-font-family)",
+        "poster-semi-bold": "var(--sv-poster-semi-bold-font-family)",
+        "body-medium": "var(--sv-body-medium-font-family)",
+        "label-loose-regular": "var(--sv-label-loose-regular-font-family)",
+        "headline-regular": "var(--sv-headline-regular-font-family)",
+        "family": "var(--sv-family)",
+        "body-regular": "var(--sv-body-regular-font-family)",
+        "headline-semi-bold": "var(--sv-headline-semi-bold-font-family)",
+        "display-large-semi-bold": "var(--sv-display-large-semi-bold-font-family)",
+        "giant-semi-bold": "var(--sv-giant-semi-bold-font-family)",
+        "label-regular": "var(--sv-label-regular-font-family)",
+        "title-medium": "var(--sv-title-medium-font-family)",
+        "label-semi-bold": "var(--sv-label-semi-bold-font-family)",
+        "body-small-medium": "var(--sv-body-small-medium-font-family)",
+        "headline-medium": "var(--sv-headline-medium-font-family)",
+        "label-medium": "var(--sv-label-medium-font-family)"
       },
       fontSize: {
         "type": {
-          "body": ["var(--sv-type-body-font-size)", { lineHeight: "var(--sv-type-body-line-height)", fontWeight: "var(--sv-type-body-font-weight)" }]
-        }
+          "96": "var(--sv-type-96)",
+          "200": "var(--sv-type-200)",
+          "18": "var(--sv-type-18)",
+          "24": "var(--sv-type-24)",
+          "22": "var(--sv-type-22)",
+          "14": "var(--sv-type-14)",
+          "12": "var(--sv-type-12)",
+          "16": "var(--sv-type-16)",
+          "32": "var(--sv-type-32)",
+          "64": "var(--sv-type-64)",
+          "40": "var(--sv-type-40)"
+        },
+        "body-small-regular": ["var(--sv-body-small-regular-font-size)", { lineHeight: "var(--sv-body-small-regular-line-height)", fontWeight: "var(--sv-body-small-regular-font-weight)" }],
+        "body-small-loose-regular": ["var(--sv-body-small-loose-regular-font-size)", { lineHeight: "var(--sv-body-small-loose-regular-line-height)", fontWeight: "var(--sv-body-small-loose-regular-font-weight)" }],
+        "display-medium": ["var(--sv-display-medium-font-size)", { lineHeight: "var(--sv-display-medium-line-height)", fontWeight: "var(--sv-display-medium-font-weight)" }],
+        "body-small-tracked-regular": ["var(--sv-body-small-tracked-regular-font-size)", { lineHeight: "var(--sv-body-small-tracked-regular-line-height)", letterSpacing: "var(--sv-body-small-tracked-regular-letter-spacing)", fontWeight: "var(--sv-body-small-tracked-regular-font-weight)" }],
+        "body-large-medium": ["var(--sv-body-large-medium-font-size)", { lineHeight: "var(--sv-body-large-medium-line-height)", fontWeight: "var(--sv-body-large-medium-font-weight)" }],
+        "body-large-semi-bold": ["var(--sv-body-large-semi-bold-font-size)", { lineHeight: "var(--sv-body-large-semi-bold-line-height)", fontWeight: "var(--sv-body-large-semi-bold-font-weight)" }],
+        "display-semi-bold": ["var(--sv-display-semi-bold-font-size)", { lineHeight: "var(--sv-display-semi-bold-line-height)", fontWeight: "var(--sv-display-semi-bold-font-weight)" }],
+        "body-large-regular": ["var(--sv-body-large-regular-font-size)", { lineHeight: "var(--sv-body-large-regular-line-height)", fontWeight: "var(--sv-body-large-regular-font-weight)" }],
+        "display-regular": ["var(--sv-display-regular-font-size)", { lineHeight: "var(--sv-display-regular-line-height)", fontWeight: "var(--sv-display-regular-font-weight)" }],
+        "body-semi-bold": ["var(--sv-body-semi-bold-font-size)", { lineHeight: "var(--sv-body-semi-bold-line-height)", fontWeight: "var(--sv-body-semi-bold-font-weight)" }],
+        "title-regular": ["var(--sv-title-regular-font-size)", { lineHeight: "var(--sv-title-regular-line-height)", fontWeight: "var(--sv-title-regular-font-weight)" }],
+        "body-small-loose-semi-bold": ["var(--sv-body-small-loose-semi-bold-font-size)", { lineHeight: "var(--sv-body-small-loose-semi-bold-line-height)", fontWeight: "var(--sv-body-small-loose-semi-bold-font-weight)" }],
+        "hero-semi-bold": ["var(--sv-hero-semi-bold-font-size)", { lineHeight: "var(--sv-hero-semi-bold-line-height)", fontWeight: "var(--sv-hero-semi-bold-font-weight)" }],
+        "label-tracked-regular": ["var(--sv-label-tracked-regular-font-size)", { lineHeight: "var(--sv-label-tracked-regular-line-height)", letterSpacing: "var(--sv-label-tracked-regular-letter-spacing)", fontWeight: "var(--sv-label-tracked-regular-font-weight)" }],
+        "label-loose-semi-bold": ["var(--sv-label-loose-semi-bold-font-size)", { lineHeight: "var(--sv-label-loose-semi-bold-line-height)", fontWeight: "var(--sv-label-loose-semi-bold-font-weight)" }],
+        "body-small-semi-bold": ["var(--sv-body-small-semi-bold-font-size)", { lineHeight: "var(--sv-body-small-semi-bold-line-height)", fontWeight: "var(--sv-body-small-semi-bold-font-weight)" }],
+        "title-semi-bold": ["var(--sv-title-semi-bold-font-size)", { lineHeight: "var(--sv-title-semi-bold-line-height)", fontWeight: "var(--sv-title-semi-bold-font-weight)" }],
+        "poster-semi-bold": ["var(--sv-poster-semi-bold-font-size)", { lineHeight: "var(--sv-poster-semi-bold-line-height)", fontWeight: "var(--sv-poster-semi-bold-font-weight)" }],
+        "body-medium": ["var(--sv-body-medium-font-size)", { lineHeight: "var(--sv-body-medium-line-height)", fontWeight: "var(--sv-body-medium-font-weight)" }],
+        "label-loose-regular": ["var(--sv-label-loose-regular-font-size)", { lineHeight: "var(--sv-label-loose-regular-line-height)", fontWeight: "var(--sv-label-loose-regular-font-weight)" }],
+        "headline-regular": ["var(--sv-headline-regular-font-size)", { lineHeight: "var(--sv-headline-regular-line-height)", fontWeight: "var(--sv-headline-regular-font-weight)" }],
+        "body-regular": ["var(--sv-body-regular-font-size)", { lineHeight: "var(--sv-body-regular-line-height)", fontWeight: "var(--sv-body-regular-font-weight)" }],
+        "headline-semi-bold": ["var(--sv-headline-semi-bold-font-size)", { lineHeight: "var(--sv-headline-semi-bold-line-height)", fontWeight: "var(--sv-headline-semi-bold-font-weight)" }],
+        "display-large-semi-bold": ["var(--sv-display-large-semi-bold-font-size)", { lineHeight: "var(--sv-display-large-semi-bold-line-height)", fontWeight: "var(--sv-display-large-semi-bold-font-weight)" }],
+        "giant-semi-bold": ["var(--sv-giant-semi-bold-font-size)", { lineHeight: "var(--sv-giant-semi-bold-line-height)", fontWeight: "var(--sv-giant-semi-bold-font-weight)" }],
+        "label-regular": ["var(--sv-label-regular-font-size)", { lineHeight: "var(--sv-label-regular-line-height)", fontWeight: "var(--sv-label-regular-font-weight)" }],
+        "title-medium": ["var(--sv-title-medium-font-size)", { lineHeight: "var(--sv-title-medium-line-height)", fontWeight: "var(--sv-title-medium-font-weight)" }],
+        "label-semi-bold": ["var(--sv-label-semi-bold-font-size)", { lineHeight: "var(--sv-label-semi-bold-line-height)", fontWeight: "var(--sv-label-semi-bold-font-weight)" }],
+        "body-small-medium": ["var(--sv-body-small-medium-font-size)", { lineHeight: "var(--sv-body-small-medium-line-height)", fontWeight: "var(--sv-body-small-medium-font-weight)" }],
+        "headline-medium": ["var(--sv-headline-medium-font-size)", { lineHeight: "var(--sv-headline-medium-line-height)", fontWeight: "var(--sv-headline-medium-font-weight)" }],
+        "label-medium": ["var(--sv-label-medium-font-size)", { lineHeight: "var(--sv-label-medium-line-height)", fontWeight: "var(--sv-label-medium-font-weight)" }]
       },
       fontWeight: {
-        "strong": "var(--sv-font-weight-strong)"
+        "regular": "var(--sv-regular)",
+        "semi-bold": "var(--sv-semi-bold)",
+        "medium": "var(--sv-medium)"
+      },
+      letterSpacing: {
+        "tracking": "var(--sv-tracking)"
       },
       boxShadow: {
-        "lift": "var(--sv-shadow-lift)"
+        "shadow": "var(--sv-shadow)",
+        "shadow-edge-up": "var(--sv-shadow-edge-up)",
+        "shadow-lift": "var(--sv-shadow-lift)"
       },
       opacity: {
-        "muted": "var(--sv-opacity-muted)"
+        "veil": "var(--sv-veil)",
+        "connector": "var(--sv-connector)",
+        "ghost": "var(--sv-ghost)"
       }
     }
   }

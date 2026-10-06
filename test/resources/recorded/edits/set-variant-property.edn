@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf7b286205b5", "component_id" "14f85022-fd8f-806f-8008-af9c8c973b20", "property" "press", "value" "Recorded"}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:blob "d9cff5dc26be1f8e3db1847afa6e5c3e85b8fa3171ef5b3a970c448ea3a28f6a"}], :tool "set_variant_property", :scenario "edits/set-variant-property"}

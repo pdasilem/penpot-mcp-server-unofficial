@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf50af1e536f", "shape_id" "1af5d650-912d-8079-8008-bb4ce80a1b9a", "mode" "fill"}, :unsaved [], :entries [{:blob "345e8d78f71080d6fe5c3126e2de12c61ac6f1f955c2f138eb81203fa263dcde"} {:blob "5cd4eecdae5f2a5dea77e6386fd035b4d84d69042796431cef522a7e07955035"}], :tool "export_shape", :scenario "export/fill-image"}

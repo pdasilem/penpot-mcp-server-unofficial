@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf50af1e536f", "shape_id" "de7fa3b6-06a7-8039-8008-aaebf707f364"}, :unsaved [], :entries [{:blob "c9a5fc290f640cdfec51690dd07e831d32276f10afa2fcf2edd9f6b5ed19c513"} {:blob "20592e26261d9a4b0d7de4501e85cfbf3b037f8feca4fb7ca6f50fd0857e751b"}], :tool "export_shape", :scenario "export/png-board"}

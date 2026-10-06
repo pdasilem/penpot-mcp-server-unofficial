@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf7b286205b5", "name" "Recorded set", "active" true}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:blob "ee76798555002b029088bb1b9d820207a81d08dab0f02bcd3556cd3ca22caff1"}], :tool "create_token_set", :scenario "manage/token-set"}

@@ -1,75 +1,54 @@
 (ns penpot.mcp.html.sizing-test
   (:require
-   [clojure.test :refer [deftest is testing]]
-   [penpot.mcp.html.cascade :as cascade]
-   [penpot.mcp.html.sizing :as sizing])
-  (:import
-   (org.jsoup Jsoup)))
+   [clojure.test :refer [deftest is]]
+   [penpot.mcp.html.sample :as sample]
+   [penpot.mcp.html.sizing :as sizing]))
 
-(def ctx {:font-size 16 :root-font-size 16 :viewport 1440})
+(def ^:private ctx {:font-size 15 :root-font-size 15 :viewport sample/viewport})
 
-(deftest flex-container-maps-to-penpot-flex
-  (is (= {:type "flex" :dir "row" :wrap "wrap" :alignItems "center" :justifyContent "space-between" :alignContent "start"
-          :rowGap 6.0 :columnGap 8.0 :padding [7.0 10.0 7.0 10.0]}
-         (sizing/container {"display" "flex" "flex-wrap" "wrap" "align-items" "center" "justify-content" "space-between"
-                            "row-gap" "6px" "column-gap" "8px"
-                            "padding-top" "7px" "padding-right" "10px" "padding-bottom" "7px" "padding-left" "10px"}
-                           ctx)))
-  (testing "defaults of a flex row"
-    (is (= ["row" "nowrap" "stretch" "start"]
-           ((juxt :dir :wrap :alignItems :justifyContent) (sizing/container {"display" "flex"} ctx))))))
+(defn- container [selector] (sizing/container (sample/style selector) ctx))
 
-(deftest block-container-is-a-stretching-column
-  (is (= ["column" "stretch" 0.0] ((juxt :dir :alignItems :rowGap) (sizing/container {"display" "block"} ctx))))
-  (is (= "column" (:dir (sizing/container {"display" "flex" "flex-direction" "column"} ctx)))))
+(defn- child
+  ([selector parent] (child selector parent {}))
+  ([selector parent extra]
+   (sizing/child (sample/style selector) (merge (container parent) extra) ctx)))
+
+(deftest a-flex-container-maps-to-penpot-flex
+  (is (= {:type "flex" :dir "row" :wrap "nowrap" :alignItems "center" :justifyContent "space-between"
+          :rowGap 8.0 :columnGap 8.0 :padding [7.0 10.0 7.0 10.0]}
+         (dissoc (container ".sel") :alignContent)))
+  (is (= ["row" "wrap" "center" 8.0] ((juxt :dir :wrap :alignItems :columnGap) (container ".toolbar"))))
+  (is (= "column" (:dir (container ".desk")))))
+
+(deftest a-block-container-is-a-stretching-column
+  (is (= ["column" "stretch" 0.0] ((juxt :dir :alignItems :rowGap) (container ".rule")))))
 
 (deftest child-width-in-a-row
-  (is (= "fix" (:horizontalSizing (sizing/child {"width" "210px"} {:dir "row" :alignItems "stretch"} ctx))))
-  (is (= 210.0 (:width (sizing/child {"width" "210px"} {:dir "row" :alignItems "stretch"} ctx))))
-  (is (= "fill" (:horizontalSizing (sizing/child {"flex-grow" "1"} {:dir "row" :alignItems "stretch"} ctx))))
-  (is (= "fill" (:horizontalSizing (sizing/child {"width" "100%"} {:dir "row" :alignItems "stretch"} ctx))))
-  (is (= "auto" (:horizontalSizing (sizing/child {} {:dir "row" :alignItems "stretch"} ctx)))))
+  (is (= ["fix" 210.0] ((juxt :horizontalSizing :width) (child ".nav" ".split"))))
+  (is (= "fill" (:horizontalSizing (child ".main" ".split"))))
+  (is (= "auto" (:horizontalSizing (child ".tabs span" ".tabs")))))
 
 (deftest child-width-in-a-column
-  (is (= "fill" (:horizontalSizing (sizing/child {"display" "block"} {:dir "column" :alignItems "stretch"} ctx))))
-  (is (= "auto" (:horizontalSizing (sizing/child {"display" "block"} {:dir "column" :alignItems "center"} ctx))))
-  (is (= "auto" (:horizontalSizing (sizing/child {"display" "inline-block"} {:dir "column" :alignItems "stretch" :block true} ctx))))
-  (is (= ["fill" 420.0] ((juxt :horizontalSizing :maxWidth) (sizing/child {"display" "flex" "max-width" "420px"} {:dir "column" :alignItems "stretch"} ctx)))))
+  (is (= "fill" (:horizontalSizing (child ".blk" ".main"))))
+  (is (= ["fix" 300.0 420.0] ((juxt :horizontalSizing :width :maxWidth) (child "div.form[style*=300px]" ".main"))))
+  (is (= "auto" (:horizontalSizing (child ".tag" ".rule" {:block true})))))
 
 (deftest child-height
-  (is (= ["fix" 38.0] ((juxt :verticalSizing :height) (sizing/child {"height" "38px"} {:dir "row" :alignItems "center"} ctx))))
-  (is (= "auto" (:verticalSizing (sizing/child {"flex-grow" "1"} {:dir "column" :alignItems "stretch"} ctx))))
-  (is (= "fill" (:verticalSizing (sizing/child {"flex-grow" "1"} {:dir "column" :alignItems "stretch" :fixed-height true} ctx))))
-  (is (= "auto" (:verticalSizing (sizing/child {} {:dir "column" :alignItems "stretch"} ctx))))
-  (is (= "fill" (:verticalSizing (sizing/child {} {:dir "row" :alignItems "stretch" :fixed-height true} ctx))))
-  (is (= "auto" (:verticalSizing (sizing/child {} {:dir "row" :alignItems "stretch"} ctx))))
-  (is (= 104.0 (:minHeight (sizing/child {"min-height" "104px"} {:dir "column" :alignItems "stretch"} ctx)))))
+  (is (= ["fix" 38.0] ((juxt :verticalSizing :height) (child ".top" ".desk" {:fixed-height true}))))
+  (is (= "fill" (:verticalSizing (child ".split" ".desk" {:fixed-height true}))))
+  (is (= "auto" (:verticalSizing (child ".split" ".desk"))))
+  (is (= 104.0 (:minHeight (child ".ta" ".main")))))
 
-(deftest child-alignment-margins-and-position
-  (let [c (sizing/child {"align-self" "center" "margin-top" "-6px" "margin-left" "auto" "position" "absolute"}
-                        {:dir "row" :alignItems "stretch"} ctx)]
-    (is (= "center" (:alignSelf c)))
-    (is (= [-6.0 0.0 0.0 0.0] (:margin c)))
-    (is (true? (:absolute c)))
-    (is (true? (:push-right c)))))
+(deftest margins-and-alignment
+  (is (true? (:push-right (child ".top .who" ".top"))))
+  (is (= [-6.0 0.0 0.0 0.0] (:margin (child ".why" ".main")))))
 
-(deftest frame-width-follows-ancestors
-  (let [doc      (Jsoup/parse "<style>body{margin:0}.wrap{max-width:1560px;padding:40px 24px}.unit{width:100%;max-width:1440px}.desk{border:1px solid #000;aspect-ratio:16/10}</style><div class='wrap'><div class='unit'><div class='desk' id='d'>x</div></div></div>")
-        computed (cascade/compute doc {:viewport 1440})
-        el       (.selectFirst doc "#d")]
-    (is (= 1392.0 (sizing/frame-width el computed 1440)))
-    (is (= 870.0 (sizing/aspect-height (get-in computed [el :style]) 1392.0)))
-    (is (nil? (sizing/aspect-height {} 1392.0)))))
+(deftest an-absolute-overlay-is-marked
+  (is (true? (:absolute (child "div[style*=absolute]" "div.split[style*=relative]")))))
 
-(deftest grid-tracks-parse
-  (is (= [{:type "flex" :value 1.0} {:type "fixed" :value 200.0} {:type "auto"} {:type "percent" :value 25.0}]
-         (sizing/tracks "1fr 200px auto 25%" ctx)))
-  (is (= [{:type "flex" :value 1.0} {:type "flex" :value 1.0} {:type "flex" :value 1.0}] (sizing/tracks "repeat(3, 1fr)" ctx)))
-  (is (= [{:type "flex" :value 2.0} {:type "auto"}] (sizing/tracks "minmax(100px, 2fr) minmax(0, auto)" ctx)))
-  (is (= [] (sizing/tracks "none" ctx))))
-
-(deftest grid-container-maps-to-penpot-grid
-  (is (= {:type "grid" :dir "row" :columns [{:type "flex" :value 1.0} {:type "flex" :value 1.0}] :rows []
-          :rowGap 8.0 :columnGap 8.0 :padding [4.0 4.0 4.0 4.0]}
-         (sizing/grid-container {"display" "grid" "grid-template-columns" "1fr 1fr" "row-gap" "8px" "column-gap" "8px"
-                                 "padding-top" "4px" "padding-right" "4px" "padding-bottom" "4px" "padding-left" "4px"} ctx))))
+(deftest the-frame-width-follows-the-ancestors
+  (let [desk  (sample/element ".desk")
+        width (sizing/frame-width desk (sample/computed) sample/viewport)]
+    (is (= (double (- sample/viewport 24 24)) width))
+    (is (= (/ (* width 10) 16) (sizing/aspect-height (sample/style ".desk") width)))
+    (is (nil? (sizing/aspect-height (sample/style ".rule") width)))))

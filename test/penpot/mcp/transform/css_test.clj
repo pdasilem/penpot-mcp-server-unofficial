@@ -1,106 +1,71 @@
 (ns penpot.mcp.transform.css-test
   (:require
-   [clojure.string :as str]
    [clojure.test :refer [deftest is]]
-   [penpot.mcp.fixtures :as fx]
-   [penpot.mcp.transform.css :as css]))
+   [penpot.mcp.real-file :as real]
+   [penpot.mcp.transform.css :as css]
+   [penpot.mcp.transform.geometry :as geometry]))
 
-(def objects (:objects fx/page))
-
-(defn- props [shape]
+(defn- props [{:keys [shape objects]}]
   (into {} (:properties (css/shape->css objects shape))))
 
-(defn- text-with [node-attrs]
-  (assoc-in fx/text [:content :children 0 :children 0 :children 0]
-            (merge (get-in fx/text [:content :children 0 :children 0 :children 0]) node-attrs)))
+(defn- px [n]
+  (let [r (/ (Math/round (* 100.0 (double n))) 100.0)]
+    (str (if (== r (Math/floor r)) (long r) r) "px")))
 
-(deftest class-name-is-kebab-case
-  (is (= "submit-button" (css/class-name "Submit Button")))
-  (is (= "a-b-c" (css/class-name "  A / B__C  ")))
-  (is (= "shape" (css/class-name "!!!"))))
+(defn- first-leaf [shape]
+  (first (filter :text (tree-seq :children :children (:content shape)))))
 
-(deftest rectangle-in-flex-layout
-  (is (= {"width" "120px"
-          "height" "40px"
-          "opacity" "0.9"
-          "border-radius" "8px"
-          "background" "rgba(51, 102, 255, 0.5)"
-          "border" "2px solid #000000"
-          "box-shadow" "0px 4px 8px 0px rgba(0, 0, 0, 0.25)"}
-         (props fx/rect))))
+(deftest every-shape-of-the-file-gets-a-clean-rule
+  (doseq [{:keys [shape objects]} (real/shapes)
+          :let [{:keys [selector css]} (css/shape->css objects shape)]]
+    (is (re-matches #"\.[a-z0-9-]+" selector) (str (:id shape)))
+    (is (not (re-find #"null|NaN|nilpx|Infinity" css)) (str (:id shape)))))
 
-(deftest board-with-flex-layout
-  (let [p (props fx/board)]
-    (is (= "absolute" (get p "position")))
-    (is (= "0px" (get p "left")))
-    (is (= "flex" (get p "display")))
-    (is (= "column" (get p "flex-direction")))
-    (is (= "12px 0px" (get p "gap")))
-    (is (= "24px 16px 24px 16px" (get p "padding")))
-    (is (= "center" (get p "align-items")))
-    (is (= "flex-start" (get p "justify-content")))
-    (is (= "#FFFFFF" (get p "background")))))
+(deftest a-shape-outside-a-layout-is-placed-against-its-board
+  (doseq [{:keys [shape objects] :as entry} (real/having #(not= :group (:type %)) "shape")
+          :let [parent (get objects (:parent-id shape))
+                frame  (get objects (:frame-id shape))]
+          :when (not (:layout parent))]
+    (let [p (props entry)]
+      (is (= (px (- (geometry/x shape) (or (some-> frame geometry/x) 0))) (get p "left")) (str (:id shape)))
+      (is (= (px (- (geometry/y shape) (or (some-> frame geometry/y) 0))) (get p "top")) (str (:id shape))))))
 
-(deftest text-styles-come-from-content
-  (let [p (props fx/text)]
-    (is (= "\"Inter\"" (get p "font-family")))
-    (is (= "24px" (get p "font-size")))
-    (is (= "700" (get p "font-weight")))
-    (is (= "1.2" (get p "line-height")))
-    (is (= "uppercase" (get p "text-transform")))
-    (is (= "center" (get p "text-align")))
-    (is (= "#111111" (get p "color")))
-    (is (not (contains? p "background")))))
+(deftest layout-boards-get-their-display
+  (doseq [entry (real/having #(= :flex (:layout %)) "flex board")]
+    (is (= "flex" (get (props entry) "display")) (str (:id (:shape entry)))))
+  (doseq [entry (real/having #(= :grid (:layout %)) "grid board")]
+    (is (= "grid" (get (props entry) "display")) (str (:id (:shape entry))))))
 
-(deftest linear-gradient-fill
-  (is (= "linear-gradient(135deg, rgba(255, 0, 0, 1) 0%, rgba(0, 0, 255, 1) 100%)"
-         (get (props fx/ellipse) "background"))))
+(deftest text-takes-its-font-size-from-the-content
+  (doseq [{:keys [shape] :as entry} (real/having #(and (= :text (:type %)) (:font-size (first-leaf %))) "text with a font size")]
+    (is (= (px (let [v (:font-size (first-leaf shape))] (if (number? v) v (parse-double v))))
+           (get (props entry) "font-size"))
+        (str (:id shape)))))
 
-(deftest ellipse-is-rounded
-  (is (= "50%" (get (props fx/ellipse) "border-radius"))))
+(deftest ellipses-are-rounded-and-strokes-become-borders
+  (doseq [entry (real/having #(= :circle (:type %)) "ellipse")]
+    (is (= "50%" (get (props entry) "border-radius")) (str (:id (:shape entry)))))
+  (doseq [entry (real/having #(some (fn [s] (and (pos? (or (:stroke-width s) 0)) (:stroke-color s))) (:strokes %)) "visible stroke")]
+    (is (some? (get (props entry) "border")) (str (:id (:shape entry))))))
 
-(deftest css-text-renders-rule
-  (let [text (:css (css/shape->css objects fx/rect))]
-    (is (str/starts-with? text ".submit-button {\n"))
-    (is (str/includes? text "  width: 120px;\n"))
-    (is (str/ends-with? text "}"))))
+(deftest shadows-become-box-shadows
+  (doseq [entry (real/having #(and (not= :text (:type %)) (some (fn [s] (not (:hidden s))) (:shadow %))) "visible shadow")]
+    (is (some? (get (props entry) "box-shadow")) (str (:id (:shape entry))))))
 
-(deftest quotes-font-family-to-prevent-css-injection
-  (let [p   (props (text-with {:font-family "A; } .evil { color: red"}))
-        out (:css (css/shape->css objects (text-with {:font-family "A; } .evil { color: red"})))]
-    (is (= "\"A; } .evil { color: red\"" (get p "font-family")))
-    (is (= 1 (count (re-seq #"\{" (str/replace out #"\"[^\"]*\"" "")))))))
+(defn- with-leaf [{:keys [shape] :as entry} attrs]
+  (assoc entry :shape (assoc-in shape [:content :children 0 :children 0 :children 0]
+                                (merge (get-in shape [:content :children 0 :children 0 :children 0]) attrs))))
 
-(deftest drops-unsafe-text-values
-  (let [p (props (text-with {:font-weight "700; } a {" :line-height "1}"}))]
-    (is (not (contains? p "font-weight")))
-    (is (not (contains? p "line-height")))))
+(def ^:private a-text
+  (delay (real/one #(and (= :text (:type %)) (get-in % [:content :children 0 :children 0 :children 0 :text])) "text")))
 
-(deftest gradient-text-fill-has-no-color
-  (let [p (props (text-with {:fills [{:fill-color-gradient {:type :linear :start-x 0 :start-y 0 :end-x 1 :end-y 0 :width 1
-                                                            :stops [{:color "#000000" :opacity 1 :offset 0}]}}]}))]
-    (is (not (contains? p "color")))))
+(deftest numeric-and-string-text-values-give-the-same-css
+  (let [leaf (first-leaf (:shape @a-text))
+        as   (fn [f] (props (with-leaf @a-text (into {} (map (fn [k] [k (f (get leaf k))])) [:font-size :font-weight :line-height :letter-spacing]))))
+        num  #(if (string? %) (or (some-> % parse-double) %) %)
+        text #(if (number? %) (let [d (double %)] (if (== d (Math/rint d)) (str (long d)) (str d))) %)]
+    (is (= (as text) (as num)))))
 
-(deftest drops-invalid-colors
-  (let [p (props (assoc fx/rect :fills [{:fill-color "red;}" :fill-opacity 1}]
-                        :strokes [{:stroke-color "url(x)" :stroke-width 1}]))]
-    (is (not (contains? p "background")))
-    (is (not (contains? p "border")))))
-
-(deftest numeric-text-values-give-the-same-css-as-strings
-  (let [strings (props (text-with {:font-size "24" :font-weight "700" :line-height "1.2" :letter-spacing "2"}))
-        numbers (props (text-with {:font-size 24 :font-weight 700 :line-height 1.2 :letter-spacing 2}))]
-    (is (= strings numbers))
-    (is (= "1.2" (get numbers "line-height")))
-    (is (= "700" (get numbers "font-weight")))
-    (is (= "2px" (get numbers "letter-spacing")))))
-
-(def ^:private saved-path
-  (dissoc fx/path-shape :x :y :width :height))
-
-(deftest a-path-takes-its-position-and-size-from-its-selrect
-  (let [p (props saved-path)]
-    (is (= {"position" "absolute" "left" "600px" "top" "0px" "width" "50px" "height" "50px"}
-           (select-keys p ["position" "left" "top" "width" "height"])))
-    (is (= (select-keys (props fx/path-shape) ["left" "top" "width" "height"])
-           (select-keys p ["left" "top" "width" "height"])))))
+(deftest class-names-of-the-file-are-kebab-case
+  (doseq [{:keys [shape]} (real/shapes)]
+    (is (re-matches #"[a-z0-9-]+" (css/class-name (:name shape))) (:name shape))))

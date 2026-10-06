@@ -1,0 +1,1 @@
+{:args {"upload_id" "00000000-0000-0000-0000-000000000001", "file_id" "4c1c501c-ee3b-8136-8008-bf818ce0fa76", "frame_selector" ".desk"}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf818ce0fa76"], :entries [{:kind :upload, :id "00000000-0000-0000-0000-000000000001", :text nil}], :tool "import_html", :scenario "import/unknown-upload"}

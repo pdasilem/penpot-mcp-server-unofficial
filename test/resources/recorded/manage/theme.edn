@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf7b286205b5", "group" "Recorded", "name" "Recorded theme", "set_ids" ["8d364592-097e-807e-8008-bf7b868c0dd3"]}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:blob "4ba401c977cc435282b33d0b7b5dcfcc3a93a918eadba1cf5dfb0cbe39371a28"}], :tool "create_token_theme", :scenario "manage/theme"}

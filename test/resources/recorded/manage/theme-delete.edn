@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf7b286205b5", "theme_id" "8d364592-097e-807e-8008-bf7ba6d9f53a"}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:blob "7f537211813cdfab80afac23e6beb06243f7d103b934dcf8bb0058a99b2189cd"}], :tool "delete_token_theme", :scenario "manage/theme-delete"}

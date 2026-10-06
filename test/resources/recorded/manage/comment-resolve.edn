@@ -1,0 +1,1 @@
+{:args {"thread_id" "4c1c501c-ee3b-8136-8008-bf7bafd78114"}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:kind :rpc, :cmd :update-comment-thread, :status 204, :body "", :params "[\"^ \",\"~:id\",\"~u4c1c501c-ee3b-8136-8008-bf7bafd78114\",\"~:is-resolved\",true]"}], :tool "resolve_comment", :scenario "manage/comment-resolve"}

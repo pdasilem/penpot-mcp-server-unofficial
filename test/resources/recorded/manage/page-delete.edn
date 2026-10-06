@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf7b286205b5", "page_id" "8d364592-097e-807e-8008-bf7bbb00f77e"}, :unsaved [#uuid "4c1c501c-ee3b-8136-8008-bf7b286205b5"], :entries [{:blob "d4ab2cda7e717b00a39516127c37e7e536ae77336f1f69191eaf522e179f9799"} {:blob "773cbdbbe7e50572e255ffb228e8a7952896d02b9f975ba0c8fbc0e10a52db0e"}], :tool "delete_page", :scenario "manage/page-delete"}

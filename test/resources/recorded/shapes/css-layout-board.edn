@@ -1,0 +1,1 @@
+{:args {"file_id" "4c1c501c-ee3b-8136-8008-bf50af1e536f", "page_id" "a0376219-e58c-8118-8008-aa01b6c4950f", "shape_id" "14f85022-fd8f-806f-8008-aed16d4aa4cc", "include_children" true}, :unsaved [], :entries [{:blob "33714aa0b19ede4349916318654aea37d0dc247a73a420293e334d1e7d18faf9"}], :tool "get_shape_css", :scenario "shapes/css-layout-board"}

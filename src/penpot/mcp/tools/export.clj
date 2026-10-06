@@ -23,7 +23,8 @@
     "  : await penpotUtils.exportImage(s, args.mode, args.format === 'svg');"
     "let binary = '';"
     "for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));"
-    "return { __type: 'base64', data: btoa(binary) };"]))
+    "const imageFill = args.mode === 'fill' ? (s.fills ?? []).find((f) => f.fillImage) : null;"
+    "return { __type: 'base64', data: btoa(binary), mtype: imageFill ? imageFill.fillImage.mtype : null };"]))
 
 (defn- decode [^String b64]
   (String. (.decode (Base64/getDecoder) b64) StandardCharsets/UTF_8))
@@ -32,9 +33,12 @@
 
 (def ^:private largest-size 1568)
 
-(defn- fill-image [^String b64 max-size]
-  (let [{:keys [bytes mime-type]} (image/fit (.decode (Base64/getDecoder) b64) max-size)]
-    (tool/image-result (.encodeToString (Base64/getEncoder) ^bytes bytes) (or mime-type "image/png"))))
+(defn- fill-image [^String b64 mtype max-size]
+  (let [data   (.decode (Base64/getDecoder) b64)
+        {:keys [bytes mime-type]} (image/fit data max-size)
+        scaled (not (identical? data bytes))]
+    (tool/image-result (.encodeToString (Base64/getEncoder) ^bytes bytes)
+                       (if scaled mime-type (or mtype mime-type)))))
 (def ^:private export-timeout-ms 120000)
 
 (defn- export-shape [ctx {:keys [file_id shape_id format mode max_size]}]
@@ -52,7 +56,7 @@
                                (throw (ex-info "Penpot editor returned no image data" {})))]
       (cond
         (= "svg" format) (large-result/svg ctx (decode base64) "shape-export.zip")
-        (= "fill" mode) (fill-image base64 (or max_size default-max-size))
+        (= "fill" mode) (fill-image base64 (:mtype result) (or max_size default-max-size))
         :else (tool/image-result base64 "image/png")))))
 
 (def tools

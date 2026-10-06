@@ -938,7 +938,7 @@ Group: `edit`. Hints: changes data, destructive, idempotent
 
 ### `move_to_parent`
 
-Move a shape into another board or group, on top of its children or at the given stacking index. The shape keeps its canvas position unless the new parent has a layout. Returns the changes. [editor]
+Move a shape into another board or group on the same page, on top of its children or at the given stacking index. The shape keeps its canvas position unless the new parent has a layout. Returns the changes. [editor]
 
 Group: `edit`. Hints: changes data, destructive, idempotent
 

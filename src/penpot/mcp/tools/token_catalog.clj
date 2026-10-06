@@ -1,14 +1,22 @@
 (ns penpot.mcp.tools.token-catalog
   (:require
+   [app.common.types.token :as cto]
+   [clojure.data.json :as json]
    [clojure.string :as str]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.canvas :as canvas]
    [penpot.mcp.tools.common :as common]))
 
+(def ^:private value-keys
+  (json/write-str (into (sorted-map) (map (fn [[k v]] [k (name v)])) cto/composite-dtcg-token-type->token-type)))
+
 (def ^:private catalog
   (str/join
    "\n"
    ["const tokens = penpot.library.local.tokens;"
+    (str "const valueKeys = " value-keys ";")
+    "const canonical = (v) => Array.isArray(v) ? v.map(canonical) : (v && typeof v === 'object') ? Object.fromEntries(Object.keys(v).map((k) => [valueKeys[k] ?? k, canonical(v[k])]).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : v;"
+    "const sameValue = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));"
     "const tokenState = (t) => ({ id: t.id, name: t.name, type: t.type, value: t.value, description: t.description, resolvedValue: t.resolvedValueString ?? null });"
     "const setState = (set) => ({ id: set.id, name: set.name, active: set.active, tokens: set.tokens.map(tokenState) });"
     "const themeState = (th) => ({ id: th.id, group: th.group, name: th.name, active: th.active, sets: th.activeSets.map((set) => ({ id: set.id, name: set.name })) });"
@@ -107,7 +115,7 @@
              [:value {:description value-description} token-value]
              [:description {:optional true :description "Description"} [:string {:max 1000}]]]
     :body (body "const set = findSet(args.setId);"
-                "const same = set.tokens.find((t) => t.name === args.name && t.type === args.type && JSON.stringify(t.value) === JSON.stringify(args.value));"
+                "const same = set.tokens.find((t) => t.name === args.name && t.type === args.type && sameValue(t.value, args.value));"
                 "if (same) return tokenState(same);"
                 "if (set.tokens.some((t) => t.name === args.name)) fail('token-exists', args.name);"
                 "const t = set.addToken({ type: args.type, name: args.name, value: args.value });"

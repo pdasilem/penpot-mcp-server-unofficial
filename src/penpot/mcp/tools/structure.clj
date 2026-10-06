@@ -32,7 +32,9 @@
     :input-schema (schema (shapes-param 2)
                           [:operation {:description "union, difference, intersection or exclude"} [:enum "union" "difference" "intersection" "exclude"]])
     :body (str/join "\n" [create/collect-shapes
-                          "const s = penpot.createBoolean(args.operation, shapes) ?? fail('create-failed', 'boolean shape');"
+                          "const sourceId = shapes[0].id;"
+                          "penpot.createBoolean(args.operation, shapes) ?? fail('create-failed', 'boolean shape');"
+                          "const s = (await waitFor(() => { const src = penpot.currentPage.getShapeById(sourceId); const p = src && src.parent; return p && p.type === 'boolean' ? p : null; }, 5000)) ?? fail('create-failed', 'boolean shape');"
                           canvas/finish])
     :args #(hash-map :shape-ids (:shape_ids %) :operation (:operation %))}))
 
