@@ -2,6 +2,7 @@
   (:require
    [app.common.uuid :as uuid]
    [clojure.test :refer [deftest is]]
+   [penpot.mcp.exports :as exports]
    [penpot.mcp.fixtures :as fx]
    [penpot.mcp.tools.snapshots :as snapshots]))
 
@@ -54,3 +55,24 @@
                         {"file_id" (str fx/file-id) "from_snapshot_id" (str snap-id)})]
     (is (= {:error (str "File " fx/file-id " has 6 shapes, more than the 5 this server reads at once")} result))
     (is (= [:get-file-stats] (fx/rpc-commands ctx)))))
+
+(defn- with-extra-shapes [f n]
+  (let [root (get-in f [:data :pages-index fx/page-id :objects uuid/zero])
+        ids  (repeatedly n uuid/next)
+        objs (into {} (map (fn [id] [id (assoc root :id id :name "extra" :parent-id uuid/zero :frame-id uuid/zero :shapes [])])) ids)]
+    (update-in f [:data :pages-index fx/page-id :objects] merge objs)))
+
+(deftest a-snapshot-above-the-size-limit-is-refused
+  (let [big    (with-extra-shapes fx/file 10)
+        ctx    (assoc-in (fx/ctx (assoc (fx/file-responses fx/file) :get-file-snapshot big)) [:config :full-file-shapes-max] 8)
+        result (fx/call (fx/find-tool snapshots/tools "compare_snapshots") ctx
+                        {"file_id" (str fx/file-id) "from_snapshot_id" (str snap-id)})]
+    (is (re-find #"more than the 8" (:error result)))))
+
+(deftest a-large-comparison-gives-counts-and-a-download
+  (let [big    (with-extra-shapes fx/file 900)
+        ctx    (assoc (fx/ctx (assoc (fx/file-responses fx/file) :get-file-snapshot big)) :exports (exports/store {:now (constantly 0)}))
+        result (fx/call (fx/find-tool snapshots/tools "compare_snapshots") ctx
+                        {"file_id" (str fx/file-id) "from_snapshot_id" (str snap-id)})]
+    (is (= 900 (get-in result ["pages" 0 "removed"])))
+    (is (re-find #"curl -o snapshot-diff\.zip" (get-in result ["full_result" "download"])))))

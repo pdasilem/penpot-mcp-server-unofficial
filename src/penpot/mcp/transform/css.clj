@@ -1,7 +1,9 @@
 (ns penpot.mcp.transform.css
   (:require
    [clojure.string :as str]
-   [penpot.mcp.transform.layout :as layout]))
+   [penpot.mcp.transform.geometry :as geometry]
+   [penpot.mcp.transform.layout :as layout]
+   [penpot.mcp.transform.text-values :as values]))
 
 (defn number [n]
   (let [r (/ (Math/round (* 100.0 (double (or n 0)))) 100.0)]
@@ -100,14 +102,14 @@
   (let [node (text-node shape)
         fill (first (:fills node))]
     [["font-family" (quoted (:font-family node))]
-     ["font-size" (some-> (:font-size node) parse-double px)]
-     ["font-weight" (safe-value (:font-weight node))]
-     ["font-style" (when (not= "normal" (:font-style node)) (safe-value (:font-style node)))]
-     ["line-height" (safe-value (:line-height node))]
-     ["letter-spacing" (some-> (:letter-spacing node) parse-double (#(when-not (zero? %) (px %))))]
-     ["text-transform" (when (not= "none" (:text-transform node)) (safe-value (:text-transform node)))]
-     ["text-decoration" (when (not= "none" (:text-decoration node)) (safe-value (:text-decoration node)))]
-     ["text-align" (safe-value (:text-align (paragraph shape)))]
+     ["font-size" (some-> (values/number (:font-size node)) px)]
+     ["font-weight" (safe-value (values/text (:font-weight node)))]
+     ["font-style" (when (not= "normal" (:font-style node)) (safe-value (values/text (:font-style node))))]
+     ["line-height" (safe-value (values/text (:line-height node)))]
+     ["letter-spacing" (some-> (values/number (:letter-spacing node)) (#(when-not (zero? %) (px %))))]
+     ["text-transform" (when (not= "none" (:text-transform node)) (safe-value (values/text (:text-transform node))))]
+     ["text-decoration" (when (not= "none" (:text-decoration node)) (safe-value (values/text (:text-decoration node))))]
+     ["text-align" (safe-value (values/text (:text-align (paragraph shape))))]
      ["color" (when (:fill-color fill) (safe-value (color (:fill-color fill) (:fill-opacity fill))))]]))
 
 (defn- in-layout? [objects shape]
@@ -117,8 +119,8 @@
   (when-not (in-layout? objects shape)
     (let [frame (get objects (:frame-id shape))]
       [["position" "absolute"]
-       ["left" (px (- (:x shape) (or (:x frame) 0)))]
-       ["top" (px (- (:y shape) (or (:y frame) 0)))]])))
+       ["left" (px (- (geometry/x shape) (or (some-> frame geometry/x) 0)))]
+       ["top" (px (- (geometry/y shape) (or (some-> frame geometry/y) 0)))]])))
 
 (defn- visual-props [shape]
   [["opacity" (when (< (or (:opacity shape) 1) 1) (number (:opacity shape)))]

@@ -69,3 +69,14 @@
   (let [doc (svg/shape->svg objects (assoc fx/rect :fills [{:fill-color "url(http://evil)" :fill-opacity 1}]))]
     (is (not (str/includes? doc "evil")))
     (is (str/includes? doc "fill=\"none\""))))
+
+(defn- text-with [node-attrs]
+  (assoc-in fx/text [:content :children 0 :children 0 :children 0]
+            (merge (get-in fx/text [:content :children 0 :children 0 :children 0]) node-attrs)))
+
+(deftest numeric-text-values-give-the-same-svg-as-strings
+  (let [render  #(svg/shape->svg objects (dissoc (text-with %) :position-data))
+        strings (render {:font-size "24" :font-weight "700"})
+        numbers (render {:font-size 24 :font-weight 700})]
+    (is (= strings numbers))
+    (is (str/includes? numbers "font-size=\"24\""))))

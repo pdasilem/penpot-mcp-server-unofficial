@@ -1,7 +1,8 @@
 (ns penpot.mcp.tools.common
   (:require
    [app.common.uuid :as uuid]
-   [app.common.types.fills.impl :as fills-impl]))
+   [app.common.types.fills.impl :as fills-impl]
+   [penpot.mcp.transform.geometry :as geometry]))
 
 (def plugin-type
   {:frame "board"
@@ -47,10 +48,10 @@
    :name (:name shape)
    :type (shape-type shape)
    :parent_id (:parent-id shape)
-   :x (:x shape)
-   :y (:y shape)
-   :width (:width shape)
-   :height (:height shape)})
+   :x (geometry/x shape)
+   :y (geometry/y shape)
+   :width (geometry/width shape)
+   :height (geometry/height shape)})
 
 (defn page-shapes [page]
   (remove root? (vals (:objects page))))

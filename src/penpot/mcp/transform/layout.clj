@@ -1,6 +1,7 @@
 (ns penpot.mcp.transform.layout
   (:require
-   [clojure.string :as str]))
+   [clojure.string :as str]
+   [penpot.mcp.transform.geometry :as geometry]))
 
 (defn- px [n]
   (let [r (/ (Math/round (* 100.0 (double (or n 0)))) 100.0)]
@@ -59,5 +60,5 @@
     (px size)))
 
 (defn child-size-props [shape]
-  [["width" (sizing (:layout-item-h-sizing shape) (:width shape))]
-   ["height" (sizing (:layout-item-v-sizing shape) (:height shape))]])
+  [["width" (sizing (:layout-item-h-sizing shape) (geometry/width shape))]
+   ["height" (sizing (:layout-item-v-sizing shape) (geometry/height shape))]])

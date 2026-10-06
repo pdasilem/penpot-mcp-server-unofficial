@@ -1,7 +1,9 @@
 (ns penpot.mcp.transform.svg
   (:require
    [clojure.string :as str]
-   [penpot.mcp.transform.css :as css]))
+   [penpot.mcp.transform.css :as css]
+   [penpot.mcp.transform.geometry :as geometry]
+   [penpot.mcp.transform.text-values :as values]))
 
 (defn escape [s]
   (-> (str s)
@@ -25,8 +27,9 @@
       (str "<" tag (attrs pairs) "/>")
       (str "<" tag (attrs pairs) ">" body "</" tag ">"))))
 
-(defn- center [{:keys [x y width height]}]
-  [(+ x (/ width 2.0)) (+ y (/ height 2.0))])
+(defn- center [shape]
+  (let [{:keys [x y width height]} (geometry/bounds shape)]
+    [(+ x (/ width 2.0)) (+ y (/ height 2.0))]))
 
 (defn- transform-attr [{:keys [transform] :as shape}]
   (let [{:keys [a b c d e f]} (when transform {:a (:a transform) :b (:b transform) :c (:c transform)
@@ -79,9 +82,10 @@
   (let [{:keys [defs] :as p} (paint shape)]
     (str defs (element tag (concat geometry (:attrs p) (stroke shape) (common-attrs shape))))))
 
-(defn- rect-geometry [{:keys [x y width height r1]}]
-  [["x" (n x)] ["y" (n y)] ["width" (n width)] ["height" (n height)]
-   ["rx" (when (and r1 (pos? r1)) (n r1))]])
+(defn- rect-geometry [{:keys [r1] :as shape}]
+  (let [{:keys [x y width height]} (geometry/bounds shape)]
+    [["x" (n x)] ["y" (n y)] ["width" (n width)] ["height" (n height)]
+     ["rx" (when (and r1 (pos? r1)) (n r1))]]))
 
 (defn- text-nodes [shape]
   (filter #(contains? % :text) (tree-seq :children :children (:content shape))))
@@ -90,12 +94,12 @@
   (let [node   (first (text-nodes shape))
         fill   (first (:fills node))
         style  [["font-family" (:font-family node)]
-                ["font-size" (:font-size node)]
-                ["font-weight" (:font-weight node)]
+                ["font-size" (values/text (:font-size node))]
+                ["font-weight" (values/text (:font-weight node))]
                 ["fill" (or (:fill-color fill) "#000000")]]
         spans  (if (seq (:position-data shape))
                  (map #(element "tspan" [["x" (n (:x %))] ["y" (n (:y %))]] (escape (:text %))) (:position-data shape))
-                 [(element "tspan" [["x" (n (:x shape))] ["y" (n (+ (:y shape) (or (some-> (:font-size node) parse-double) 14)))]]
+                 [(element "tspan" [["x" (n (geometry/x shape))] ["y" (n (+ (geometry/y shape) (or (values/number (:font-size node)) 14)))]]
                            (escape (str/join (map :text (text-nodes shape)))))])]
     (str "<text" (attrs (concat style (common-attrs shape))) ">" (apply str spans) "</text>")))
 
@@ -117,7 +121,7 @@
     (case type
       :frame (board objects shape)
       :rect (painted "rect" (rect-geometry shape) shape)
-      :circle (let [{:keys [x y width height]} shape]
+      :circle (let [{:keys [x y width height]} (geometry/bounds shape)]
                 (painted "ellipse" [["cx" (n (+ x (/ width 2.0)))] ["cy" (n (+ y (/ height 2.0)))]
                                     ["rx" (n (/ width 2.0))] ["ry" (n (/ height 2.0))]]
                          shape))
@@ -128,9 +132,10 @@
       :image (element "rect" (concat (rect-geometry shape) [["fill" "#CCCCCC"] ["data-image" (some-> shape :metadata :id str)]] (common-attrs shape)))
       (element "g" (container-attrs shape) (children objects shape)))))
 
-(defn shape->svg [objects {:keys [x y width height] :as shape}]
-  (str "<svg xmlns=\"http://www.w3.org/2000/svg\""
+(defn shape->svg [objects shape]
+  (let [{:keys [x y width height]} (geometry/bounds shape)]
+    (str "<svg xmlns=\"http://www.w3.org/2000/svg\""
        " viewBox=\"" (str/join " " (map n [x y width height])) "\""
        " width=\"" (n width) "\" height=\"" (n height) "\">"
-       (render objects shape)
-       "</svg>"))
+         (render objects shape)
+         "</svg>")))

@@ -3,6 +3,7 @@
    [app.common.types.tokens-lib :as ctob]
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]
+   [penpot.mcp.exports :as exports]
    [penpot.mcp.fixtures :as fx]
    [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tools.library :as library]))
@@ -173,3 +174,40 @@
 (deftest components-with-the-same-name-are-ordered-by-id
   (let [listed [{:id "c2" :name "Component" :path ""} {:id "c1" :name "Component" :path ""}]]
     (is (= ["c1" "c2"] (mapv #(get % "id") (get (:result (run-in-editor "list_components" listed {"file_id" fid})) "components"))))))
+
+(def ^:private filter-lib
+  (-> (ctob/make-tokens-lib)
+      (ctob/add-set (ctob/make-token-set :id fx/token-set-id :name "brand"))
+      (ctob/add-set (ctob/make-token-set :id (parse-uuid "88888888-0000-0000-0000-000000000009") :name "core"))
+      (ctob/add-token fx/token-set-id (ctob/make-token :id (parse-uuid "88888888-0000-0000-0000-000000000003") :name "color.primary" :type :color :value "#3366FF"))
+      (ctob/add-token fx/token-set-id (ctob/make-token :id (parse-uuid "88888888-0000-0000-0000-000000000004") :name "radius.card" :type :border-radius :value "8"))
+      (ctob/add-token (parse-uuid "88888888-0000-0000-0000-000000000009") (ctob/make-token :id (parse-uuid "88888888-0000-0000-0000-000000000005") :name "color.Accent" :type :color :value "#FF0000"))))
+
+(defn- run-on-lib [lib args]
+  (fx/call (fx/find-tool library/tools "get_design_tokens")
+           (fx/ctx (fx/file-responses (assoc-in fx/file [:data :tokens-lib] lib)))
+           (merge {"file_id" fid} args)))
+
+(defn- token-names [result]
+  (into {} (map (fn [s] [(get s "name") (mapv #(get % "name") (get s "tokens"))])) (get result "sets")))
+
+(deftest design-tokens-are-filtered-by-name-type-and-set
+  (is (= {"brand" ["color.primary"] "core" ["color.Accent"]} (token-names (run-on-lib filter-lib {"query" "COLOR"}))))
+  (is (= {"brand" ["radius.card"] "core" []} (token-names (run-on-lib filter-lib {"type" "border-radius"}))))
+  (is (= {"core" ["color.Accent"]} (token-names (run-on-lib filter-lib {"set" "core"}))))
+  (is (= {"brand" ["color.primary"]} (token-names (run-on-lib filter-lib {"set" "brand" "type" "color" "query" "prim"})))))
+
+(deftest the-editor-filters-tokens-itself
+  (let [{:keys [scripts]} (run-in-editor "get_design_tokens" {:sets [] :themes []}
+                                         {"file_id" fid "set" "brand" "type" "border-radius" "query" "card"})]
+    (is (= {"set" "brand" "type" "borderRadius" "query" "card"} (get (fx/script-args (last scripts)) "tokenFilter")))))
+
+(deftest a-large-catalog-gives-sets-with-token-counts-and-a-download
+  (let [lib    (reduce (fn [l i] (ctob/add-token l fx/token-set-id (ctob/make-token :id (java.util.UUID/randomUUID) :name (str "space.s" i) :type :spacing :value (str i))))
+                       (ctob/add-set (ctob/make-tokens-lib) (ctob/make-token-set :id fx/token-set-id :name "brand"))
+                       (range 2000))
+        result (fx/call (fx/find-tool library/tools "get_design_tokens")
+                        (assoc (fx/ctx (fx/file-responses (assoc-in fx/file [:data :tokens-lib] lib))) :exports (exports/store {:now (constantly 0)}))
+                        {"file_id" fid})]
+    (is (= [{"id" (str fx/token-set-id) "name" "brand" "active" false "token_count" 2000}] (get result "sets")))
+    (is (re-find #"curl -o design-tokens\.zip" (get-in result ["full_result" "download"])))))

@@ -90,17 +90,23 @@
    {:name "color.primary" :type :color :value {:kind :color :rgba {:r 51 :g 102 :b 255 :a 1.0}}}
    {:name "font.size.l" :type :font-size :value {:kind :dimension :value 16.0 :unit "px"}}])
 
-(defn- matched [result]
-  (update result :raw-values #(usage/with-matches scale %)))
+(defn- with-raw [result facts scale-tokens]
+  (let [window (reduce usage/add-raw (usage/raw-window 0 1000 nil) facts)]
+    (assoc result :raw (usage/with-matches scale-tokens (:groups window)) :raw-count (:count window))))
+
+(defn- entries [result]
+  (for [g (:raw result) v (:values g)]
+    (merge (dissoc g :values) v)))
 
 (defn- report-on [pages]
-  (matched (usage/report {:tokens tokens :facts (mapv usage/page-facts pages)})))
+  (let [facts (mapv usage/page-facts pages)]
+    (with-raw (usage/report {:tokens tokens :facts facts}) facts scale)))
 
 (defn- report []
   (report-on [home library-page]))
 
 (defn- raw [result shape-id attribute]
-  (filter #(and (= shape-id (:shape-id %)) (= attribute (:attribute %))) (:raw-values result)))
+  (filter #(and (= shape-id (:shape-id %)) (= attribute (:attribute %))) (entries result)))
 
 (deftest a-token-is-unused-when-no-shape-applies-it-and-no-used-token-references-it
   (let [result (report)]
@@ -139,7 +145,7 @@
     (testing "a library color is not raw"
       (is (empty? (raw result label-id :fill))))
     (testing "copies take their values from the main component"
-      (is (empty? (filter #(= copy-id (:shape-id %)) (:raw-values result)))))
+      (is (empty? (filter #(= copy-id (:shape-id %)) (entries result)))))
     (testing "top-level boards keep their size"
       (is (empty? (raw result screen-id :width)))
       (is (empty? (raw result loose-id :width))))))
@@ -175,16 +181,18 @@
     (is (empty? (raw result label-id :font-size)))))
 
 (deftest without-a-scale-raw-values-are-reported-without-matches
-  (let [result (update (usage/report {:tokens tokens :facts [(usage/page-facts home)]}) :raw-values #(usage/with-matches nil %))]
-    (is (seq (:raw-values result)))
-    (is (not-any? #(contains? % :matches) (:raw-values result)))))
+  (let [facts  [(usage/page-facts home)]
+        result (with-raw (usage/report {:tokens tokens :facts facts}) facts nil)]
+    (is (seq (entries result)))
+    (is (not-any? #(contains? % :matches) (entries result)))))
 
 (deftest the-summary-counts-the-whole-file
-  (is (= {:tokens 8 :applied 2 :missing 0 :referenced-only 2 :unused 4 :shapes 6 :raw-values 11}
-         (:summary (report)))))
+  (is (= {:tokens 8 :applied 2 :missing 0 :referenced-only 2 :unused 4 :shapes 6}
+         (:summary (report))))
+  (is (= 11 (:raw-count (report)))))
 
 (deftest raw-values-follow-the-layer-tree-so-each-frame-stays-together
-  (let [frames (map :frame-id (:raw-values (report)))]
+  (let [frames (map :frame-id (entries (report)))]
     (is (= (count (distinct frames)) (count (partition-by identity frames))))
     (is (= [screen-id loose-id] (distinct frames)))))
 
@@ -205,7 +213,7 @@
 (defn- gap-attributes [layout]
   (let [page (update-in home [:objects card-id] merge layout {:layout-gap {:row-gap 8 :column-gap 10}})]
     (into #{} (comp (filter #(= card-id (:shape-id %))) (map :attribute) (filter #{:row-gap :column-gap}))
-          (:raw-values (report-on [page])))))
+          (entries (report-on [page])))))
 
 (deftest only-the-gaps-the-layout-uses-are-raw
   (is (= #{:column-gap} (gap-attributes {:layout :flex :layout-flex-dir :row :layout-wrap-type :nowrap})))
@@ -220,3 +228,23 @@
 
 (deftest page-facts-name-their-page
   (is (= (:id home) (:page-id (usage/page-facts home)))))
+
+(deftest raw-values-are-kept-once-per-shape
+  (let [groups (:raw (report))]
+    (is (= (count groups) (count (distinct (map :shape-id groups)))))
+    (is (= 11 (reduce + (map (comp count :values) groups))))))
+
+(defn- window [offset limit page-id]
+  (let [facts [{:page-id :p1 :page "One" :raw [{:shape-id 1 :values [:a :b :c]} {:shape-id 2 :values [:d]}]}
+               {:page-id :p2 :page "Two" :raw [{:shape-id 3 :values [:e :f]}]}]]
+    (select-keys (reduce usage/add-raw (usage/raw-window offset limit page-id) facts) [:count :groups])))
+
+(deftest the-raw-window-counts-every-value-and-keeps-only-the-asked-slice
+  (is (= {:count 6 :groups [{:page-id :p1 :page "One" :shape-id 1 :values [:b :c]}
+                            {:page-id :p1 :page "One" :shape-id 2 :values [:d]}
+                            {:page-id :p2 :page "Two" :shape-id 3 :values [:e]}]}
+         (window 1 4 nil)))
+  (is (= {:count 6 :groups [{:page-id :p2 :page "Two" :shape-id 3 :values [:f]}]} (window 5 10 nil)))
+  (is (= {:count 6 :groups []} (window 6 10 nil)))
+  (is (= {:count 0 :groups []} (window 0 0 :p3)))
+  (is (= {:count 2 :groups [{:page-id :p2 :page "Two" :shape-id 3 :values [:e :f]}]} (window 0 10 :p2))))

@@ -181,7 +181,7 @@ Group: `read`. Hints: read-only, idempotent
 
 ### `compare_snapshots`
 
-Compare a saved version with another version or with the current file. Returns added and removed pages, and for each changed page the added, removed and modified shapes with the names of the changed attributes.
+Compare a saved version with another version or with the current file. Returns added and removed pages, and for each changed page the added, removed and modified shapes with the names of the changed attributes. When the answer would be larger than 100 KB, pages carry only the counts of added, removed and modified shapes, and full_result holds a one-time download of the whole comparison.
 
 Group: `read`. Hints: read-only, idempotent
 
@@ -256,7 +256,7 @@ Group: `read`. Hints: read-only, idempotent
 
 ### `get_shape_tree`
 
-Return the layer tree of a page, or of one shape, with id, name, type, geometry and child count per node. Children are listed bottom to top. Use depth to limit the size of the answer.
+Return the layer tree of a page, or of one shape, with id, name, type, geometry and child count per node. Children are listed bottom to top. Use depth to limit the size of the answer; a tree larger than 100 KB comes as the root with node_count and a one-time download of the whole tree in full_result.
 
 Group: `read`. Hints: read-only, idempotent
 
@@ -269,7 +269,7 @@ Group: `read`. Hints: read-only, idempotent
 
 ### `get_shape`
 
-Return all Penpot attributes of one shape (fills, strokes, layout, text content, tokens and so on), its plugin type and the id of the page it is on.
+Return all Penpot attributes of one shape (fills, strokes, layout, text content, tokens and so on), its plugin type and the id of the page it is on. When the answer would be larger than 100 KB, content is replaced by its size and full_result holds a one-time download of the whole shape.
 
 Group: `read`. Hints: read-only, idempotent
 
@@ -296,7 +296,7 @@ Group: `read`. Hints: read-only, idempotent
 
 ### `get_shape_css`
 
-Generate CSS for a shape, and optionally for all its visible descendants: size, position (when not inside a layout), fills and gradients, border, radius, shadows, blur, flex and grid layout, and text styles. Returns one rule per shape and the whole stylesheet as text.
+Generate CSS for a shape, and optionally for all its visible descendants: size, position (when not inside a layout), fills and gradients, border, radius, shadows, blur, flex and grid layout, and text styles. Returns one rule per shape and the whole stylesheet as text. When the answer would be larger than 100 KB it holds the rule of the shape itself and rule_count, and full_result holds a one-time download of styles.css and rules.json.
 
 Group: `read`. Hints: read-only, idempotent
 
@@ -309,7 +309,7 @@ Group: `read`. Hints: read-only, idempotent
 
 ### `get_shape_svg`
 
-Render a shape and its descendants as a standalone SVG document. With the file open in the editor the markup comes from Penpot itself; otherwise it is drawn from the saved file data, with text as plain SVG text and images as placeholders. Use export_shape for a raster image.
+Render a shape and its descendants as a standalone SVG document. With the file open in the editor the markup comes from Penpot itself; otherwise it is drawn from the saved file data, with text as plain SVG text and images as placeholders. Use export_shape for a raster image. Markup larger than 100 KB comes as svg_bytes and a one-time download in full_result.
 
 Group: `read`. Hints: read-only, idempotent
 
@@ -373,17 +373,20 @@ Group: `read`. Hints: read-only, idempotent
 
 ### `get_design_tokens`
 
-List the design token sets of the file and whether each is active, with every token's id, name, type, value and description, and the token themes with their id, group, name, whether each is active and the names of their sets. Token ids are used by set_token.
+List the design token sets of the file and whether each is active, with every token's id, name, type, value and description, and the token themes with their id, group, name, whether each is active and the names of their sets. Token ids are used by set_token. set, type and query narrow the tokens; sets without matching tokens are listed with no tokens. When the answer would be larger than 100 KB it lists the sets with token_count and the themes, and full_result holds a one-time download of the whole answer: Claude Code can fetch it with the curl command, other clients give it to the user.
 
 Group: `read`. Hints: read-only, idempotent
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `file_id` | uuid | yes | Penpot file id |
+| `set` | string | no | Only this token set |
+| `type` | `boolean`, `border-radius`, `color`, `dimensions`, `font-family`, `font-size`, `font-weight`, `letter-spacing`, `number`, `opacity`, `other`, `rotation`, `shadow`, `sizing`, `spacing`, `string`, `stroke-width`, `text-case`, `text-decoration`, `typography` | no | Only tokens of this type |
+| `query` | string | no | Only tokens whose name contains this text, ignoring case |
 
 ### `token_usage`
 
-Audit how the file uses its design tokens, across every page including component pages. Returns a summary; unused: tokens no shape applies and no used token references, with their sets and values; missing: token names applied to shapes that are not in the token catalog; referenced_only: tokens used only through other tokens; references: tokens whose value contains other tokens and whether they are used; usage: for each used token the number of shapes, how many of them are component copies, the pages and the attributes it is applied to; raw_values: values set as plain numbers or colors instead of tokens (padding, the gaps the layout uses, radius, fill, stroke color and width, font size, and the size of fixed nested boards), grouped by top-level board and shape. Zeros, library colors and typographies are left out; component copies are not checked, so values overridden on a copy are not reported. Each raw value lists the tokens of the default theme combination with the same value in matches, or off_scale when none has it; summary.unresolved_tokens names tokens whose value could not be computed. sections picks the parts to return besides the summary. page_id narrows raw_values to one page; raw_values are paged with limit and cursor.
+Audit how the file uses its design tokens, across every page including component pages. Returns a summary; unused: tokens no shape applies and no used token references, with their sets and values; missing: token names applied to shapes that are not in the token catalog; referenced_only: tokens used only through other tokens; references: tokens whose value contains other tokens and whether they are used; usage: for each used token the number of shapes, how many of them are component copies, the pages and the attributes it is applied to; raw_values: values set as plain numbers or colors instead of tokens (padding, the gaps the layout uses, radius, fill, stroke color and width, font size, and the size of fixed nested boards), grouped by top-level board and shape. Zeros, library colors and typographies are left out; component copies are not checked, so values overridden on a copy are not reported. Each raw value lists the tokens of the default theme combination with the same value in matches, or off_scale when none has it; summary.unresolved_tokens names tokens whose value could not be computed. sections picks the parts to return besides the summary. page_id narrows raw_values to one page; raw_values are paged with limit and cursor. When the other parts would be larger than 100 KB they are left out, archived_sections names them and full_result holds a one-time download of them.
 
 Group: `read`. Hints: read-only, idempotent
 
@@ -1525,7 +1528,7 @@ Group: `edit`. Hints: changes data, destructive, idempotent
 
 ### `export_shape`
 
-Render a shape, for example a board, exactly as Penpot draws it and return it: png as an image the model can see, svg as markup. A png is scaled down so that its longer side fits max_size. Mode fill returns the raw image used as the shape's fill (png only, unscaled). Find board ids with list_shapes or search_shapes. [editor]
+Render a shape, for example a board, exactly as Penpot draws it and return it: png as an image the model can see, svg as markup; markup larger than 100 KB comes as svg_bytes and a one-time download in full_result. A png is scaled down so that its longer side fits max_size. Mode fill returns the image used as the shape's fill, scaled down the same way. Find board ids with list_shapes or search_shapes. [editor]
 
 Group: `export`. Hints: read-only, idempotent
 
@@ -1535,7 +1538,7 @@ Group: `export`. Hints: read-only, idempotent
 | `shape_id` | uuid | yes | Shape to export, e.g. a board id |
 | `format` | `png`, `svg` | no | png (default) or svg |
 | `mode` | `shape`, `fill` | no | shape (default) or fill |
-| `max_size` | integer | no | Longest side of a png in pixels, default 1568; smaller shapes keep their size |
+| `max_size` | integer | no | Longest side of the image in pixels, default 768, at most 1568; smaller images keep their size |
 
 ### `export_design_system`
 

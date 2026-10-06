@@ -2,6 +2,7 @@
   (:require
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]
+   [penpot.mcp.exports :as exports]
    [penpot.mcp.fixtures :as fx]
    [penpot.mcp.plugin.bridge :as bridge]
    [penpot.mcp.plugin.read :as read]
@@ -121,7 +122,7 @@
   (let [ctx (fx/plugin-ctx {:__type "base64" :data "iVBORw0KGgo="})
         res (tool/invoke (fx/find-tool export/tools "export_shape") ctx {"file_id" fid "shape_id" sid})]
     (is (= {:content [{:type :image :data "iVBORw0KGgo=" :mime-type "image/png"}] :error? false} res))
-    (is (= {"fileId" fid "shapeId" sid "format" "png" "mode" "shape" "maxSize" 1568} (fx/last-script-args ctx)))))
+    (is (= {"fileId" fid "shapeId" sid "format" "png" "mode" "shape" "maxSize" 768} (fx/last-script-args ctx)))))
 
 (deftest export-limits-the-longer-side
   (let [ctx (fx/plugin-ctx {:__type "base64" :data "AA=="})]
@@ -129,7 +130,28 @@
     (is (= 800 (get (fx/last-script-args ctx) "maxSize")))
     (is (str/includes? (last @(:scripts ctx)) "Math.min(1, args.maxSize / Math.max(s.width, s.height))")))
   (is (true? (:error? (tool/invoke (fx/find-tool export/tools "export_shape") (fx/plugin-ctx nil)
-                                   {"file_id" fid "shape_id" sid "max_size" 5000})))))
+                                   {"file_id" fid "shape_id" sid "max_size" 1569})))))
+
+(defn- png-b64 [w h]
+  (let [img (java.awt.image.BufferedImage. w h java.awt.image.BufferedImage/TYPE_INT_ARGB)
+        out (java.io.ByteArrayOutputStream.)]
+    (javax.imageio.ImageIO/write img "png" out)
+    (.encodeToString (java.util.Base64/getEncoder) (.toByteArray out))))
+
+(defn- size-of [b64]
+  (let [img (javax.imageio.ImageIO/read (java.io.ByteArrayInputStream. (.decode (java.util.Base64/getDecoder) ^String b64)))]
+    [(.getWidth img) (.getHeight img)]))
+
+(deftest a-fill-image-is-scaled-down-to-max-size
+  (let [ctx (fx/plugin-ctx {:__type "base64" :data (png-b64 3000 1500)})
+        res (tool/invoke (fx/find-tool export/tools "export_shape") ctx {"file_id" fid "shape_id" sid "mode" "fill"})]
+    (is (= [768 384] (size-of (get-in res [:content 0 :data]))))
+    (is (= "image/png" (get-in res [:content 0 :mime-type])))))
+
+(deftest a-small-fill-image-keeps-its-size
+  (let [ctx (fx/plugin-ctx {:__type "base64" :data (png-b64 300 200)})
+        res (tool/invoke (fx/find-tool export/tools "export_shape") ctx {"file_id" fid "shape_id" sid "mode" "fill" "max_size" 1000})]
+    (is (= [300 200] (size-of (get-in res [:content 0 :data]))))))
 
 (deftest export-svg-returns-svg-text
   (let [svg "<svg xmlns=\"http://www.w3.org/2000/svg\"/>"
@@ -198,3 +220,11 @@
                                {:result (if (str/includes? code "return { switched") {:switched false} {:__type "base64" :data "AA=="}) :changed false}))]
     (tool/invoke (fx/find-tool export/tools "export_shape") ctx {"file_id" fid "shape_id" sid})
     (is (= [120000] (distinct (rest @seen))))))
+
+(deftest a-large-svg-export-gives-its-size-and-a-download
+  (let [svg (str "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"400\" height=\"300\">" (apply str (repeat 20000 "<rect/>")) "</svg>")
+        ctx (assoc (fx/plugin-ctx {:__type "base64" :data (.encodeToString (java.util.Base64/getEncoder) (.getBytes svg "UTF-8"))})
+                   :exports (exports/store {:now (constantly 0)}))
+        res (fx/call (fx/find-tool export/tools "export_shape") ctx {"file_id" fid "shape_id" sid "format" "svg"})]
+    (is (= {"width" "400" "height" "300"} (select-keys res ["width" "height"])))
+    (is (re-find #"curl -o shape-export\.zip" (get-in res ["full_result" "download"])))))

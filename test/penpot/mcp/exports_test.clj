@@ -1,7 +1,9 @@
 (ns penpot.mcp.exports-test
   (:require
    [clojure.test :refer [deftest is]]
-   [penpot.mcp.exports :as exports])
+   [penpot.mcp.exports :as exports]
+   [penpot.mcp.html.uploads :as uploads]
+   [penpot.mcp.spool :as spool])
   (:import
    (java.io ByteArrayInputStream)
    (java.util.zip ZipInputStream)))
@@ -68,3 +70,16 @@
         store (exports/store {:now now :max-bytes 4})]
     (is (some? (:id (exports/put! store (byte-array 3)))))
     (is (= {:error :full} (exports/put! store (byte-array 3))))))
+
+(deftest exports-and-uploads-share-one-budget
+  (let [sp      (spool/create {:max-bytes 10 :now (constantly 0)})
+        exports (exports/store {:now (constantly 0) :spool sp})
+        uploads (uploads/store {:now (constantly 0) :spool sp})]
+    (is (some? (uploads/put! uploads "123456")))
+    (is (= {:error :full} (exports/put! exports (byte-array 6))))
+    (is (some? (:id (exports/put! exports (byte-array 4)))))))
+
+(deftest a-download-carries-the-name-it-was-stored-with
+  (let [s  (exports/store {:now (constantly 0)})
+        id (:id (exports/put! s (byte-array [1]) "token-usage.zip"))]
+    (is (= "token-usage.zip" (:name (exports/take-download! s id))))))

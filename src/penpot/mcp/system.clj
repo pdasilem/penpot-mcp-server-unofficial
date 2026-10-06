@@ -3,11 +3,14 @@
    [clojure.tools.logging :as log]
    [penpot.mcp.exports :as exports]
    [penpot.mcp.html.uploads :as uploads]
+   [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.notifications :as notifications]
    [penpot.mcp.penpot.rpc :as rpc]
    [penpot.mcp.penpot.version :as version]
    [penpot.mcp.plugin.bridge :as bridge]
-   [penpot.mcp.server :as server])
+   [penpot.mcp.server :as server]
+   [penpot.mcp.spool :as spool]
+   [penpot.mcp.sweeper :as sweeper])
   (:import
    (java.net URI)
    (java.net.http HttpClient HttpRequest HttpResponse$BodyHandlers)
@@ -18,6 +21,20 @@
 (def ^:private plugin-task-timeout-ms 30000)
 (def ^:private presence-wait-ms 1500)
 (def ^:private plugin-lock-wait-ms 60000)
+(def ^:private file-cache-sweep-s 30)
+
+(defn- now-ms []
+  (System/currentTimeMillis))
+
+(defn- start-file-cache [_]
+  (let [cache (atom nil)]
+    {:cache cache
+     :sweeper (sweeper/start! "file-cache-sweeper" file-cache-sweep-s #(file/evict-idle! cache (now-ms)))}))
+
+(defn- start-exports [cfg]
+  (fn [_]
+    (exports/start! {:now now-ms
+                     :spool (spool/create {:max-bytes (* (:store-mb cfg) 1024 1024) :now now-ms :dir (:spool-dir cfg)})})))
 
 (defn- index-fetcher [base-url]
   (let [client (-> (HttpClient/newBuilder) (.connectTimeout index-timeout) (.build))
@@ -63,11 +80,10 @@
                                                  :mcp-key (:penpot-mcp-key cfg)
                                                  :task-timeout-ms plugin-task-timeout-ms}))
                          bridge/stop!]
-                        [:exports
-                         (fn [_] (exports/start! {:now #(System/currentTimeMillis)}))
-                         exports/stop!]
+                        [:file-cache start-file-cache (comp sweeper/stop! :sweeper)]
+                        [:exports (start-exports cfg) exports/stop!]
                         [:mcp
-                         (fn [{:keys [bridge exports]}]
+                         (fn [{:keys [bridge exports file-cache]}]
                            (server/start! {:host (:mcp-host cfg)
                                            :port (:mcp-port cfg)
                                            :mcp-key (:penpot-mcp-key cfg)
@@ -84,9 +100,9 @@
                                                  :bridge bridge
                                                  :execute #(bridge/execute! bridge %)
                                                  :persistence {:dirty (atom #{})}
-                                                 :file-cache (atom nil)
+                                                 :file-cache (:cache file-cache)
                                                  :plugin-lock {:lock (ReentrantLock.) :wait-ms plugin-lock-wait-ms}
-                                                 :uploads (uploads/store {:now #(System/currentTimeMillis)})
+                                                 :uploads (uploads/store {:now now-ms :spool (:spool exports)})
                                                  :exports exports
                                                  :import-jobs (atom {})
                                                  :version-error #(version/check-error @version-state)}}))

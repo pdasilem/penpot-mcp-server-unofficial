@@ -20,7 +20,14 @@
     (is (= 4402 (:ws-port cfg)))
     (is (= 300 (:version-check-interval cfg)))
     (is (= "info" (:log-level cfg)))
-    (is (= 64 (:import-max-asset-mb cfg)))))
+    (is (= 32 (:import-max-asset-mb cfg)))
+    (is (= 64 (:store-mb cfg)))
+    (is (nil? (:spool-dir cfg)))))
+
+(deftest reads-the-store-budget-and-spool-directory
+  (let [cfg (config/load-config (assoc required-env "PENPOT_MCP_STORE_MB" "256" "PENPOT_MCP_SPOOL_DIR" "/var/spool/penpot-mcp"))]
+    (is (= 256 (:store-mb cfg)))
+    (is (= "/var/spool/penpot-mcp" (:spool-dir cfg)))))
 
 (deftest parses-numeric-settings-from-strings
   (let [cfg (config/load-config (assoc required-env "MCP_PORT" "5000" "VERSION_CHECK_INTERVAL" "60"

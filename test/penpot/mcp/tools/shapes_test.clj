@@ -1,7 +1,9 @@
 (ns penpot.mcp.tools.shapes-test
   (:require
+   [app.common.uuid :as uuid]
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]
+   [penpot.mcp.exports :as exports]
    [penpot.mcp.fixtures :as fx]
    [penpot.mcp.tools.shapes :as shapes]))
 
@@ -207,3 +209,59 @@
   (let [ctx (fx/plugin-ctx {:pageId pid :tree {:id "b" :name "Card" :type "board" :child_count 0}} (fx/file-responses fx/file))]
     (fx/call (fx/find-tool shapes/tools "get_shape_tree") ctx {"file_id" fid "root_id" (str fx/board-id)})
     (is (str/includes? (last @(:scripts ctx)) "locateShape(args.rootId)?.page"))))
+
+(defn- crowded-file [n]
+  (let [ids   (vec (repeatedly n uuid/next))
+        board (get-in fx/file [:data :pages-index fx/page-id :objects fx/board-id])
+        rect  (get-in fx/file [:data :pages-index fx/page-id :objects fx/rect-id])
+        kids  (into {} (map (fn [id] [id (assoc rect :id id :name (str "Item " id) :parent-id fx/board-id :frame-id fx/board-id)])) ids)]
+    (-> fx/file
+        (update-in [:data :pages-index fx/page-id :objects] merge kids)
+        (assoc-in [:data :pages-index fx/page-id :objects fx/board-id] (assoc board :shapes ids)))))
+
+(defn- run-big [tool-name args]
+  (fx/call (fx/find-tool shapes/tools tool-name)
+           (assoc (fx/ctx (fx/file-responses (crowded-file 3000))) :exports (exports/store {:now (constantly 0)}))
+           (merge {"file_id" fid "page_id" pid} args)))
+
+(defn- download-of [result]
+  (get-in result ["full_result" "download"]))
+
+(deftest a-large-tree-gives-its-size-and-a-download
+  (let [result (run-big "get_shape_tree" {"depth" 5})]
+    (is (= 3005 (get result "node_count")))
+    (is (not (contains? result "children")))
+    (is (re-find #"curl -o shape-tree\.zip" (download-of result)))))
+
+(deftest large-css-gives-the-root-rule-and-a-download
+  (let [result (run-big "get_shape_css" {"shape_id" (str fx/board-id) "include_children" true})]
+    (is (= 3001 (get result "rule_count")))
+    (is (= [(str fx/board-id)] (map #(get % "shape_id") (get result "rules"))))
+    (is (re-find #"curl -o shape-css\.zip" (download-of result)))))
+
+(deftest a-large-svg-gives-its-size-and-a-download
+  (let [result (run-big "get_shape_svg" {"shape_id" (str fx/board-id)})]
+    (is (< 102400 (get result "svg_bytes")))
+    (is (not (contains? result "svg")))
+    (is (re-find #"curl -o shape-svg\.zip" (download-of result)))))
+
+(deftest the-css-archive-holds-the-stylesheet-and-the-rules
+  (let [store  (exports/store {:now (constantly 0)})
+        result (fx/call (fx/find-tool shapes/tools "get_shape_css")
+                        (assoc (fx/ctx (fx/file-responses (crowded-file 3000))) :exports store)
+                        {"file_id" fid "page_id" pid "shape_id" (str fx/board-id) "include_children" true})
+        id     (second (re-find #"export=([0-9a-f]{32})" (download-of result)))
+        names  (with-open [z (java.util.zip.ZipInputStream. (java.io.ByteArrayInputStream. (exports/take! store id)))]
+                 (loop [acc #{}] (if-let [e (.getNextEntry z)] (recur (conj acc (.getName e))) acc)))]
+    (is (= #{"styles.css" "rules.json"} names))))
+
+(deftest a-shape-with-a-large-content-gives-its-size-instead
+  (let [text   (get-in fx/file [:data :pages-index fx/page-id :objects fx/text-id])
+        huge   (assoc-in text [:content :children 0 :children 0 :children 0 :text] (apply str (repeat 120000 "a")))
+        f      (assoc-in fx/file [:data :pages-index fx/page-id :objects fx/text-id] huge)
+        result (fx/call (fx/find-tool shapes/tools "get_shape")
+                        (assoc (fx/ctx (fx/file-responses f)) :exports (exports/store {:now (constantly 0)}))
+                        {"file_id" fid "page_id" pid "shape_id" (str fx/text-id)})]
+    (is (< 120000 (get-in result ["shape" "content" "size_bytes"])))
+    (is (= "Title" (get-in result ["shape" "name"])))
+    (is (re-find #"curl -o shape\.zip" (download-of result)))))

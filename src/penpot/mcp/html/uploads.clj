@@ -1,39 +1,31 @@
 (ns penpot.mcp.html.uploads
+  (:require
+   [penpot.mcp.spool :as spool])
   (:import
+   (java.nio.charset StandardCharsets)
    (java.util UUID)))
 
 (def ^:private ttl-ms (* 60 60 1000))
 (def ^:private default-max-bytes (* 100 1024 1024))
 
-(defn store [{:keys [now max-bytes]}]
-  {:entries (atom {}) :now now :max-bytes (or max-bytes default-max-bytes)})
+(defn store [{:keys [now max-bytes spool]}]
+  {:spool (or spool (spool/create {:max-bytes (or max-bytes default-max-bytes) :now now})) :now now})
 
-(defn- expired? [now-ms {:keys [touched]}]
-  (> (- now-ms touched) ttl-ms))
+(defn put! [{:keys [spool now]} ^String text]
+  (let [id (str (UUID/randomUUID))]
+    (spool/put! spool (.getBytes text StandardCharsets/UTF_8)
+                {:kind :upload :expires-at (+ (now) ttl-ms) ::spool/id id})))
 
-(defn- sweep [entries now-ms]
-  (into {} (remove (fn [[_ e]] (expired? now-ms e))) entries))
+(defn- live? [entry now-ms]
+  (and (= :upload (:kind entry)) (<= now-ms (:expires-at entry))))
 
-(defn- stored-bytes [entries]
-  (reduce + 0 (map (comp count :text) (vals entries))))
+(defn text [{:keys [spool now]} id]
+  (let [now-ms (now)]
+    (when (live? (spool/entry spool id) now-ms)
+      (spool/update! spool id assoc :expires-at (+ now-ms ttl-ms))
+      (some-> (spool/read spool id) (String. StandardCharsets/UTF_8)))))
 
-(defn put! [{:keys [entries now max-bytes]} text]
-  (let [id     (str (UUID/randomUUID))
-        now-ms (now)
-        after  (swap! entries (fn [es]
-                                (let [es (sweep es now-ms)]
-                                  (if (> (+ (stored-bytes es) (count text)) max-bytes)
-                                    es
-                                    (assoc es id {:text text :touched now-ms})))))]
-    (when (contains? after id) id)))
-
-(defn text [{:keys [entries now]} id]
-  (let [now-ms (now)
-        after  (swap! entries (fn [es]
-                                (let [es (sweep es now-ms)]
-                                  (cond-> es (contains? es id) (assoc-in [id :touched] now-ms)))))]
-    (get-in after [id :text])))
-
-(defn remove! [{:keys [entries]} id]
-  (swap! entries dissoc id)
+(defn remove! [{:keys [spool]} id]
+  (when (= :upload (:kind (spool/entry spool id)))
+    (spool/delete! spool id))
   nil)

@@ -141,3 +141,21 @@
 (deftest shape-missing-on-page-is-user-error
   (let [ex (error-of #(file/read-shape (fx/ctx (fx/file-responses fx/file)) fx/file-id fx/rect-id fx/page2-id))]
     (is (= (str "Shape " fx/rect-id " not found on page " fx/page2-id) (ex-message ex)))))
+
+(deftest an-idle-whole-file-is-dropped-from-the-cache
+  (let [cache (atom nil)
+        ctx   (assoc (fx/ctx (fx/file-responses fx/file)) :file-cache cache)]
+    (file/read-whole ctx fx/file-id)
+    (let [used (:used @cache)]
+      (file/evict-idle! cache (+ used file/cache-idle-ms))
+      (is (some? @cache) "kept while it was used within the idle time")
+      (file/evict-idle! cache (+ used file/cache-idle-ms 1))
+      (is (nil? @cache)))))
+
+(deftest reading-a-cached-file-keeps-it
+  (let [cache (atom nil)
+        ctx   (assoc (fx/ctx (fx/file-responses fx/file)) :file-cache cache)]
+    (file/read-whole ctx fx/file-id)
+    (swap! cache assoc :used 0)
+    (file/read-whole ctx fx/file-id)
+    (is (pos? (:used @cache)))))

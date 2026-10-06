@@ -7,6 +7,10 @@ services:
     networks:
       - penpot
     env_file: ./penpot-mcp-server-unofficial/.env
+    environment:
+      PENPOT_MCP_SPOOL_DIR: /var/spool/penpot-mcp
+    volumes:
+      - penpot-mcp-spool:/var/spool/penpot-mcp
     read_only: true
     tmpfs:
       - /tmp
@@ -16,3 +20,6 @@ services:
       - no-new-privileges:true
     mem_limit: 512m
     pids_limit: 256
+
+volumes:
+  penpot-mcp-spool:

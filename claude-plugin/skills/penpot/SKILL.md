@@ -54,5 +54,6 @@ Design tokens and themes: [references/tokens.md](references/tokens.md).
 - `switch_variant` and `swap_component` replace the copy: the returned shape id can differ from the one passed.
 - `set_flip` sets the mirrored state; it is not a toggle.
 - Size limits set with `set_layout_child` cannot be removed.
-- `export_shape` scales a PNG down so its longer side fits `max_size` (default 1568).
+- `export_shape` scales an image down so its longer side fits `max_size` (default 768, at most 1568); ask for more only when small details matter.
+- A read whose answer would be larger than 100 KB returns a short version and `full_result`. In Claude Code, run its `download` curl command with the MCP server URL without its query string in place of `<MCP address>`, unzip the archive and read only the parts the task needs with a script instead of loading the whole file. Other clients give the command to the user. Narrowing the call, for example with `depth`, `root_id`, `query` or `sections`, avoids the download.
 - Penpot rejects editing or deleting comments written by another account.

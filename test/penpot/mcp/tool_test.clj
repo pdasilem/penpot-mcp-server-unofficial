@@ -84,3 +84,9 @@
 (deftest invoke-rejects-non-map-arguments
   (let [t {:name "sample" :input-schema schema:sample :handler (fn [_ _] (tool/json-result {}))}]
     (is (true? (:error? (tool/invoke t {:version-error (constantly nil)} ["not" "a" "map"]))))))
+
+(deftest running-out-of-memory-is-reported-as-a-tool-error
+  (let [t {:name "big" :input-schema [:map] :handler (fn [_ _] (throw (OutOfMemoryError. "Java heap space")))}
+        result (tool/invoke t {:version-error (constantly nil)} {})]
+    (is (:error? result))
+    (is (re-find #"memory" (get-in result [:content 0 :text])))))

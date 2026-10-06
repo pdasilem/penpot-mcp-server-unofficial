@@ -16,7 +16,8 @@
    :ws-host "127.0.0.1"
    :ws-port 0
    :version-check-interval 300
-   :log-level "info"})
+   :log-level "info"
+   :store-mb 64})
 
 (def ping-tool
   {:name "ping"

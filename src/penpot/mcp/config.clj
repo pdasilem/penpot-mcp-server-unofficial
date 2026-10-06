@@ -19,6 +19,8 @@
    :log-level "LOG_LEVEL"
    :toolsets "PENPOT_MCP_TOOLSETS"
    :import-max-asset-mb "PENPOT_MCP_IMPORT_MAX_ASSET_MB"
+   :store-mb "PENPOT_MCP_STORE_MB"
+   :spool-dir "PENPOT_MCP_SPOOL_DIR"
    :full-file-shapes-max "FULL_FILE_SHAPES_MAX"})
 
 (def ^:private secret-keys
@@ -40,7 +42,9 @@
    [:ws-port {:default 4402} port]
    [:version-check-interval {:default 300} [:int {:min 1}]]
    [:log-level {:default "info"} [:enum "trace" "debug" "info" "warn" "error"]]
-   [:import-max-asset-mb {:default 64} [:int {:min 1}]]
+   [:import-max-asset-mb {:default 32} [:int {:min 1}]]
+   [:store-mb {:default 64} [:int {:min 1}]]
+   [:spool-dir {:optional true} [:string {:min 1}]]
    [:full-file-shapes-max {:default 5000} [:int {:min 0}]]
    [:toolsets {:default "read,edit"}
     [:re {:error/message "should be a comma separated list of read, edit, manage, export and import"}

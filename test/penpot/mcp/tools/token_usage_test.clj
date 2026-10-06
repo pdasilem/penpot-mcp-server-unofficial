@@ -3,6 +3,7 @@
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]
    [penpot.mcp.design.tokens :as tokens]
+   [penpot.mcp.exports :as exports]
    [penpot.mcp.fixtures :as fx]
    [penpot.mcp.plugin.read :as read]
    [penpot.mcp.tools :as tools]
@@ -112,3 +113,32 @@
   (let [ctx (assoc (fx/ctx (fx/file-responses file)) :file-cache (atom nil))]
     (fx/call tool ctx {"file_id" fid})
     (is (= 1 (count (filter #{:get-file} (fx/rpc-commands ctx)))))))
+
+(deftest only-the-default-theme-combination-is-resolved
+  (let [themed (fn [code]
+                 (cond
+                   (str/includes? code read/pages-body) [{:id (str fx/page-id) :name "Screens"}]
+                   (str/includes? code read/tokens-body)
+                   {:sets [{:id "l" :name "light" :active false
+                            :tokens [{:id "a" :name "color.bg" :type "color" :value "#3366FF" :description ""}]}
+                           {:id "d" :name "dark" :active true
+                            :tokens [{:id "b" :name "color.bg" :type "color" :value "#FFFFFF" :description ""}]}]
+                    :themes [{:id "t1" :group "mode" :name "light" :active false :sets ["light"]}
+                             {:id "t2" :group "mode" :name "dark" :active true :sets ["dark"]}]}))
+        seen   (atom nil)
+        real   tokens/resolve-catalog]
+    (with-redefs [tokens/resolve-catalog (fn [c] (reset! seen (:themes c)) (real c))]
+      (let [result (fx/call tool (fx/plugin-ctx themed (fx/file-responses blue-instance)) {"file_id" fid})]
+        (is (= ["dark"] (map :name @seen)))
+        (is (= ["color.bg"] (get (last (values-of result "Login Card")) "matches")))
+        (is (true? (get (first (values-of result "Button Instance")) "off_scale")))))))
+
+(deftest large-sections-go-to-a-download-and-raw-values-stay
+  (let [many   (into [] (map (fn [i] {:id (str i) :name (str "space.unused." i) :type "spacing" :value (str i) :description ""})) (range 3000))
+        ctx    (assoc (fx/plugin-ctx (editor many) (fx/file-responses blue-instance)) :exports (exports/store {:now (constantly 0)}))
+        result (fx/call tool ctx {"file_id" fid "limit" 5})]
+    (is (= 5 (count (mapcat #(get % "values") (shapes result)))))
+    (is (contains? result "next_cursor"))
+    (is (not (contains? result "unused")))
+    (is (= #{"unused" "missing" "referenced_only" "references" "usage"} (set (get result "archived_sections"))))
+    (is (re-find #"curl -o token-usage\.zip" (get-in result ["full_result" "download"])))))

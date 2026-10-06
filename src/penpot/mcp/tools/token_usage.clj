@@ -7,6 +7,7 @@
    [penpot.mcp.penpot.file :as file]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.common :as common]
+   [penpot.mcp.tools.large-result :as large-result]
    [penpot.mcp.tools.token-rules :as token-rules]
    [penpot.mcp.tools.token-source :as token-source]))
 
@@ -14,6 +15,11 @@
   (for [s (:sets catalog)
         t (:tokens s)]
     {:set (:name s) :name (:name t) :type (:type t) :value (:value t)}))
+
+(defn- default-themes [themes]
+  (let [groups (group-by :group themes)]
+    (into [] (comp (map :group) (distinct) (map #(let [ts (get groups %)] (or (first (filter :active ts)) (first ts)))))
+          themes)))
 
 (defn- design-catalog [catalog]
   {:sets (mapv (fn [s] {:name (:name s)
@@ -23,7 +29,7 @@
                (:sets catalog))
    :themes (mapv (fn [t] {:group (str (:group t)) :name (str (:name t)) :active (boolean (:active t))
                           :sets (into [] (filter string?) (:sets t))})
-                 (:themes catalog))
+                 (default-themes (:themes catalog)))
    :colors []
    :typographies []
    :warnings []})
@@ -54,16 +60,14 @@
     (seq matches) (assoc :matches matches)
     (and matches (empty? matches)) (assoc :off_scale true)))
 
-(defn- shape-groups [entries]
-  (for [group (partition-by :shape-id entries)
-        :let [{:keys [shape-id shape]} (first group)]]
-    {:shape_id shape-id :shape shape :values (mapv raw-value group)}))
+(defn- shape-group [{:keys [shape-id shape values]}]
+  {:shape_id shape-id :shape shape :values (mapv raw-value values)})
 
-(defn- frame-groups [entries]
-  (for [group (partition-by (juxt :page-id :frame-id) entries)
+(defn- frame-groups [groups]
+  (for [group (partition-by (juxt :page-id :frame-id) groups)
         :let [{:keys [page-id page frame-id frame]} (first group)]]
     (common/compact {:page_id page-id :page page :frame_id frame-id :frame frame
-                     :shapes (vec (shape-groups group))})))
+                     :shapes (mapv shape-group group)})))
 
 (defn- usage-entry [{:keys [name shapes copies attributes pages]}]
   {:name name :shapes shapes :copies copies
@@ -73,18 +77,22 @@
 (def ^:private section-names
   ["unused" "missing" "referenced_only" "references" "usage" "raw_values"])
 
-(defn- summary [report raw {:keys [tokens error unresolved] :as sc}]
+(defn- summary [report window {:keys [tokens error unresolved] :as sc}]
   (let [s (:summary report)]
     (cond-> {:tokens (:tokens s) :applied (:applied s) :missing (:missing s) :referenced_only (:referenced-only s)
-             :unused (:unused s) :shapes_checked (:shapes s) :raw_values (count raw)}
+             :unused (:unused s) :shapes_checked (:shapes s) :raw_values (:count window)}
       sc (assoc :values_compared (some? tokens))
       error (assoc :values_not_compared error)
       (seq unresolved) (assoc :unresolved_tokens unresolved))))
 
-(defn- raw-section [raw sc args]
-  (let [paged (common/paged :raw_values raw args)]
-    (cond-> {:raw_values (vec (frame-groups (usage/with-matches (:tokens sc) (:raw_values paged))))}
-      (:next_cursor paged) (assoc :next_cursor (:next_cursor paged)))))
+(defn- empty-window [{:keys [page_id limit cursor]} wanted]
+  (if (wanted "raw_values")
+    (usage/raw-window (if cursor (parse-long cursor) 0) (or limit common/default-page-size) page_id)
+    (usage/raw-window 0 0 page_id)))
+
+(defn- raw-section [{:keys [offset limit groups] :as window} sc]
+  (cond-> {:raw_values (vec (frame-groups (usage/with-matches (:tokens sc) groups)))}
+    (> (:count window) (+ offset limit)) (assoc :next_cursor (str (+ offset limit)))))
 
 (defn- sections [report]
   {"unused" {:unused (mapv #(update % :type type-name) (:unused report))}
@@ -97,26 +105,35 @@
   (when (and page-id (not-any? #(= page-id %) (:page-ids report)))
     (throw (tool/user-error (str "Page " page-id " not found in file " file-id)))))
 
-(defn- source [ctx file-id]
+(defn- collect [pages window]
+  (reduce (fn [acc page]
+            (let [f (usage/page-facts page)]
+              (-> acc
+                  (update :facts conj (dissoc f :raw))
+                  (update :window usage/add-raw f))))
+          {:facts [] :window window}
+          pages))
+
+(defn- source [ctx file-id window]
   (if-let [catalog (token-source/editor-catalog ctx file-id)]
-    {:catalog catalog :pages (file/read-pages ctx file-id)}
+    (assoc (collect (file/read-pages ctx file-id) window) :catalog catalog)
     (let [f (file/read-whole ctx file-id file/editor-hint)]
-      {:catalog (token-source/file-catalog (get-in f [:data :tokens-lib]))
-       :pages (map #(file/page f (:id %)) (file/pages f))})))
+      (assoc (collect (map #(file/page f (:id %)) (file/pages f)) window)
+             :catalog (token-source/file-catalog (get-in f [:data :tokens-lib]))))))
 
 (defn- token-usage [ctx {:keys [file_id page_id] :as args}]
   (let [wanted  (set (or (:sections args) section-names))
-        {:keys [catalog pages]} (source ctx file_id)
-        facts   (into [] (map usage/page-facts) pages)
+        {:keys [catalog facts window]} (source ctx file_id (empty-window args wanted))
         report  (assoc (usage/report {:tokens (set-tokens catalog) :facts facts}) :page-ids (map :page-id facts))
         _       (check-page! report file_id page_id)
-        raw     (cond->> (:raw-values report) page_id (filterv #(= page_id (:page-id %))))
-        sc      (when (wanted "raw_values") (scale catalog))]
-    (tool/json-result
-     (apply merge
-            {:summary (summary report raw sc)}
-            (when (wanted "raw_values") (raw-section raw sc args))
-            (vals (select-keys (sections report) wanted))))))
+        sc      (when (wanted "raw_values") (scale catalog))
+        head    (merge {:summary (summary report window sc)} (when (wanted "raw_values") (raw-section window sc)))
+        parts   (select-keys (sections report) wanted)]
+    (large-result/result ctx {:full (apply merge head (vals parts))
+                              :brief (constantly (assoc head :archived_sections (vec (keys parts))))
+                              :archived #(apply merge (vals parts))
+                              :file-name "token-usage.zip"
+                              :entry "token-usage.json"})))
 
 (def tools
   [{:name "token_usage"
@@ -130,7 +147,8 @@
                       "component copies are not checked, so values overridden on a copy are not reported. "
                       "Each raw value lists the tokens of the default theme combination with the same value in matches, or off_scale when none has it; "
                       "summary.unresolved_tokens names tokens whose value could not be computed. "
-                      "sections picks the parts to return besides the summary. page_id narrows raw_values to one page; raw_values are paged with limit and cursor.")
+                      "sections picks the parts to return besides the summary. page_id narrows raw_values to one page; raw_values are paged with limit and cursor. "
+                      "When the other parts would be larger than 100 KB they are left out, archived_sections names them and full_result holds a one-time download of them.")
     :annotations tool/read-only
     :input-schema (into [:map {:closed true}
                          common/file-id-param

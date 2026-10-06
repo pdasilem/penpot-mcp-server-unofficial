@@ -86,3 +86,21 @@
                         :strokes [{:stroke-color "url(x)" :stroke-width 1}]))]
     (is (not (contains? p "background")))
     (is (not (contains? p "border")))))
+
+(deftest numeric-text-values-give-the-same-css-as-strings
+  (let [strings (props (text-with {:font-size "24" :font-weight "700" :line-height "1.2" :letter-spacing "2"}))
+        numbers (props (text-with {:font-size 24 :font-weight 700 :line-height 1.2 :letter-spacing 2}))]
+    (is (= strings numbers))
+    (is (= "1.2" (get numbers "line-height")))
+    (is (= "700" (get numbers "font-weight")))
+    (is (= "2px" (get numbers "letter-spacing")))))
+
+(def ^:private saved-path
+  (dissoc fx/path-shape :x :y :width :height))
+
+(deftest a-path-takes-its-position-and-size-from-its-selrect
+  (let [p (props saved-path)]
+    (is (= {"position" "absolute" "left" "600px" "top" "0px" "width" "50px" "height" "50px"}
+           (select-keys p ["position" "left" "top" "width" "height"])))
+    (is (= (select-keys (props fx/path-shape) ["left" "top" "width" "height"])
+           (select-keys p ["left" "top" "width" "height"])))))

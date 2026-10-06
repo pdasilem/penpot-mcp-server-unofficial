@@ -89,16 +89,18 @@
          (remove #(tokenized? applied (:attribute %)))
          distinct)))
 
-(defn- applications [page shape]
-  (for [[name attributes] (group-by val (:applied-tokens shape))]
-    {:name name :shape-id (:id shape) :page-id (:id page) :page (:name page)
-     :copy? (copy? shape) :attributes (set (map key attributes))}))
+(defn- add-usage [acc shape]
+  (reduce (fn [m [name applied]]
+            (update m name (fn [u] (-> (or u {:shapes 0 :copies 0 :attributes #{}})
+                                       (update :shapes inc)
+                                       (update :copies + (if (copy? shape) 1 0))
+                                       (update :attributes into (map key applied))))))
+          acc
+          (group-by val (:applied-tokens shape))))
 
-(defn- located [page objects shape value]
-  (merge {:page-id (:id page) :page (:name page)}
-         (frame objects shape)
-         {:shape-id (:id shape) :shape (:name shape)}
-         value))
+(defn- raw-group [objects shape]
+  (when-let [values (seq (raw-values objects shape))]
+    (merge (frame objects shape) {:shape-id (:id shape) :shape (:name shape) :values (vec values)})))
 
 (defn- layer-order [objects]
   (loop [seen #{root-id} pending (list* (:shapes (get objects root-id))) acc []]
@@ -112,8 +114,7 @@
   (let [objects (:objects page)
         shapes  (layer-order objects)]
     {:page-id (:id page)
+     :page (:name page)
      :shapes (count shapes)
-     :applications (into [] (mapcat #(applications page %)) shapes)
-     :raw-values (into [] (comp (remove copy?)
-                                (mapcat (fn [s] (map #(located page objects s %) (raw-values objects s)))))
-                       shapes)}))
+     :usage (reduce add-usage {} shapes)
+     :raw (into [] (comp (remove copy?) (keep #(raw-group objects %))) shapes)}))
