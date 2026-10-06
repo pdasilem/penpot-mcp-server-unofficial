@@ -1,6 +1,5 @@
 (ns ^:integration penpot.mcp.tools.plugin-it-test
   (:require
-   [app.common.types.tokens-lib :as ctob]
    [clojure.data.json :as json]
    [clojure.java.io :as io]
    [clojure.string :as str]
@@ -8,6 +7,7 @@
    [penpot.mcp.it :as it]
    [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.rpc :as rpc]
+   [penpot.mcp.penpot.tokens-lib :as ctob]
    [penpot.mcp.test-client :as mcp]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools :as tools])

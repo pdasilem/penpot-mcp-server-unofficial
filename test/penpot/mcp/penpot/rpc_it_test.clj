@@ -1,12 +1,12 @@
 (ns ^:integration penpot.mcp.penpot.rpc-it-test
   (:require
-   [app.common.files.changes-builder :as pcb]
-   [app.common.uuid :as uuid]
    [clojure.test :refer [deftest is]]
    [penpot.mcp.it :as it]
    [penpot.mcp.penpot.changes :as changes]
    [penpot.mcp.penpot.file :as file]
-   [penpot.mcp.penpot.rpc :as rpc]))
+   [penpot.mcp.penpot.rpc :as rpc]
+   [penpot.mcp.penpot.shape :as shape]
+   [penpot.mcp.penpot.uuid :as uuid]))
 
 (deftest reads-profile-with-access-token
   (is (uuid? (:id (rpc/call (it/client) :get-profile {})))))
@@ -24,7 +24,7 @@
               before  (file/fetch client (:id created))
               names   (mapv :name (file/pages before))]
           (changes/commit! client (:id created)
-                           #(pcb/add-empty-page (pcb/empty-changes) page-id "IT page"))
+                           #(vector (shape/add-page page-id "IT page")))
           (let [fetched (file/fetch client (:id created))]
             (is (= (conj names "IT page") (mapv :name (file/pages fetched))))
             (is (= "IT page" (:name (file/page fetched page-id))))

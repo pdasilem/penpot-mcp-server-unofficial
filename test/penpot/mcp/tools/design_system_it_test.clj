@@ -1,12 +1,12 @@
 (ns ^:integration penpot.mcp.tools.design-system-it-test
   (:require
-   [app.common.types.tokens-lib :as ctob]
    [clojure.data.json :as json]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
    [penpot.mcp.it :as it]
    [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.rpc :as rpc]
+   [penpot.mcp.penpot.tokens-lib :as ctob]
    [penpot.mcp.test-client :as mcp]
    [penpot.mcp.tools.plugin-it-test :as p])
   (:import

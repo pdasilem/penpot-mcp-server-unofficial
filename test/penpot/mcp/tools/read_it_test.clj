@@ -1,7 +1,5 @@
 (ns ^:integration penpot.mcp.tools.read-it-test
   (:require
-   [app.common.files.changes-builder :as pcb]
-   [app.common.uuid :as uuid]
    [clojure.data.json :as json]
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]
@@ -9,6 +7,8 @@
    [penpot.mcp.penpot.changes :as changes]
    [penpot.mcp.penpot.file :as file]
    [penpot.mcp.penpot.notifications :as notifications]
+   [penpot.mcp.penpot.shape :as shape]
+   [penpot.mcp.penpot.uuid :as uuid]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools :as tools]))
 
@@ -41,7 +41,7 @@
               rect (filled-rect f)
               page (uuid/next)]
           (call ctx "create_snapshot" {"file_id" fid "label" "before"})
-          (changes/commit! client (:id copy) #(pcb/add-empty-page (pcb/empty-changes) page "IT page"))
+          (changes/commit! client (:id copy) #(vector (shape/add-page page "IT page")))
           (let [snap (get-in (call ctx "list_snapshots" {"file_id" fid}) ["snapshots" 0 "id"])]
             (is (some #{"IT page"} (map #(get % "name") (get (call ctx "compare_snapshots" {"file_id" fid "from_snapshot_id" snap}) "added_pages")))))
           (is (= (:name copy) (get (call ctx "get_file" {"file_id" fid}) "name")))
