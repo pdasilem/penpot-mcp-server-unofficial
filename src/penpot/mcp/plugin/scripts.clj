@@ -132,6 +132,7 @@
     "property-exists" (str "The variant set already has a property named " detail)
     "value-not-found" (str "No variant has this property value: " detail)
     "variant-not-updated" (str "Penpot did not update the variant property " detail)
+    "property-order-unknown" (str "Penpot does not report the order of variant properties while one is named with digits only (" detail "); rename it in Penpot's design panel so the name has a letter, then try again")
     "not-a-copy" (str "Shape " detail " is not the root of a component copy")
     "not-detached" (str "Penpot did not detach the copy " detail)
     "not-in-layout" (str "Shape " detail " is not inside a flex or grid layout")

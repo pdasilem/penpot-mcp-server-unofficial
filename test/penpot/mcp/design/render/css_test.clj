@@ -3,6 +3,7 @@
    [clojure.string :as str]
    [clojure.test :refer [deftest is]]
    [penpot.mcp.design.fixture :as fixture]
+   [penpot.mcp.design.real-model :as real]
    [penpot.mcp.design.render :as render]
    [penpot.mcp.design.render.naming :as naming]))
 
@@ -45,3 +46,21 @@
   (doseq [prefix ["Bad" (apply str (repeat 32 "a"))]]
     (is (= :penpot.mcp.design.render/invalid-option
            (:type (ex-data (try (render/render (fixture/model) :css {:prefix prefix}) (catch Exception e e))))))))
+
+(defn- dark-pair []
+  (let [default (real/default-combination)
+        [group theme] (first (:themes default))
+        dark (str/replace theme #"(?i)\blight\b" "dark")]
+    {:group group :default theme
+     :dark (first (filter #(= dark (get (:themes %) group)) (:combinations (fixture/model))))}))
+
+(deftest the-system-dark-scheme-takes-the-dark-theme-of-the-default-palette
+  (let [{:keys [group dark]} (dark-pair)
+        content (:content (first (:files (render/render (fixture/model) :css {:color-scheme-group group}))))
+        media   (second (re-find #"(?s)@media \(prefers-color-scheme: dark\) \{\n(.*?)\n\}\n?$" content))
+        surface (first (filter #(= ["surface"] (:path %)) (:tokens dark)))]
+    (is (some? media))
+    (is (str/includes? media (str ":root:not([data-" (str/lower-case group) "])")))
+    (is (str/includes? media (str "--surface: " (real/hex (get-in surface [:value :rgba])) ";")))
+    (is (= 1 (count (re-seq #"prefers-color-scheme" content))))))
+

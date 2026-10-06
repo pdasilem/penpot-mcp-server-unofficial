@@ -35,3 +35,12 @@
   (doseq [options [{:version 2} {:prefix "Bad"}]]
     (is (= :penpot.mcp.design.render/invalid-option
            (:type (ex-data (try (render/render (fixture/model) :tailwind options) (catch Exception e e))))))))
+
+(deftest the-dark-variant-covers-every-dark-theme-of-the-group
+  (let [group   (key (first (:themes (first (:combinations (fixture/model))))))
+        content (get (files {:color-scheme-group group}) "tokens.css")
+        darks   (filter #(re-find #"(?i)\bdark\b" %) (map #(get (:themes %) group) (:combinations (fixture/model))))
+        variant (second (re-find #"@custom-variant dark \(&:where\((.*)\)\);" content))]
+    (is (seq darks))
+    (doseq [d darks]
+      (is (str/includes? variant (str "[data-" (str/lower-case group) "=\"" d "\"]")) d))))

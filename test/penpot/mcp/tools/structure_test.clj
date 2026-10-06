@@ -30,5 +30,9 @@
   (is (true? (get-in (e/run "edits/mask") ["shape" "isMask"])))
   (is (seq (get (e/run "edits/ungroup") "shapeIds"))))
 
-(deftest svg-is-imported-into-the-board
-  (is (= (get (e/args "edits/import-svg") "parent_id") (get-in (e/run "edits/import-svg") ["shape" "parentId"]))))
+(deftest an-icon-exported-by-penpot-is-imported-into-the-board-at-its-size
+  (let [svg   (get (e/args "edits/import-svg") "svg")
+        shape (get (e/run "edits/import-svg") "shape")]
+    (is (= (get (e/args "edits/import-svg") "parent_id") (get shape "parentId")))
+    (is (= [(parse-long (second (re-find #"width=\"(\d+)\"" svg))) (parse-long (second (re-find #"height=\"(\d+)\"" svg)))]
+           [(get shape "width") (get shape "height")]))))

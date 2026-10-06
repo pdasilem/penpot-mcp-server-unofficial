@@ -1552,7 +1552,7 @@ Group: `export`. Hints: read-only
 | `platform` | `css`, `scss`, `tailwind`, `typescript`, `dtcg`, `kotlin`, `swiftui` | yes | Output format |
 | `options` | object | no | Format options: prefix, color_scheme_group, version, package, type_name |
 | `options.prefix` | string | no | CSS, SCSS and Tailwind variable prefix |
-| `options.color_scheme_group` | string | no | Theme group whose light and dark themes follow the system color scheme |
+| `options.color_scheme_group` | string | no | Theme group that follows the light or dark mode of the operating system: a theme counts as light or dark when its name has the word light or dark, and the pair is taken from the palette of the active theme |
 | `options.version` | `3`, `4` | no | Tailwind version, 4 by default |
 | `options.package` | string | no | Kotlin package, required for kotlin |
 | `options.type_name` | string | no | Kotlin or Swift type name, from the file name by default |

@@ -351,3 +351,20 @@
   --sv-outline-variant: #39505f;
   --sv-link-colour: #4fd8c0;
 }
+
+@media (prefers-color-scheme: dark) {
+:root:not([data-scheme]) {
+  --sv-surface-variant: #22262a;
+  --sv-on-accent: #14171a;
+  --sv-error: #e3705b;
+  --sv-outline: #63696c;
+  --sv-band: #22262a;
+  --sv-surface: #191c1f;
+  --sv-text-secondary: #a0a7ad;
+  --sv-accent: #f2a93b;
+  --sv-text-primary: #e8eaec;
+  --sv-background: #0e1012;
+  --sv-outline-variant: #4a5054;
+  --sv-link-colour: #f2a93b;
+}
+}

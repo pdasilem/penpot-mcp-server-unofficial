@@ -91,7 +91,7 @@
 (def ^:private options-schema
   [:map {:closed true}
    [:prefix {:optional true :description "CSS, SCSS and Tailwind variable prefix"} [:re #"^[a-z][a-z0-9-]{0,30}$"]]
-   [:color_scheme_group {:optional true :description "Theme group whose light and dark themes follow the system color scheme"} [:string {:max 255}]]
+   [:color_scheme_group {:optional true :description "Theme group that follows the light or dark mode of the operating system: a theme counts as light or dark when its name has the word light or dark, and the pair is taken from the palette of the active theme"} [:string {:max 255}]]
    [:version {:optional true :description "Tailwind version, 4 by default"} [:enum 3 4]]
    [:package {:optional true :description "Kotlin package, required for kotlin"} [:re #"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$"]]
    [:type_name {:optional true :description "Kotlin or Swift type name, from the file name by default"} [:re #"^[A-Z][A-Za-z0-9]{0,63}$"]]])

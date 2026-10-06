@@ -73,13 +73,15 @@
   (str ":root" (apply str (map (fn [[g t]] (group-part g t (get default-themes g))) themes))))
 
 (defn- scheme-rules [prefix entries {:keys [id themes]} default scheme-group]
-  (let [theme (get themes scheme-group)]
-    (when (and scheme-group (contains? #{"light" "dark"} theme) (not= theme (get (:themes default) scheme-group)))
+  (let [theme   (get themes scheme-group)
+        base    (get (:themes default) scheme-group)
+        scheme  (table/color-scheme theme)]
+    (when (and scheme-group scheme (not= scheme (table/color-scheme base)) (= (table/palette theme) (table/palette base)))
       (let [others (dissoc themes scheme-group)
             sel    (str ":root:not([" (attribute scheme-group) "])"
                         (apply str (map (fn [[g t]] (group-part g t (get (:themes default) g))) others)))]
         (some->> (block sel (lines-for prefix entries id (fn [values v] (not= v (get values (:id default))))))
-                 (str "@media (prefers-color-scheme: " theme ") {\n")
+                 (str "@media (prefers-color-scheme: " scheme ") {\n")
                  (#(str % "}\n")))))))
 
 (defn render [model {:keys [prefix color-scheme-group]}]

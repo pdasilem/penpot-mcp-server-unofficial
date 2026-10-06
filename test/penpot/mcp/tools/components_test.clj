@@ -26,3 +26,12 @@
 
 (deftest a-variant-property-is-renamed
   (is (nil? (:error (e/run "edits/rename-variant-property")))))
+
+(deftest a-property-can-be-renamed-to-digits-only
+  (let [variants (get (e/run "edits/rename-variant-property-numeric") "variants")]
+    (is (some #{"1"} (get variants "properties")))
+    (is (not-any? #{(get (e/args "edits/rename-variant-property-numeric") "property")} (get variants "properties")))))
+
+(deftest a-set-with-a-digits-only-property-is-refused-instead-of-edited-at-a-guessed-position
+  (is (re-find #"^Penpot does not report the order of variant properties while one is named with digits only \(1\)"
+               (:error (e/run "edits/remove-variant-property-order-unknown")))))

@@ -349,4 +349,4 @@
   --color-sv-link-colour: #4fd8c0;
 }
 
-@custom-variant dark (&:where([data-scheme=dark], [data-scheme=dark] *));
+@custom-variant dark (&:where([data-scheme="STUDIO_MONITOR dark"], [data-scheme="STUDIO_MONITOR dark"] *, [data-scheme="PAPER_AND_INK dark"], [data-scheme="PAPER_AND_INK dark"] *, [data-scheme="SIGNAL dark"], [data-scheme="SIGNAL dark"] *));

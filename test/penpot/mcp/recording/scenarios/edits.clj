@@ -1,6 +1,8 @@
 (ns penpot.mcp.recording.scenarios.edits
   (:require
-   [penpot.mcp.recording.data :as d]))
+   [penpot.mcp.recording.data :as d]
+   [penpot.mcp.replay :as replay]
+   [penpot.mcp.tools :as tools]))
 
 (defn- own? [s] (and (not (:shape-ref s)) (not (:hidden s))))
 
@@ -58,7 +60,9 @@
   [(d/fresh-shape f #(and (own? %) (#{:rect :frame} (:type %)) (= "Model" (:name (d/page-of f %)))) "own shapes on Model")
    (d/fresh-shape f #(and (own? %) (#{:rect :frame :path} (:type %)) (= "Icons" (:name (d/page-of f %)))) "own shapes on Icons")])
 
-(defn- path [f] (d/fresh-shape f #(and (= :path (:type %)) (:content %)) "path"))
+(defn- exported-icon-svg []
+  (let [export (first (filter #(= "export_shape" (:name %)) tools/all))]
+    (get (replay/data (replay/run export "export/svg-icon")) "svg")))
 
 (defn- base [f] {"file_id" (:fid f)})
 
@@ -82,6 +86,7 @@
    (s "set-variant-property" "set_variant_property" #(merge (base %) {"component_id" (str (:id (variant-component %))) "property" (variant-property %) "value" "Recorded"}))
    (s "rename-variant-property" "rename_variant_property" #(let [c (other-variant-component %)] (merge (base %) {"component_id" (str (:id c)) "property" (:name (first (:variant-properties c))) "new_name" "Recorded property"})))
    (s "rename-variant-property-numeric" "rename_variant_property" #(let [c (multi-property-component %)] (merge (base %) {"component_id" (str (:id c)) "property" (:name (second (:variant-properties c))) "new_name" "1"})))
+   (s "remove-variant-property-order-unknown" "remove_variant_property" #(let [c (multi-property-component %)] (merge (base %) {"component_id" (str (:id c)) "property" (:name (first (:variant-properties c)))})))
    (s "duplicate" "duplicate_shape" #(at % (rect %)))
    (s "blend-mode" "set_blend_mode" #(at % (rect %) "mode" "multiply"))
    (s "blur" "set_blur" #(at % (rect %) "layer_blur" 4))
@@ -100,9 +105,7 @@
    (s "flatten" "flatten" #(merge (base %) {"shape_ids" (ids (rect %))}))
    (s "mask" "set_mask" #(merge (base %) {"group_id" (str (:id (group %))) "mask" true}))
    (s "ungroup" "ungroup" #(merge (base %) {"group_id" (str (:id (group %)))}))
-   (s "import-svg" "import_svg" #(let [b (board %) p (path %)]
-                                    (merge (base %) {"parent_id" (str (:id b)) "x" 5 "y" 5
-                                                     "svg" (str "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><path d=\"" (:content p) "\"/></svg>")})))
+   (s "import-svg" "import_svg" #(merge (base %) {"parent_id" (str (:id (board %))) "x" 5 "y" 5 "svg" (exported-icon-svg)}))
    (s "apply-library-color" "apply_library_color" #(at % (rect %) "color_id" (str (:id (first (vals (get-in % [:file :data :colors])))))))
    (s "create-library-color" "create_library_color" #(merge (base %) {"name" "Recorded color" "path" "Recorded" "color" (:color (first (vals (get-in % [:file :data :colors]))))}))
    (s "create-library-typography" "create_library_typography" #(merge (base %) {"name" "Recorded typography" "font_family" "Work Sans" "font_size" 16}))
