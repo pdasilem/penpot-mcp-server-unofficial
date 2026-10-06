@@ -1,8 +1,8 @@
 (ns penpot.mcp.plugin.scripts
   (:refer-clojure :exclude [run!])
   (:require
-   [clojure.data.json :as json]
-   [clojure.string :as str])
+   [clojure.string :as str]
+   [penpot.mcp.codec :as json])
   (:import
    (java.util.concurrent TimeUnit)
    (java.util.concurrent.locks ReentrantLock)))

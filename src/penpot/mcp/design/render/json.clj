@@ -1,7 +1,7 @@
 (ns penpot.mcp.design.render.json
   (:require
-   [clojure.data.json :as json]
    [clojure.string :as str]
+   [penpot.mcp.codec :as json]
    [penpot.mcp.design.js.number :as jsnum]))
 
 (def ^:private step "  ")

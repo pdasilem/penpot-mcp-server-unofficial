@@ -1,7 +1,7 @@
 (ns penpot.mcp.html.bundle
   (:require
-   [clojure.data.json :as json]
    [clojure.string :as str]
+   [penpot.mcp.codec :as json]
    [penpot.mcp.tool :as tool])
   (:import
    (java.io ByteArrayInputStream)

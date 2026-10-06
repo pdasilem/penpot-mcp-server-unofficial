@@ -1,7 +1,7 @@
 (ns penpot.mcp.tools.token-catalog
   (:require
-   [clojure.data.json :as json]
    [clojure.string :as str]
+   [penpot.mcp.codec :as json]
    [penpot.mcp.penpot.token :as cto]
    [penpot.mcp.tool :as tool]
    [penpot.mcp.tools.canvas :as canvas]

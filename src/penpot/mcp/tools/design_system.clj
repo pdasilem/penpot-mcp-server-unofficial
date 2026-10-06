@@ -1,7 +1,7 @@
 (ns penpot.mcp.tools.design-system
   (:require
-   [clojure.data.json :as json]
    [clojure.string :as str]
+   [penpot.mcp.codec :as json]
    [penpot.mcp.design.budget :as budget]
    [penpot.mcp.design.export :as export]
    [penpot.mcp.design.render :as render]

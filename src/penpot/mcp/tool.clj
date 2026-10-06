@@ -1,11 +1,11 @@
 (ns penpot.mcp.tool
   (:require
-   [clojure.data.json :as data.json]
    [clojure.string :as str]
    [malli.core :as m]
    [malli.error :as me]
    [malli.json-schema :as mjs]
    [malli.transform :as mt]
+   [penpot.mcp.codec :as data.json]
    [penpot.mcp.json :as json]
    [penpot.mcp.log :as log]
    [penpot.mcp.penpot.heavy :as heavy]))

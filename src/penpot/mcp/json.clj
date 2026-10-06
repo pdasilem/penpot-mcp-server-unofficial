@@ -1,7 +1,7 @@
 (ns penpot.mcp.json
   (:require
-   [clojure.data.json :as data.json]
    [clojure.string :as str]
+   [penpot.mcp.codec :as data.json]
    [penpot.mcp.penpot.tokens-lib :as ctob]
    [penpot.mcp.penpot.types :as types])
   (:import

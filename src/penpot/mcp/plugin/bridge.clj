@@ -1,7 +1,7 @@
 (ns penpot.mcp.plugin.bridge
   (:require
-   [clojure.data.json :as json]
    [penpot.mcp.auth :as auth]
+   [penpot.mcp.codec :as json]
    [penpot.mcp.log :as log]
    [penpot.mcp.tool :as tool])
   (:import
